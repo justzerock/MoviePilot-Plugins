@@ -30,7 +30,7 @@ class DoubanRankVote(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "1.9.1"
+    plugin_version = "0.0.1"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -246,8 +246,8 @@ class DoubanRankVote(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 6
+                                    'cols': 6,
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -263,8 +263,8 @@ class DoubanRankVote(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 4,
-                                    'md': 2
+                                    'cols': 6,
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -280,8 +280,8 @@ class DoubanRankVote(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 4,
-                                    'md': 2
+                                    'cols': 6,
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -297,8 +297,8 @@ class DoubanRankVote(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 4,
-                                    'md': 2
+                                    'cols': 6,
+                                    'md': 3
                                 },
                                 'content': [
                                     {
