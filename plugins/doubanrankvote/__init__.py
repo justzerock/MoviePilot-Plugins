@@ -418,6 +418,7 @@ class DoubanRankVote(_PluginBase):
         contents = []
         for history in historys:
             title = history.get("title")
+            vote = history.get("vote")
             poster = history.get("poster")
             mtype = history.get("type")
             time_str = history.get("time")
@@ -479,7 +480,7 @@ class DoubanRankVote(_PluginBase):
                                                         'href': f"https://movie.douban.com/subject/{doubanid}",
                                                         'target': '_blank'
                                                     },
-                                                    'text': title
+                                                    'text': f"{title} {vote}分"
                                                 }
                                             ]
                                         },
@@ -672,6 +673,7 @@ class DoubanRankVote(_PluginBase):
                     # 存储历史记录
                     history.append({
                         "title": title,
+                        "vote": vote,
                         "type": mediainfo.type.value,
                         "year": mediainfo.year,
                         "poster": mediainfo.get_poster_image(),
