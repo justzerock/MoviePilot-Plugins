@@ -30,7 +30,7 @@ class DoubanRankVote(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.2"
+    plugin_version = "0.0.3"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -603,7 +603,7 @@ class DoubanRankVote(_PluginBase):
                     logger.info(f"类型为 {type_str}")
                     vote = rss_info.get('vote')
                     vote_limit = self._mvote
-                    if addr.endswith('movie-top250'):
+                    if addr.endswith('movie_top250'):
                         vote_limit = 0  # 不做评分限制
                     elif addr.endswith('tv_hot'):
                         vote_limit = self._tvote  # 电视剧评分限制
