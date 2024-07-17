@@ -22,21 +22,21 @@ from app.utils.dom import DomUtils
 from app.utils.http import RequestUtils
 
 
-class DoubanRank(_PluginBase):
+class DoubanRankVote(_PluginBase):
     # 插件名称
-    plugin_name = "豆瓣榜单订阅"
+    plugin_name = "豆瓣榜单订阅（使用豆瓣评分）"
     # 插件描述
-    plugin_desc = "监控豆瓣热门榜单，自动添加订阅。"
+    plugin_desc = "监控豆瓣热门榜单，自动添加订阅。基于jxxghp原版小改"
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
     plugin_version = "1.9.1"
     # 插件作者
-    plugin_author = "jxxghp"
+    plugin_author = "justzerock"
     # 作者主页
-    author_url = "https://github.com/jxxghp"
+    author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀
-    plugin_config_prefix = "doubanrank_"
+    plugin_config_prefix = "doubanrankvote_"
     # 加载顺序
     plugin_order = 6
     # 可使用的用户级别
@@ -159,7 +159,7 @@ class DoubanRank(_PluginBase):
         if self._enabled and self._cron:
             return [
                 {
-                    "id": "DoubanRank",
+                    "id": "DoubanRankVote",
                     "name": "豆瓣榜单订阅服务",
                     "trigger": CronTrigger.from_crontab(self._cron),
                     "func": self.__refresh_rss,
@@ -169,7 +169,7 @@ class DoubanRank(_PluginBase):
         elif self._enabled:
             return [
                 {
-                    "id": "DoubanRank",
+                    "id": "DoubanRankVote",
                     "name": "豆瓣榜单订阅服务",
                     "trigger": CronTrigger.from_crontab("0 8 * * *"),
                     "func": self.__refresh_rss,
@@ -393,10 +393,10 @@ class DoubanRank(_PluginBase):
                             },
                             'events': {
                                 'click': {
-                                    'api': 'plugin/DoubanRank/delete_history',
+                                    'api': 'plugin/DoubanRankVote/delete_history',
                                     'method': 'get',
                                     'params': {
-                                        'key': f"doubanrank: {title} (DB:{doubanid})",
+                                        'key': f"doubanrankvote: {title} (DB:{doubanid})",
                                         'apikey': settings.API_TOKEN
                                     }
                                 }
@@ -557,11 +557,17 @@ class DoubanRank(_PluginBase):
                     douban_id = rss_info.get('doubanid')
                     year = rss_info.get('year')
                     type_str = rss_info.get('type')
+                    logger.info(f"类型为 {type_str}")
+                    vote = rss_info.get('vote')
+                    # 判断评分是否符合要求
+                    if self._vote and vote < self._vote:
+                        logger.info(f'{title} {year} 评分{vote}不符合要求')
+                        continue
                     if type_str == "movie":
                         mtype = MediaType.MOVIE
                     elif type_str:
                         mtype = MediaType.TV
-                    unique_flag = f"doubanrank: {title} (DB:{douban_id})"
+                    unique_flag = f"doubanrankvote: {title} (DB:{douban_id})"
                     # 检查是否已处理过
                     if unique_flag in [h.get("unique") for h in history]:
                         continue
@@ -594,9 +600,9 @@ class DoubanRank(_PluginBase):
                             logger.warn(f'未识别到媒体信息，标题：{title}，豆瓣ID：{douban_id}')
                             continue
                     # 判断评分是否符合要求
-                    if self._vote and mediainfo.vote_average < self._vote:
-                        logger.info(f'{mediainfo.title_year} 评分不符合要求')
-                        continue
+                    # if self._vote and vote < self._vote:
+                    #     logger.info(f'{mediainfo.title_year} 评分不符合要求')
+                    #     continue
                     # 查询缺失的媒体信息
                     exist_flag, _ = self.downloadchain.get_no_exists_info(meta=meta, mediainfo=mediainfo)
                     if exist_flag:
@@ -681,6 +687,14 @@ class DoubanRank(_PluginBase):
                     year = re.findall(r"\b(19\d{2}|20\d{2})\b", description)
                     if year:
                         rss_info['year'] = year[0]
+
+                    # 提取评分
+                    vote_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
+                    if vote_match:
+                        if vote_match.group(1) == "无":
+                            rss_info['vote'] = 0
+                        else:
+                            rss_info['vote'] = float(vote_match.group(1))
 
                     # 返回对象
                     ret_array.append(rss_info)
