@@ -64,7 +64,9 @@ class DoubanRankVote(_PluginBase):
     _onlyonce = False
     _rss_addrs = []
     _ranks = []
-    _vote = 0
+    _mvote = 7.5
+    _tvote = 8.0
+    _svote = 8.5
     _clear = False
     _clearflag = False
     _proxy = False
@@ -79,7 +81,9 @@ class DoubanRankVote(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._vote = float(config.get("vote")) if config.get("vote") else 0
+            self._mvote = float(config.get("mvote")) if config.get("mvote") else 7.5
+            self._tvote = float(config.get("tvote")) if config.get("tvote") else 8.0
+            self._svote = float(config.get("svote")) if config.get("svote") else 8.5
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -266,8 +270,24 @@ class DoubanRankVote(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'vote',
-                                            'label': '评分',
+                                            'model': 'mvote',
+                                            'label': '电影评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    },
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'tvote',
+                                            'label': '剧集评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    },
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'svote',
+                                            'label': '综艺评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -350,7 +370,9 @@ class DoubanRankVote(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
-            "vote": "",
+            "mvote": "7.5",
+            "tvote": "8.0",
+            "svote": "8.5",
             "ranks": [],
             "rss_addrs": "",
             "clear": False
@@ -396,7 +418,7 @@ class DoubanRankVote(_PluginBase):
                                     'api': 'plugin/DoubanRankVote/delete_history',
                                     'method': 'get',
                                     'params': {
-                                        'key': f"doubanrankvote: {title} (DB:{doubanid})",
+                                        'key': f"doubanrank: {title} (DB:{doubanid})",
                                         'apikey': settings.API_TOKEN
                                     }
                                 }
@@ -513,7 +535,9 @@ class DoubanRankVote(_PluginBase):
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
-            "vote": self._vote,
+            "mvote": self._mvote,
+            "tvote": self._tvote,
+            "svote": self._svote,
             "ranks": self._ranks,
             "rss_addrs": '\n'.join(map(str, self._rss_addrs)),
             "clear": self._clear
@@ -559,15 +583,22 @@ class DoubanRankVote(_PluginBase):
                     type_str = rss_info.get('type')
                     logger.info(f"类型为 {type_str}")
                     vote = rss_info.get('vote')
+                    vote_limit = self._mvote
+                    if addr.endswith('movie-top250'):
+                        vote_limit = 0  # 不做评分限制
+                    elif addr.endswith('tv_hot'):
+                        vote_limit = self._tvote  # 电视剧评分限制
+                    elif addr.endswith('show_domestic'):
+                        vote_limit = self._svote  # 综艺评分限制
                     # 判断评分是否符合要求
-                    if self._vote and vote < self._vote:
-                        logger.info(f'{title} {year} 评分{vote}不符合要求')
+                    if vote < vote_limit:
+                        logger.info(f'{title} 评分{vote}不符合要求')
                         continue
                     if type_str == "movie":
                         mtype = MediaType.MOVIE
                     elif type_str:
                         mtype = MediaType.TV
-                    unique_flag = f"doubanrankvote: {title} (DB:{douban_id})"
+                    unique_flag = f"doubanrank: {title} (DB:{douban_id})"
                     # 检查是否已处理过
                     if unique_flag in [h.get("unique") for h in history]:
                         continue
