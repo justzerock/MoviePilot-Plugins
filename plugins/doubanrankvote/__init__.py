@@ -263,8 +263,8 @@ class DoubanRankVote(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 6
+                                    'cols': 4,
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -274,7 +274,16 @@ class DoubanRankVote(_PluginBase):
                                             'label': '电影评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
-                                    },
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
                                     {
                                         'component': 'VTextField',
                                         'props': {
@@ -282,7 +291,16 @@ class DoubanRankVote(_PluginBase):
                                             'label': '剧集评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
-                                    },
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
                                     {
                                         'component': 'VTextField',
                                         'props': {
