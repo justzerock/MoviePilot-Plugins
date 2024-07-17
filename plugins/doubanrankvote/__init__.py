@@ -30,7 +30,7 @@ class DoubanRankVote(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.1"
+    plugin_version = "0.0.2"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
