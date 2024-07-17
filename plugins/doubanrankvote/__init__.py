@@ -600,7 +600,6 @@ class DoubanRankVote(_PluginBase):
                     douban_id = rss_info.get('doubanid')
                     year = rss_info.get('year')
                     type_str = rss_info.get('type')
-                    logger.info(f"类型为 {type_str}")
                     vote = rss_info.get('vote')
                     vote_limit = self._mvote
                     if addr.endswith('movie_top250'):
