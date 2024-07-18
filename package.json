@@ -3,11 +3,12 @@
         "name": "豆瓣榜单订阅（豆瓣评分）",
         "description": "监控豆瓣热门榜单，自动添加订阅。基于jxxghp原版小改",
         "labels": "订阅",
-        "version": "0.0.5",
+        "version": "0.0.6",
         "icon": "movie.jpg",
         "author": "justzerock",
         "level": 2,
         "history": {
+            "v0.0.6": "小改",
             "v0.0.5": "改名",
             "v0.0.4": "自定义源适配",
             "v0.0.3": "修改小问题",

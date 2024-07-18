@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.5"
+    plugin_version = "0.0.6"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -601,7 +601,8 @@ class DoubanRankRate(_PluginBase):
                     year = rss_info.get('year')
                     type_str = rss_info.get('type')
                     rate = rss_info.get('rate')
-                    if type_str == "custom":
+                    preset = rss_info.get('preset')
+                    if preset == "custom":
                         score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
                         if score_match:
                             score_limit = float(score_match.group(1))
@@ -748,7 +749,7 @@ class DoubanRankRate(_PluginBase):
 
                     # 提取评分
                     if '评分' in description:
-                        rss_info['type'] = 'preset'
+                        rss_info['preset'] = 'preset'
                         rate_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
                         if rate_match:
                             if rate_match.group(1) == "无":
@@ -756,7 +757,7 @@ class DoubanRankRate(_PluginBase):
                             else:
                                 rss_info['rate'] = float(rate_match.group(1))
                     else:
-                        rss_info['type'] = 'custom'
+                        rss_info['preset'] = 'custom'
                         rate_match = re.search(r"<p>(\d+(?:\.\d+)?)</p>", description)
                         if rate_match:
                             rss_info['rate'] = float(rate_match.group(1))
