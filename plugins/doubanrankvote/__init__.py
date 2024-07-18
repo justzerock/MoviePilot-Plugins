@@ -30,7 +30,7 @@ class DoubanRankVote(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.3"
+    plugin_version = "0.0.4"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -601,17 +601,23 @@ class DoubanRankVote(_PluginBase):
                     year = rss_info.get('year')
                     type_str = rss_info.get('type')
                     vote = rss_info.get('vote')
-                    vote_limit = self._mvote
-                    if addr.endswith('movie_top250'):
-                        vote_limit = 0  # 不做评分限制
-                    elif addr.endswith('tv_hot'):
-                        vote_limit = self._tvote  # 电视剧评分限制
-                    elif addr.endswith('show_domestic'):
-                        vote_limit = self._svote  # 综艺评分限制
-                    # 判断评分是否符合要求
-                    if vote < vote_limit:
+                    score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
+                    score_limit = float(score_match.group(1))
+                    logger.info(f"当前评分要求 {score_limit} 分")
+                    if vote < score_limit:
                         logger.info(f'{title} 评分{vote}不符合要求')
                         continue
+                    # vote_limit = self._mvote
+                    # if addr.endswith('movie_top250'):
+                    #     vote_limit = 0  # 不做评分限制
+                    # elif addr.endswith('tv_hot'):
+                    #     vote_limit = self._tvote  # 电视剧评分限制
+                    # elif addr.endswith('show_domestic'):
+                    #     vote_limit = self._svote  # 综艺评分限制
+                    # # 判断评分是否符合要求
+                    # if vote < vote_limit:
+                    #     logger.info(f'{title} 评分{vote}不符合要求')
+                    #     continue
                     if type_str == "movie":
                         mtype = MediaType.MOVIE
                     elif type_str:
@@ -739,12 +745,17 @@ class DoubanRankVote(_PluginBase):
                         rss_info['year'] = year[0]
 
                     # 提取评分
-                    vote_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
-                    if vote_match:
-                        if vote_match.group(1) == "无":
-                            rss_info['vote'] = 0
-                        else:
-                            rss_info['vote'] = float(vote_match.group(1))
+                    if '评分' in description:
+                        vote_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
+                        if vote_match:
+                            if vote_match.group(1) == "无":
+                                rss_info['vote'] = 0
+                            else:
+                                rss_info['vote'] = float(vote_match.group(1))
+                    else:
+                        vote_match = re.search(r"<p>(\d+(?:\.\d+)?)</p>", description)
+                        rss_info['vote'] = float(vote_match.group(1))
+
 
                     # 返回对象
                     ret_array.append(rss_info)
