@@ -22,21 +22,21 @@ from app.utils.dom import DomUtils
 from app.utils.http import RequestUtils
 
 
-class DoubanRankVote(_PluginBase):
+class DoubanRankRate(_PluginBase):
     # 插件名称
-    plugin_name = "豆瓣榜单订阅（使用豆瓣评分）"
+    plugin_name = "豆瓣榜单订阅（豆瓣评分）"
     # 插件描述
     plugin_desc = "监控豆瓣热门榜单，自动添加订阅。基于jxxghp原版小改"
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.4"
+    plugin_version = "0.0.5"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀
-    plugin_config_prefix = "doubanrankvote_"
+    plugin_config_prefix = "doubanrankrate_"
     # 加载顺序
     plugin_order = 6
     # 可使用的用户级别
@@ -64,9 +64,9 @@ class DoubanRankVote(_PluginBase):
     _onlyonce = False
     _rss_addrs = []
     _ranks = []
-    _mvote = 7.5
-    _tvote = 8.0
-    _svote = 8.5
+    _mrate = 7.5
+    _trate = 8.0
+    _srate = 8.5
     _clear = False
     _clearflag = False
     _proxy = False
@@ -81,9 +81,9 @@ class DoubanRankVote(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._mvote = float(config.get("mvote")) if config.get("mvote") else 7.5
-            self._tvote = float(config.get("tvote")) if config.get("tvote") else 8.0
-            self._svote = float(config.get("svote")) if config.get("svote") else 8.5
+            self._mrate = float(config.get("mrate")) if config.get("mrate") else 7.5
+            self._trate = float(config.get("trate")) if config.get("trate") else 8.0
+            self._srate = float(config.get("srate")) if config.get("srate") else 8.5
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -163,7 +163,7 @@ class DoubanRankVote(_PluginBase):
         if self._enabled and self._cron:
             return [
                 {
-                    "id": "DoubanRankVote",
+                    "id": "DoubanRankRate",
                     "name": "豆瓣榜单订阅服务",
                     "trigger": CronTrigger.from_crontab(self._cron),
                     "func": self.__refresh_rss,
@@ -173,7 +173,7 @@ class DoubanRankVote(_PluginBase):
         elif self._enabled:
             return [
                 {
-                    "id": "DoubanRankVote",
+                    "id": "DoubanRankRate",
                     "name": "豆瓣榜单订阅服务",
                     "trigger": CronTrigger.from_crontab("0 8 * * *"),
                     "func": self.__refresh_rss,
@@ -270,7 +270,7 @@ class DoubanRankVote(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'mvote',
+                                            'model': 'mrate',
                                             'label': '电影评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
@@ -287,7 +287,7 @@ class DoubanRankVote(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'tvote',
+                                            'model': 'trate',
                                             'label': '剧集评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
@@ -304,7 +304,7 @@ class DoubanRankVote(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'svote',
+                                            'model': 'srate',
                                             'label': '综艺评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
@@ -388,9 +388,9 @@ class DoubanRankVote(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
-            "mvote": "7.5",
-            "tvote": "8.0",
-            "svote": "8.5",
+            "mrate": "7.5",
+            "trate": "8.0",
+            "srate": "8.5",
             "ranks": [],
             "rss_addrs": "",
             "clear": False
@@ -418,7 +418,7 @@ class DoubanRankVote(_PluginBase):
         contents = []
         for history in historys:
             title = history.get("title")
-            vote = history.get("vote")
+            rate = history.get("rate")
             poster = history.get("poster")
             mtype = history.get("type")
             time_str = history.get("time")
@@ -434,7 +434,7 @@ class DoubanRankVote(_PluginBase):
                             },
                             'events': {
                                 'click': {
-                                    'api': 'plugin/DoubanRankVote/delete_history',
+                                    'api': 'plugin/DoubanRankRate/delete_history',
                                     'method': 'get',
                                     'params': {
                                         'key': f"doubanrank: {title} (DB:{doubanid})",
@@ -480,7 +480,7 @@ class DoubanRankVote(_PluginBase):
                                                         'href': f"https://movie.douban.com/subject/{doubanid}",
                                                         'target': '_blank'
                                                     },
-                                                    'text': f"{title} {vote}分"
+                                                    'text': f"{title} {rate}分"
                                                 }
                                             ]
                                         },
@@ -554,9 +554,9 @@ class DoubanRankVote(_PluginBase):
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
-            "mvote": self._mvote,
-            "tvote": self._tvote,
-            "svote": self._svote,
+            "mrate": self._mrate,
+            "trate": self._trate,
+            "srate": self._srate,
             "ranks": self._ranks,
             "rss_addrs": '\n'.join(map(str, self._rss_addrs)),
             "clear": self._clear
@@ -600,24 +600,26 @@ class DoubanRankVote(_PluginBase):
                     douban_id = rss_info.get('doubanid')
                     year = rss_info.get('year')
                     type_str = rss_info.get('type')
-                    vote = rss_info.get('vote')
-                    score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
-                    score_limit = float(score_match.group(1))
-                    logger.info(f"当前评分要求 {score_limit} 分")
-                    if vote < score_limit:
-                        logger.info(f'{title} 评分{vote}不符合要求')
-                        continue
-                    # vote_limit = self._mvote
-                    # if addr.endswith('movie_top250'):
-                    #     vote_limit = 0  # 不做评分限制
-                    # elif addr.endswith('tv_hot'):
-                    #     vote_limit = self._tvote  # 电视剧评分限制
-                    # elif addr.endswith('show_domestic'):
-                    #     vote_limit = self._svote  # 综艺评分限制
-                    # # 判断评分是否符合要求
-                    # if vote < vote_limit:
-                    #     logger.info(f'{title} 评分{vote}不符合要求')
-                    #     continue
+                    rate = rss_info.get('rate')
+                    if type_str == "custom":
+                        score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
+                        if score_match:
+                            score_limit = float(score_match.group(1))
+                            if rate < score_limit:
+                                logger.info(f'{title} 评分{rate}低于 {score_limit}，不符合要求')
+                                continue
+                    else:
+                        rate_limit = self._mrate
+                        if addr.endswith('movie_top250'):
+                            rate_limit = 0  # 不做评分限制
+                        elif addr.endswith('tv_hot'):
+                            rate_limit = self._trate  # 电视剧评分限制
+                        elif addr.endswith('show_domestic'):
+                            rate_limit = self._srate  # 综艺评分限制
+                        # 判断评分是否符合要求
+                        if rate < rate_limit:
+                            logger.info(f'{title} 评分{rate}低于 {rate_limit}，不符合要求')
+                            continue
                     if type_str == "movie":
                         mtype = MediaType.MOVIE
                     elif type_str:
@@ -655,7 +657,7 @@ class DoubanRankVote(_PluginBase):
                             logger.warn(f'未识别到媒体信息，标题：{title}，豆瓣ID：{douban_id}')
                             continue
                     # 判断评分是否符合要求
-                    # if self._vote and vote < self._vote:
+                    # if self._rate and rate < self._rate:
                     #     logger.info(f'{mediainfo.title_year} 评分不符合要求')
                     #     continue
                     # 查询缺失的媒体信息
@@ -678,7 +680,7 @@ class DoubanRankVote(_PluginBase):
                     # 存储历史记录
                     history.append({
                         "title": title,
-                        "vote": vote,
+                        "rate": rate,
                         "type": mediainfo.type.value,
                         "year": mediainfo.year,
                         "poster": mediainfo.get_poster_image(),
@@ -746,15 +748,18 @@ class DoubanRankVote(_PluginBase):
 
                     # 提取评分
                     if '评分' in description:
-                        vote_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
-                        if vote_match:
-                            if vote_match.group(1) == "无":
-                                rss_info['vote'] = 0
+                        rss_info['type'] = 'preset'
+                        rate_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
+                        if rate_match:
+                            if rate_match.group(1) == "无":
+                                rss_info['rate'] = 0
                             else:
-                                rss_info['vote'] = float(vote_match.group(1))
+                                rss_info['rate'] = float(rate_match.group(1))
                     else:
-                        vote_match = re.search(r"<p>(\d+(?:\.\d+)?)</p>", description)
-                        rss_info['vote'] = float(vote_match.group(1))
+                        rss_info['type'] = 'custom'
+                        rate_match = re.search(r"<p>(\d+(?:\.\d+)?)</p>", description)
+                        if rate_match:
+                            rss_info['rate'] = float(rate_match.group(1))
 
 
                     # 返回对象
