@@ -1,9 +1,9 @@
 {
     "DoubanRankRate": {
-        "name": "豆瓣榜单订阅（使用豆瓣评分）",
+        "name": "豆瓣榜单订阅（豆瓣评分）",
         "description": "监控豆瓣热门榜单，自动添加订阅。基于jxxghp原版小改",
         "labels": "订阅",
-        "version": "0.0.4",
+        "version": "0.0.5",
         "icon": "movie.jpg",
         "author": "justzerock",
         "level": 2,
