@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.6"
+    plugin_version = "0.0.7"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -599,9 +599,9 @@ class DoubanRankRate(_PluginBase):
                     title = rss_info.get('title')
                     douban_id = rss_info.get('doubanid')
                     year = rss_info.get('year')
-                    type_str = rss_info.get('type')
                     rate = rss_info.get('rate')
                     preset = rss_info.get('preset')
+
                     if preset == "custom":
                         score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
                         if score_match:
@@ -621,10 +621,10 @@ class DoubanRankRate(_PluginBase):
                         if rate < rate_limit:
                             logger.info(f'{title} 评分{rate}低于 {rate_limit}，不符合要求')
                             continue
-                    if type_str == "movie":
-                        mtype = MediaType.MOVIE
-                    elif type_str:
+                    if 'tv_' in addr or 'show_' in addr:
                         mtype = MediaType.TV
+                    else:
+                        mtype = MediaType.MOVIE
                     unique_flag = f"doubanrank: {title} (DB:{douban_id})"
                     # 检查是否已处理过
                     if unique_flag in [h.get("unique") for h in history]:
