@@ -1,13 +1,14 @@
 {
     "DoubanRankRate": {
         "name": "豆瓣榜单订阅（豆瓣评分）",
-        "description": "监控豆瓣热门榜单，自动添加订阅。基于jxxghp原版小改",
+        "description": "监控豆瓣热门榜单，自动添加订阅。基于原版，改用豆瓣评分筛选，不同分类使用不同分数。",
         "labels": "订阅",
-        "version": "0.0.7",
+        "version": "0.0.8",
         "icon": "movie.jpg",
-        "author": "justzerock",
+        "author": "jxxghp,justzerock",
         "level": 2,
         "history": {
+            "v0.0.8": "新增榜单链接，修改说明",
             "v0.0.7": "修改type",
             "v0.0.6": "小改",
             "v0.0.5": "改名",

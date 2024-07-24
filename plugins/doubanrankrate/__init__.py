@@ -26,13 +26,13 @@ class DoubanRankRate(_PluginBase):
     # 插件名称
     plugin_name = "豆瓣榜单订阅（豆瓣评分）"
     # 插件描述
-    plugin_desc = "监控豆瓣热门榜单，自动添加订阅。基于jxxghp原版小改"
+    plugin_desc = "监控豆瓣热门榜单，自动添加订阅。基于原版，改用豆瓣评分筛选，不同分类使用不同分数。"
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.7"
+    plugin_version = "0.0.8"
     # 插件作者
-    plugin_author = "justzerock"
+    plugin_author = "jxxghp,justzerock"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀
@@ -64,9 +64,9 @@ class DoubanRankRate(_PluginBase):
     _onlyonce = False
     _rss_addrs = []
     _ranks = []
-    _mrate = 7.5
-    _trate = 8.0
-    _srate = 8.5
+    _mrate = 0
+    _trate = 0
+    _srate = 0
     _clear = False
     _clearflag = False
     _proxy = False
@@ -81,9 +81,9 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._mrate = float(config.get("mrate")) if config.get("mrate") else 7.5
-            self._trate = float(config.get("trate")) if config.get("trate") else 8.0
-            self._srate = float(config.get("srate")) if config.get("srate") else 8.5
+            self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
+            self._trate = float(config.get("trate")) if config.get("trate") else 0
+            self._srate = float(config.get("srate")) if config.get("srate") else 0
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -353,7 +353,10 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'rss_addrs',
                                             'label': '自定义榜单地址',
-                                            'placeholder': '每行一个地址，如：https://rsshub.app/douban/movie/ustop'
+                                            'placeholder': '''每行一个地址，支持单独添加评分筛选，如：
+                                            https://rsshub.app/douban/list/movie_weekly_best/score=7.5
+                                            https://rsshub.app/douban/list/tv_global_best_weekly/score=8.5
+                                            '''
                                         }
                                     }
                                 ]
@@ -366,8 +369,8 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 6
+                                    'cols': 6,
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -376,6 +379,23 @@ class DoubanRankRate(_PluginBase):
                                             'model': 'clear',
                                             'label': '清理历史记录',
                                         }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 6,
+                                    'md': 3
+                                },
+                                'content': [
+                                    {
+                                        'component': 'a',
+                                        'props': {
+                                            'href': 'https://docs.rsshub.app/zh/routes/social-media#%E8%B1%86%E7%93%A3%E6%A6%9C%E5%8D%95%E4%B8%8E%E9%9B%86%E5%90%88',
+                                            'target': '_blank'
+                                        },
+                                        'text': "RSSHub - 豆瓣榜单与集合"
                                     }
                                 ]
                             }
@@ -388,9 +408,9 @@ class DoubanRankRate(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
-            "mrate": "7.5",
-            "trate": "8.0",
-            "srate": "8.5",
+            "mrate": "0",
+            "trate": "0",
+            "srate": "0",
             "ranks": [],
             "rss_addrs": "",
             "clear": False
@@ -613,9 +633,9 @@ class DoubanRankRate(_PluginBase):
                         rate_limit = self._mrate
                         if addr.endswith('movie_top250'):
                             rate_limit = 0  # 不做评分限制
-                        elif addr.endswith('tv_hot'):
+                        elif 'tv_' in addr:
                             rate_limit = self._trate  # 电视剧评分限制
-                        elif addr.endswith('show_domestic'):
+                        elif 'show_' in addr:
                             rate_limit = self._srate  # 综艺评分限制
                         # 判断评分是否符合要求
                         if rate < rate_limit:
