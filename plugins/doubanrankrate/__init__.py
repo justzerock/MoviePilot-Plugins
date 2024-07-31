@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.8"
+    plugin_version = "0.0.9"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -67,6 +67,7 @@ class DoubanRankRate(_PluginBase):
     _mrate = 0
     _trate = 0
     _srate = 0
+    _drate = 0
     _clear = False
     _clearflag = False
     _proxy = False
@@ -84,6 +85,7 @@ class DoubanRankRate(_PluginBase):
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
             self._trate = float(config.get("trate")) if config.get("trate") else 0
             self._srate = float(config.get("srate")) if config.get("srate") else 0
+            self._drate = float(config.get("drate")) if config.get("drate") else 0
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -263,8 +265,8 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 6,
-                                    'md': 3
+                                    'cols': 4,
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -280,8 +282,8 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 6,
-                                    'md': 3
+                                    'cols': 4,
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -297,8 +299,8 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 6,
-                                    'md': 3
+                                    'cols': 4,
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -306,6 +308,23 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'srate',
                                             'label': '综艺评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'drate',
+                                            'label': '纪录片评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -411,6 +430,7 @@ class DoubanRankRate(_PluginBase):
             "mrate": "0",
             "trate": "0",
             "srate": "0",
+            "drate": "0",
             "ranks": [],
             "rss_addrs": "",
             "clear": False
@@ -440,7 +460,7 @@ class DoubanRankRate(_PluginBase):
             title = history.get("title")
             rate = history.get("rate")
             poster = history.get("poster")
-            mtype = history.get("type")
+            rtype = history.get("type")
             time_str = history.get("time")
             doubanid = history.get("doubanid")
             contents.append(
@@ -509,7 +529,7 @@ class DoubanRankRate(_PluginBase):
                                             'props': {
                                                 'class': 'pa-0 px-2'
                                             },
-                                            'text': f'类型：{mtype}'
+                                            'text': f'类型：{rtype}'
                                         },
                                         {
                                             'component': 'VCardText',
@@ -577,6 +597,7 @@ class DoubanRankRate(_PluginBase):
             "mrate": self._mrate,
             "trate": self._trate,
             "srate": self._srate,
+            "drate": self._drate,
             "ranks": self._ranks,
             "rss_addrs": '\n'.join(map(str, self._rss_addrs)),
             "clear": self._clear
@@ -621,26 +642,53 @@ class DoubanRankRate(_PluginBase):
                     year = rss_info.get('year')
                     rate = rss_info.get('rate')
                     preset = rss_info.get('preset')
+                    is_docu = rss_info.get('is_docu')
+                    rtype = '电影'
 
-                    if preset == "custom":
+                    """ if preset == "custom":
                         score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
-                        if score_match:
-                            score_limit = float(score_match.group(1))
-                            if rate < score_limit:
-                                logger.info(f'{title} 评分{rate}低于 {score_limit}，不符合要求')
-                                continue
-                    else:
-                        rate_limit = self._mrate
-                        if addr.endswith('movie_top250'):
-                            rate_limit = 0  # 不做评分限制
+                        if is_docu:
+                            rate_limit = self._drate # 纪录片评分限制
+                        elif score_match:
+                            rate_limit = float(score_match.group(1))
+                        elif 'movie_' in addr:
+                            rate_limit = self._mrate # 电影评分限制
                         elif 'tv_' in addr:
                             rate_limit = self._trate  # 电视剧评分限制
                         elif 'show_' in addr:
                             rate_limit = self._srate  # 综艺评分限制
-                        # 判断评分是否符合要求
                         if rate < rate_limit:
-                            logger.info(f'{title} 评分{rate}低于 {rate_limit}，不符合要求')
+                            logger.info(f'{title} 评分{rate}低于 {score_limit}，不符合要求')
                             continue
+                    else: """
+
+                    score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
+                    rate_limit = self._mrate
+                    if is_docu:
+                        rate_limit = self._drate
+                        rtype = '纪录片'
+                    elif score_match:
+                        rate_limit = float(score_match.group(1))
+                        if 'movie_' in addr:
+                            rtype = '电影'
+                        elif 'tv_' in addr:
+                            rtype = '电视剧'
+                        elif 'show_' in addr:
+                            rtype = '综艺'
+                    elif 'movie_top250' in addr:
+                        rate_limit = 0  # 不做评分限制
+                        rtype = '电影'
+                    elif 'tv_' in addr:
+                        rate_limit = self._trate  # 电视剧评分限制
+                        rtype = '电视剧'
+                    elif 'show_' in addr:
+                        rate_limit = self._srate  # 综艺评分限制
+                        rtype = '综艺'
+                    # 判断评分是否符合要求
+                    if rate < rate_limit:
+                        logger.info(f'{title} 评分{rate}低于 {rate_limit}，不符合要求')
+                        continue
+
                     if 'tv_' in addr or 'show_' in addr:
                         mtype = MediaType.TV
                     else:
@@ -702,7 +750,7 @@ class DoubanRankRate(_PluginBase):
                     history.append({
                         "title": title,
                         "rate": rate,
-                        "type": mediainfo.type.value,
+                        "type": rtype,
                         "year": mediainfo.year,
                         "poster": mediainfo.get_poster_image(),
                         "overview": mediainfo.overview,
@@ -769,7 +817,7 @@ class DoubanRankRate(_PluginBase):
 
                     # 提取评分
                     if '评分' in description:
-                        rss_info['preset'] = 'preset'
+                        # rss_info['preset'] = 'preset'
                         rate_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
                         if rate_match:
                             if rate_match.group(1) == "无":
@@ -777,11 +825,16 @@ class DoubanRankRate(_PluginBase):
                             else:
                                 rss_info['rate'] = float(rate_match.group(1))
                     else:
-                        rss_info['preset'] = 'custom'
+                        # rss_info['preset'] = 'custom'
                         rate_match = re.search(r"<p>(\d+(?:\.\d+)?)</p>", description)
                         if rate_match:
                             rss_info['rate'] = float(rate_match.group(1))
 
+                    # 是否纪录片
+                    if "纪录片" in description:
+                        rss_info['is_docu'] = True
+                    else:
+                        rss_info['is_docu'] = False
 
                     # 返回对象
                     ret_array.append(rss_info)
