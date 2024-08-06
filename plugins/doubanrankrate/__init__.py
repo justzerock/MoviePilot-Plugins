@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.2"
+    plugin_version = "0.1.3"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -85,8 +85,8 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._chrate = float(config.get("mrate")) if config.get("chrate") else 0
-            self._japrate = float(config.get("mrate")) if config.get("japrate") else 0
+            self._chrate = float(config.get("_chrate")) if config.get("chrate") else 0
+            self._japrate = float(config.get("_japrate")) if config.get("japrate") else 0
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
             self._trate = float(config.get("trate")) if config.get("trate") else 0
             self._srate = float(config.get("srate")) if config.get("srate") else 0
