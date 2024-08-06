@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.0"
+    plugin_version = "0.1.1"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -521,6 +521,7 @@ class DoubanRankRate(_PluginBase):
         for history in historys:
             title = history.get("title")
             rate = history.get("rate")
+            year = history.get("year")
             poster = history.get("poster")
             rtype = history.get("type")
             time_str = history.get("time")
