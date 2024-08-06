@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.3"
+    plugin_version = "0.1.4"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -70,7 +70,7 @@ class DoubanRankRate(_PluginBase):
     _trate = 0
     _srate = 0
     _drate = 0
-    _year = 0
+    _year = 2000
     _clear = False
     _clearflag = False
     _proxy = False
@@ -85,13 +85,13 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._chrate = float(config.get("_chrate")) if config.get("chrate") else 0
-            self._japrate = float(config.get("_japrate")) if config.get("japrate") else 0
+            self._chrate = float(config.get("chrate")) if config.get("chrate") else 0
+            self._japrate = float(config.get("japrate")) if config.get("japrate") else 0
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
             self._trate = float(config.get("trate")) if config.get("trate") else 0
             self._srate = float(config.get("srate")) if config.get("srate") else 0
             self._drate = float(config.get("drate")) if config.get("drate") else 0
-            self._year = int(config.get("year")) if config.get("year") else 0
+            self._year = int(config.get("year")) if config.get("year") else 2000
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -489,10 +489,13 @@ class DoubanRankRate(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
+            "chrate": "0",
+            "japrate": "0",
             "mrate": "0",
             "trate": "0",
             "srate": "0",
             "drate": "0",
+            "year": "2000",
             "ranks": [],
             "rss_addrs": "",
             "clear": False
@@ -657,8 +660,8 @@ class DoubanRankRate(_PluginBase):
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
-            "chrate": self._mrate,
-            "japrate": self._mrate,
+            "chrate": self._chrate,
+            "japrate": self._japrate,
             "mrate": self._mrate,
             "trate": self._trate,
             "srate": self._srate,
