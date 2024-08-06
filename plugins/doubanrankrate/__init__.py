@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.1"
+    plugin_version = "0.1.2"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -85,8 +85,8 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._chrate = float(config.get("mrate")) if config.get("mrate") else 0
-            self._japrate = float(config.get("mrate")) if config.get("mrate") else 0
+            self._chrate = float(config.get("mrate")) if config.get("chrate") else 0
+            self._japrate = float(config.get("mrate")) if config.get("japrate") else 0
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
             self._trate = float(config.get("trate")) if config.get("trate") else 0
             self._srate = float(config.get("srate")) if config.get("srate") else 0
@@ -712,7 +712,7 @@ class DoubanRankRate(_PluginBase):
                     country = rss_info.get('country')
                     rtype = '电影'
 
-                    if year < self._year:
+                    if int(year) < self._year:
                         logger.info(f"跳过：{title} ，年份：{year} ，低于设定年份：{self._year}")
                         continue
 
@@ -731,9 +731,9 @@ class DoubanRankRate(_PluginBase):
                         if 'movie_' in addr:
                             rtype = '电影'
                             if country == '日本':
-                                rate_limit = 9.0
+                                rate_limit = self._japrate
                             elif country == '中国':
-                                rate_limit = 7.5
+                                rate_limit = self._chrate
                             else:
                                 rate_limit = rate_limit
     
