@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.0.9"
+    plugin_version = "0.1.0"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -64,10 +64,13 @@ class DoubanRankRate(_PluginBase):
     _onlyonce = False
     _rss_addrs = []
     _ranks = []
+    _chrate = 0
+    _japrate = 0
     _mrate = 0
     _trate = 0
     _srate = 0
     _drate = 0
+    _year = 0
     _clear = False
     _clearflag = False
     _proxy = False
@@ -82,10 +85,13 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
+            self._chrate = float(config.get("mrate")) if config.get("mrate") else 0
+            self._japrate = float(config.get("mrate")) if config.get("mrate") else 0
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
             self._trate = float(config.get("trate")) if config.get("trate") else 0
             self._srate = float(config.get("srate")) if config.get("srate") else 0
             self._drate = float(config.get("drate")) if config.get("drate") else 0
+            self._year = int(config.get("year")) if config.get("year") else 0
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -272,23 +278,6 @@ class DoubanRankRate(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'mrate',
-                                            'label': '电影评分',
-                                            'placeholder': '评分大于等于该值才订阅'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 4,
-                                    'md': 2
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
                                             'model': 'trate',
                                             'label': '剧集评分',
                                             'placeholder': '评分大于等于该值才订阅'
@@ -325,6 +314,79 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'drate',
                                             'label': '纪录片评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 6,
+                                    'md': 3
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'year',
+                                            'label': '年份筛选',
+                                            'placeholder': '年份大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'chrate',
+                                            'label': '中国电影评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'japrate',
+                                            'label': '日本电影评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'mrate',
+                                            'label': '其他电影评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -529,7 +591,7 @@ class DoubanRankRate(_PluginBase):
                                             'props': {
                                                 'class': 'pa-0 px-2'
                                             },
-                                            'text': f'类型：{rtype}'
+                                            'text': f'类型：{rtype} 年份：{year}'
                                         },
                                         {
                                             'component': 'VCardText',
@@ -594,10 +656,13 @@ class DoubanRankRate(_PluginBase):
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
+            "chrate": self._mrate,
+            "japrate": self._mrate,
             "mrate": self._mrate,
             "trate": self._trate,
             "srate": self._srate,
             "drate": self._drate,
+            "year": self._year,
             "ranks": self._ranks,
             "rss_addrs": '\n'.join(map(str, self._rss_addrs)),
             "clear": self._clear
@@ -643,27 +708,20 @@ class DoubanRankRate(_PluginBase):
                     rate = rss_info.get('rate')
                     preset = rss_info.get('preset')
                     is_docu = rss_info.get('is_docu')
+                    country = rss_info.get('country')
                     rtype = '电影'
 
-                    """ if preset == "custom":
-                        score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
-                        if is_docu:
-                            rate_limit = self._drate # 纪录片评分限制
-                        elif score_match:
-                            rate_limit = float(score_match.group(1))
-                        elif 'movie_' in addr:
-                            rate_limit = self._mrate # 电影评分限制
-                        elif 'tv_' in addr:
-                            rate_limit = self._trate  # 电视剧评分限制
-                        elif 'show_' in addr:
-                            rate_limit = self._srate  # 综艺评分限制
-                        if rate < rate_limit:
-                            logger.info(f'{title} 评分{rate}低于 {score_limit}，不符合要求')
-                            continue
-                    else: """
+                    if year < self._year:
+                        logger.info(f"跳过：{title} ，年份：{year} ，低于设定年份：{self._year}")
+                        continue
 
                     score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
-                    rate_limit = self._mrate
+                    if country == '日本':
+                        rate_limit = self._japrate
+                    elif country == '中国':
+                        rate_limit = self._chrate
+                    else:
+                        rate_limit = self._mrate
                     if is_docu:
                         rate_limit = self._drate
                         rtype = '纪录片'
@@ -671,6 +729,13 @@ class DoubanRankRate(_PluginBase):
                         rate_limit = float(score_match.group(1))
                         if 'movie_' in addr:
                             rtype = '电影'
+                            if country == '日本':
+                                rate_limit = 9.0
+                            elif country == '中国':
+                                rate_limit = 7.5
+                            else:
+                                rate_limit = rate_limit
+    
                         elif 'tv_' in addr:
                             rtype = '电视剧'
                         elif 'show_' in addr:
@@ -814,6 +879,13 @@ class DoubanRankRate(_PluginBase):
                     year = re.findall(r"\b(19\d{2}|20\d{2})\b", description)
                     if year:
                         rss_info['year'] = year[0]
+
+                    if "中国" in description:
+                        rss_info['country'] = "中国"
+                    elif "日本" in description:
+                        rss_info['country'] = "日本"
+                    else:
+                        rss_info['country'] = "外国" 
 
                     # 提取评分
                     if '评分' in description:
