@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.4"
+    plugin_version = "0.1.5"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -64,10 +64,12 @@ class DoubanRankRate(_PluginBase):
     _onlyonce = False
     _rss_addrs = []
     _ranks = []
-    _chrate = 0
-    _japrate = 0
+    _chmrate = 0
+    _jpmrate = 0
     _mrate = 0
-    _trate = 0
+    _chtvrate = 0
+    _jptvrate = 0
+    _tvrate = 0
     _srate = 0
     _drate = 0
     _year = 2000
@@ -85,10 +87,12 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._chrate = float(config.get("chrate")) if config.get("chrate") else 0
-            self._japrate = float(config.get("japrate")) if config.get("japrate") else 0
+            self._chmrate = float(config.get("chmrate")) if config.get("chmrate") else 0
+            self._jpmrate = float(config.get("jpmrate")) if config.get("jpmrate") else 0
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
-            self._trate = float(config.get("trate")) if config.get("trate") else 0
+            self._chtvrate = float(config.get("chtvrate")) if config.get("chtvrate") else 0
+            self._jptvrate = float(config.get("jptvrate")) if config.get("jptvrate") else 0
+            self._tvrate = float(config.get("tvrate")) if config.get("tvrate") else 0
             self._srate = float(config.get("srate")) if config.get("srate") else 0
             self._drate = float(config.get("drate")) if config.get("drate") else 0
             self._year = int(config.get("year")) if config.get("year") else 2000
@@ -278,8 +282,42 @@ class DoubanRankRate(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'trate',
-                                            'label': '剧集评分',
+                                            'model': 'chtvrate',
+                                            'label': '国产剧集评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'jptvrate',
+                                            'label': '日本剧集评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'tvrate',
+                                            'label': '其他剧集评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -297,23 +335,6 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'srate',
                                             'label': '综艺评分',
-                                            'placeholder': '评分大于等于该值才订阅'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 4,
-                                    'md': 2
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'drate',
-                                            'label': '纪录片评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -351,7 +372,7 @@ class DoubanRankRate(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'chrate',
+                                            'model': 'chmrate',
                                             'label': '中国电影评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
@@ -368,7 +389,7 @@ class DoubanRankRate(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'japrate',
+                                            'model': 'jpmrate',
                                             'label': '日本电影评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
@@ -387,6 +408,23 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'mrate',
                                             'label': '其他电影评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'drate',
+                                            'label': '纪录片评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -489,10 +527,12 @@ class DoubanRankRate(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
-            "chrate": "0",
-            "japrate": "0",
+            "chmrate": "0",
+            "jpmrate": "0",
             "mrate": "0",
-            "trate": "0",
+            "chtvrate": "0",
+            "jptvrate": "0",
+            "tvrate": "0",
             "srate": "0",
             "drate": "0",
             "year": "2000",
@@ -586,7 +626,7 @@ class DoubanRankRate(_PluginBase):
                                                         'href': f"https://movie.douban.com/subject/{doubanid}",
                                                         'target': '_blank'
                                                     },
-                                                    'text': f"{title} {rate}分"
+                                                    'text': f"{title} ({year})"
                                                 }
                                             ]
                                         },
@@ -595,7 +635,7 @@ class DoubanRankRate(_PluginBase):
                                             'props': {
                                                 'class': 'pa-0 px-2'
                                             },
-                                            'text': f'类型：{rtype} 年份：{year}'
+                                            'text': f'类型：{rtype} - {rate}分'
                                         },
                                         {
                                             'component': 'VCardText',
@@ -660,10 +700,12 @@ class DoubanRankRate(_PluginBase):
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
-            "chrate": self._chrate,
-            "japrate": self._japrate,
+            "chmrate": self._chmrate,
+            "jpmrate": self._jpmrate,
             "mrate": self._mrate,
-            "trate": self._trate,
+            "chtvrate": self._chtvrate,
+            "jptvrate": self._jptvrate,
+            "tvrate": self._tvrate,
             "srate": self._srate,
             "drate": self._drate,
             "year": self._year,
@@ -721,9 +763,9 @@ class DoubanRankRate(_PluginBase):
 
                     score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
                     if country == '日本':
-                        rate_limit = self._japrate
+                        rate_limit = self._jpmrate
                     elif country == '中国':
-                        rate_limit = self._chrate
+                        rate_limit = self._chmrate
                     else:
                         rate_limit = self._mrate
                     if is_docu:
@@ -734,11 +776,11 @@ class DoubanRankRate(_PluginBase):
                         if 'movie_' in addr:
                             rtype = '电影'
                             if country == '日本':
-                                rate_limit = self._japrate
+                                rate_limit = self._jpmrate
                             elif country == '中国':
-                                rate_limit = self._chrate
+                                rate_limit = self._chmrate
                             else:
-                                rate_limit = rate_limit
+                                rate_limit = self._mrate
     
                         elif 'tv_' in addr:
                             rtype = '电视剧'
@@ -748,8 +790,12 @@ class DoubanRankRate(_PluginBase):
                         rate_limit = 0  # 不做评分限制
                         rtype = '电影'
                     elif 'tv_' in addr:
-                        rate_limit = self._trate  # 电视剧评分限制
+                        rate_limit = self._tvrate  # 电视剧评分限制
                         rtype = '电视剧'
+                        if country == '日本':
+                            rate_limit = self._jptvrate
+                        elif country == '中国':
+                            rate_limit = self._chtvrate
                     elif 'show_' in addr:
                         rate_limit = self._srate  # 综艺评分限制
                         rtype = '综艺'
