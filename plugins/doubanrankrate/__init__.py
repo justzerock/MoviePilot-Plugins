@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.5"
+    plugin_version = "0.1.6"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -373,7 +373,7 @@ class DoubanRankRate(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'chmrate',
-                                            'label': '中国电影评分',
+                                            'label': '中国大陆电影评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -764,7 +764,7 @@ class DoubanRankRate(_PluginBase):
                     score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
                     if country == '日本':
                         rate_limit = self._jpmrate
-                    elif country == '中国':
+                    elif country == '中国大陆':
                         rate_limit = self._chmrate
                     else:
                         rate_limit = self._mrate
@@ -777,7 +777,7 @@ class DoubanRankRate(_PluginBase):
                             rtype = '电影'
                             if country == '日本':
                                 rate_limit = self._jpmrate
-                            elif country == '中国':
+                            elif country == '中国大陆':
                                 rate_limit = self._chmrate
                             else:
                                 rate_limit = self._mrate
@@ -794,7 +794,7 @@ class DoubanRankRate(_PluginBase):
                         rtype = '电视剧'
                         if country == '日本':
                             rate_limit = self._jptvrate
-                        elif country == '中国':
+                        elif country == '中国大陆':
                             rate_limit = self._chtvrate
                     elif 'show_' in addr:
                         rate_limit = self._srate  # 综艺评分限制
@@ -930,12 +930,12 @@ class DoubanRankRate(_PluginBase):
                     if year:
                         rss_info['year'] = year[0]
 
-                    if "中国" in description:
-                        rss_info['country'] = "中国"
+                    if "中国大陆" in description:
+                        rss_info['country'] = "中国大陆"
                     elif "日本" in description:
                         rss_info['country'] = "日本"
                     else:
-                        rss_info['country'] = "外国" 
+                        rss_info['country'] = "其他" 
 
                     # 提取评分
                     if '评分' in description:
