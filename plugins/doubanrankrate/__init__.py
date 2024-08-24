@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.7"
+    plugin_version = "0.1.8"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -351,7 +351,7 @@ class DoubanRankRate(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 3,
-                                    'md': 1
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -368,7 +368,7 @@ class DoubanRankRate(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 3,
-                                    'md': 1
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -376,7 +376,7 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'stmrate',
                                             'label': '科幻惊悚等评分',
-                                            'placeholder': '年份大于等于该值才订阅'
+                                            'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
                                 ]
