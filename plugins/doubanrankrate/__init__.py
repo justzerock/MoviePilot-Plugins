@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.6"
+    plugin_version = "0.1.7"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -64,6 +64,7 @@ class DoubanRankRate(_PluginBase):
     _onlyonce = False
     _rss_addrs = []
     _ranks = []
+    _stmrate = 0
     _chmrate = 0
     _jpmrate = 0
     _mrate = 0
@@ -87,6 +88,7 @@ class DoubanRankRate(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
+            self._stmrate = float(config.get("stmrate")) if config.get("stmrate") else 0
             self._chmrate = float(config.get("chmrate")) if config.get("chmrate") else 0
             self._jpmrate = float(config.get("jpmrate")) if config.get("jpmrate") else 0
             self._mrate = float(config.get("mrate")) if config.get("mrate") else 0
@@ -348,8 +350,8 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 6,
-                                    'md': 3
+                                    'cols': 3,
+                                    'md': 1
                                 },
                                 'content': [
                                     {
@@ -357,6 +359,23 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'year',
                                             'label': '年份筛选',
+                                            'placeholder': '年份大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 3,
+                                    'md': 1
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'stmrate',
+                                            'label': '科幻惊悚等评分',
                                             'placeholder': '年份大于等于该值才订阅'
                                         }
                                     }
@@ -527,6 +546,7 @@ class DoubanRankRate(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
+            "stmrate": "0",
             "chmrate": "0",
             "jpmrate": "0",
             "mrate": "0",
@@ -700,6 +720,7 @@ class DoubanRankRate(_PluginBase):
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
+            "stmrate": self._stmrate,
             "chmrate": self._chmrate,
             "jpmrate": self._jpmrate,
             "mrate": self._mrate,
@@ -754,6 +775,7 @@ class DoubanRankRate(_PluginBase):
                     rate = rss_info.get('rate')
                     preset = rss_info.get('preset')
                     is_docu = rss_info.get('is_docu')
+                    is_st = rss_info.get('is_st')
                     country = rss_info.get('country')
                     rtype = '电影'
 
@@ -771,6 +793,9 @@ class DoubanRankRate(_PluginBase):
                     if is_docu:
                         rate_limit = self._drate
                         rtype = '纪录片'
+                    elif is_st:
+                        rate_limit = self._stmrate
+                        rtype = '科幻惊悚等'
                     elif score_match:
                         rate_limit = float(score_match.group(1))
                         if 'movie_' in addr:
@@ -784,6 +809,12 @@ class DoubanRankRate(_PluginBase):
     
                         elif 'tv_' in addr:
                             rtype = '电视剧'
+                            if country == '日本':
+                                rate_limit = self._jptvrate
+                            elif country == '中国大陆':
+                                rate_limit = self._chtvrate
+                            else:
+                                rate_limit = self._tvrate
                         elif 'show_' in addr:
                             rtype = '综艺'
                     elif 'movie_top250' in addr:
@@ -936,6 +967,18 @@ class DoubanRankRate(_PluginBase):
                         rss_info['country'] = "日本"
                     else:
                         rss_info['country'] = "其他" 
+
+                    # 是否科幻惊悚
+                    if "科幻" in description and "惊悚" in description:
+                        rss_info['is_st'] = True
+                    elif "惊悚" in description and "恐怖" in description:
+                        rss_info['is_st'] = True
+                    elif "科幻" in description and "恐怖" in description:
+                        rss_info['is_st'] = True
+                    elif "惊悚" in description and "犯罪" in description:
+                        rss_info['is_st'] = True
+                    else:
+                        rss_info['is_st'] = False
 
                     # 提取评分
                     if '评分' in description:
