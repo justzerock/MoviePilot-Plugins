@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.8"
+    plugin_version = "0.1.9"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -793,7 +793,7 @@ class DoubanRankRate(_PluginBase):
                     if is_docu:
                         rate_limit = self._drate
                         rtype = '纪录片'
-                    elif is_st:
+                    elif 'movie_' in addr and is_st:
                         rate_limit = self._stmrate
                         rtype = '科幻惊悚等'
                     elif score_match:
