@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.1.9"
+    plugin_version = "0.2.0"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -942,6 +942,9 @@ class DoubanRankRate(_PluginBase):
                     # 年份
                     description = DomUtils.tag_value(item, "description", default="")
 
+                    if "爱情" in description and "同性" in description:
+                        logger.warn(f"不感兴趣")
+                        continue
                     if not title and not link:
                         logger.warn(f"条目标题和链接均为空，无法处理")
                         continue
@@ -976,6 +979,8 @@ class DoubanRankRate(_PluginBase):
                     elif "科幻" in description and "恐怖" in description:
                         rss_info['is_st'] = True
                     elif "惊悚" in description and "犯罪" in description:
+                        rss_info['is_st'] = True
+                    elif "韩国" in description and "犯罪" in description:
                         rss_info['is_st'] = True
                     else:
                         rss_info['is_st'] = False

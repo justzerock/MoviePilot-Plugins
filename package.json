@@ -3,11 +3,12 @@
         "name": "豆瓣榜单订阅（豆瓣评分）",
         "description": "监控豆瓣热门榜单，自动添加订阅。基于原版，改用豆瓣评分筛选，不同分类使用不同分数。",
         "labels": "订阅",
-        "version": "0.1.9",
+        "version": "0.2.0",
         "icon": "movie.jpg",
         "author": "jxxghp,justzerock",
         "level": 2,
         "history": {
+            "v0.2.0": "加一点限制",
             "v0.1.9": "修复bug",
             "v0.1.8": "修复bug",
             "v0.1.7": "细分科幻惊悚等类型评分",
