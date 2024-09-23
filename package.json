@@ -7,6 +7,7 @@
         "icon": "movie.jpg",
         "author": "jxxghp,justzerock",
         "level": 2,
+        "v2": true,
         "history": {
             "v0.2.0": "加一点限制",
             "v0.1.9": "修复bug",
