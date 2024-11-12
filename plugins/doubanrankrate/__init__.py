@@ -74,6 +74,7 @@ class DoubanRankRate(_PluginBase):
     _srate = 0
     _drate = 0
     _year = 2000
+    _homo = False
     _clear = False
     _clearflag = False
     _proxy = False
@@ -98,6 +99,7 @@ class DoubanRankRate(_PluginBase):
             self._srate = float(config.get("srate")) if config.get("srate") else 0
             self._drate = float(config.get("drate")) if config.get("drate") else 0
             self._year = int(config.get("year")) if config.get("year") else 2000
+            self._homo = config.get("homo") or False
             rss_addrs = config.get("rss_addrs")
             if rss_addrs:
                 if isinstance(rss_addrs, str):
@@ -260,8 +262,8 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 6,
-                                    'md': 3
+                                    'cols': 3,
+                                    'md': 2
                                 },
                                 'content': [
                                     {
@@ -277,7 +279,7 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 4,
+                                    'cols': 3,
                                     'md': 2
                                 },
                                 'content': [
@@ -338,6 +340,22 @@ class DoubanRankRate(_PluginBase):
                                             'model': 'srate',
                                             'label': '综艺评分',
                                             'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 4,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'homo',
+                                            'label': '同性',
                                         }
                                     }
                                 ]
@@ -491,12 +509,12 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'rss_addrs',
                                             'label': '自定义榜单地址',
-                                            'placeholder': '''每行一个地址，支持单独添加评分筛选，如：
-                                            https://rsshub.app/douban/list/movie_weekly_best/score=7.5
-                                            https://rsshub.app/douban/list/tv_global_best_weekly/score=8.5
+                                            'placeholder': '''每行一个地址，支持单独添加评分筛选，精确到整数，如：
+                                            https://rsshub.app/douban/list/movie_weekly_best/score=7
+                                            https://rsshub.app/douban/list/tv_global_best_weekly/score=8
                                             '''
                                         }
-                                    }
+                                    }   
                                 ]
                             }
                         ]
@@ -524,7 +542,8 @@ class DoubanRankRate(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 6,
-                                    'md': 3
+                                    'md': 3,
+                                    'style': 'display: flex; align-items: center;'
                                 },
                                 'content': [
                                     {
@@ -558,6 +577,7 @@ class DoubanRankRate(_PluginBase):
             "year": "2000",
             "ranks": [],
             "rss_addrs": "",
+            "homo": False,
             "clear": False
         }
 
@@ -598,7 +618,7 @@ class DoubanRankRate(_PluginBase):
                             "props": {
                                 'innerClass': 'absolute top-0 right-0',
                             },
-                            'events': {
+                            'events': { 
                                 'click': {
                                     'api': 'plugin/DoubanRankRate/delete_history',
                                     'method': 'get',
@@ -637,7 +657,8 @@ class DoubanRankRate(_PluginBase):
                                         {
                                             'component': 'VCardTitle',
                                             'props': {
-                                                'class': 'ps-1 pe-5 break-words whitespace-break-spaces'
+                                                'class': 'ps-1 pe-5 break-words whitespace-break-spaces',
+                                                'style': 'font-size: 14px;'
                                             },
                                             'content': [
                                                 {
@@ -711,7 +732,7 @@ class DoubanRankRate(_PluginBase):
         historys = [h for h in historys if h.get("unique") != key]
         self.save_data('history', historys)
         return schemas.Response(success=True, message="删除成功")
-
+    
     def __update_config(self):
         """
         列新配置
@@ -732,6 +753,7 @@ class DoubanRankRate(_PluginBase):
             "year": self._year,
             "ranks": self._ranks,
             "rss_addrs": '\n'.join(map(str, self._rss_addrs)),
+            "homo": self._homo,
             "clear": self._clear
         })
 
@@ -777,7 +799,12 @@ class DoubanRankRate(_PluginBase):
                     is_docu = rss_info.get('is_docu')
                     is_st = rss_info.get('is_st')
                     country = rss_info.get('country')
+                    is_homo = rss_info.get('is_homo')
                     rtype = '电影'
+
+                    if not self._homo and is_homo:
+                        logger.info(f"跳过：{title} ，类型：{rtype} ，为同性题材")
+                        continue
 
                     if int(year) < self._year:
                         logger.info(f"跳过：{title} ，年份：{year} ，低于设定年份：{self._year}")
@@ -942,9 +969,6 @@ class DoubanRankRate(_PluginBase):
                     # 年份
                     description = DomUtils.tag_value(item, "description", default="")
 
-                    if "爱情" in description and "同性" in description:
-                        logger.warn(f"不感兴趣")
-                        continue
                     if not title and not link:
                         logger.warn(f"条目标题和链接均为空，无法处理")
                         continue
@@ -970,6 +994,11 @@ class DoubanRankRate(_PluginBase):
                         rss_info['country'] = "日本"
                     else:
                         rss_info['country'] = "其他" 
+                    # 是否同性
+                    if "同性" in description:
+                        rss_info['is_homo'] = True
+                    else:
+                        rss_info['is_homo'] = False
 
                     # 是否科幻惊悚
                     if "科幻" in description and "惊悚" in description:
