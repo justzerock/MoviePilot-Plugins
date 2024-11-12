@@ -30,7 +30,7 @@ class DoubanRankRate(_PluginBase):
     # 插件图标
     plugin_icon = "movie.jpg"
     # 插件版本
-    plugin_version = "0.2.1"
+    plugin_version = "0.2.2"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -385,23 +385,6 @@ class DoubanRankRate(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 3,
-                                    'md': 2
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'stmrate',
-                                            'label': '科幻惊悚等评分',
-                                            'placeholder': '评分大于等于该值才订阅'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
                                     'cols': 4,
                                     'md': 2
                                 },
@@ -462,6 +445,23 @@ class DoubanRankRate(_PluginBase):
                                         'props': {
                                             'model': 'drate',
                                             'label': '纪录片评分',
+                                            'placeholder': '评分大于等于该值才订阅'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 3,
+                                    'md': 2
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'stmrate',
+                                            'label': '科幻惊悚等评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -1000,16 +1000,8 @@ class DoubanRankRate(_PluginBase):
                     else:
                         rss_info['is_homo'] = False
 
-                    # 是否科幻惊悚
-                    if "科幻" in description and "惊悚" in description:
-                        rss_info['is_st'] = True
-                    elif "惊悚" in description and "恐怖" in description:
-                        rss_info['is_st'] = True
-                    elif "科幻" in description and "恐怖" in description:
-                        rss_info['is_st'] = True
-                    elif "惊悚" in description and "犯罪" in description:
-                        rss_info['is_st'] = True
-                    elif "韩国" in description and "犯罪" in description:
+                    # 是否科幻惊悚恐怖犯罪
+                    if "科幻" in description or "惊悚" in description or "恐怖" in description or "犯罪" in description:
                         rss_info['is_st'] = True
                     else:
                         rss_info['is_st'] = False
