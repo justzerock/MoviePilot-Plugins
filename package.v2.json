@@ -36,11 +36,12 @@
         "name": "媒体库服务器通知（自用修改）",
         "description": "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。",
         "labels": "消息通知,媒体库",
-        "version": "0.1",
+        "version": "0.2",
         "icon": "mediaplay.png",
         "author": "jxxghp,justzerock",
         "level": 1,
         "history": {
+            "v0.2": "精简通知详情",
             "v0.1": "有声书改为音乐"
         }
     }
