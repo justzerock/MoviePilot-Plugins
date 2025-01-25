@@ -294,6 +294,7 @@ class MediaServerMsgMod(_PluginBase):
             message_title = f"{self._webhook_actions.get(event_info.event)} 🎬 {event_info.item_name}"
         elif event_info.item_type == "AUD":
             message_title = f"{self._webhook_actions.get(event_info.event)} 🎵 {event_info.item_name}"
+            logger.info(event_info)
         else:
             message_title = f"{self._webhook_actions.get(event_info.event)}"
 
