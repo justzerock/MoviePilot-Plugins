@@ -7,7 +7,6 @@
         "icon": "movie.jpg",
         "author": "jxxghp,justzerock",
         "level": 2,
-        "v2": true,
         "history": {
             "v0.2.2": "小改组件布局",
             "v0.2.1": "新增类型开关",
@@ -31,6 +30,18 @@
             "v0.0.3": "修改小问题",
             "v0.0.2": "修改历史样式",
             "v0.0.1": "修改评分筛选"
+        }
+    },
+    "MediaServerMsgMod": {
+        "name": "媒体库服务器通知（自用修改）",
+        "description": "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。",
+        "labels": "消息通知,媒体库",
+        "version": "0.1",
+        "icon": "mediaplay.png",
+        "author": "jxxghp,justzerock",
+        "level": 1,
+        "history": {
+            "v0.1": "有声书改为音乐"
         }
     }
 }
