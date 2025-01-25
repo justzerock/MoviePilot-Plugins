@@ -737,7 +737,7 @@ class DoubanRankRate(_PluginBase):
         """
         列新配置
         """
-        self.update_config({
+        self.update_config({    
             "enabled": self._enabled,
             "cron": self._cron,
             "onlyonce": self._onlyonce,
