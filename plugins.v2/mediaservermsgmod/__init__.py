@@ -303,14 +303,15 @@ class MediaServerMsgMod(_PluginBase):
             message_texts.append(f"用户：{event_info.user_name}")
         if event_info.device_name:
             message_texts.append(f"设备：{event_info.client} {event_info.device_name}")
-        if event_info.ip:
+        if event_info.ip and event_info.item_type != "AUD":
             message_texts.append(f"IP地址：{event_info.ip} {WebUtils.get_location(event_info.ip)}")
-        if event_info.percentage:
+        if event_info.percentage and event_info.item_type != "AUD":
             percentage = round(float(event_info.percentage), 2)
             message_texts.append(f"进度：{percentage}%")
-        if event_info.overview:
-            message_texts.append(f"剧情：{event_info.overview}")
-        message_texts.append(f"时间：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}")
+        # if event_info.overview:
+        #     message_texts.append(f"剧情：{event_info.overview}")
+        if event_info.item_type != "AUD":
+            message_texts.append(f"时间：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}")
 
         # 消息内容
         message_content = "\n".join(message_texts)
