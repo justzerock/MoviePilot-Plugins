@@ -50,12 +50,13 @@
         "name": "Emby媒体库刷新",
         "description": "入库后自动刷新Emby服务器海报墙。",
         "labels": "媒体库",
-        "version": "0.0.2",
+        "version": "0.0.3",
         "icon": "refresh2.png",
         "author": "jxxghp,justzerock",
         "level": 1,
         "history": {
-            "v0.0.2": "修改判断",
+            "v0.0.3": "获取转移后的目录改为文件路径",
+            "v0.0.2": "修改响应判断",
             "v0.0.1": "修改为Emby媒体刷新接口"
         }
     }

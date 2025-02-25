@@ -21,7 +21,7 @@ class MediaServerRefreshMod(_PluginBase):
     # 插件图标
     plugin_icon = "refresh2.png"
     # 插件版本
-    plugin_version = "0.0.2"
+    plugin_version = "0.0.3"
     # 插件作者
     plugin_author = "jxxghp, justzerock"
     # 作者主页
@@ -216,11 +216,11 @@ class MediaServerRefreshMod(_PluginBase):
 
         # 入库数据
         transferinfo: TransferInfo = event_info.get("transferinfo")
-        if not transferinfo or not transferinfo.target_diritem or not transferinfo.target_diritem.path:
+        if not transferinfo or not transferinfo.target_item or not transferinfo.target_item.path:
             return
-
+        logger.info(transferinfo.target_item)
         # 获取文件路径
-        file_path = transferinfo.target_diritem.path
+        file_path = transferinfo.target_item.path
         
         # 通知Emby刷新
         self.notify_emby_scan(file_path)
