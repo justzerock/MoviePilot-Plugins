@@ -21,7 +21,7 @@ class MediaServerRefreshMod(_PluginBase):
     # 插件图标
     plugin_icon = "refresh2.png"
     # 插件版本
-    plugin_version = "0.0.1"
+    plugin_version = "0.0.2"
     # 插件作者
     plugin_author = "jxxghp, justzerock"
     # 作者主页
@@ -73,7 +73,7 @@ class MediaServerRefreshMod(_PluginBase):
                 headers={'accept': '*/*', 'Content-Type': 'application/json'},
                 data=json.dumps(json_data)
             )
-            if response.status_code == 200:
+            if response.status_code == 204 or response.status_code == 200:
                 logger.info(f"Emby刷新请求发送成功: {file_path}")
                 return True
             else:
