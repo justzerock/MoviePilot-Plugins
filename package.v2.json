@@ -46,18 +46,19 @@
             "v0.1": "有声书改为音乐"
         }
     },
-    "MediaServerRefreshMod": {
-        "name": "Emby媒体库刷新",
-        "description": "入库后自动刷新Emby服务器海报墙。",
-        "labels": "媒体库",
-        "version": "0.0.3",
-        "icon": "refresh2.png",
-        "author": "jxxghp,justzerock",
+    "MediaSyncDelMod": {
+        "name": "媒体文件同步删除",
+        "description": "同步删除历史记录、源文件和下载任务。",
+        "labels": "文件整理",
+        "version": "1.7.1",
+        "icon": "mediasyncdel.png",
+        "author": "thsrite,justzerock",
         "level": 1,
         "history": {
-            "v0.0.3": "获取转移后的目录改为文件路径",
-            "v0.0.2": "修改响应判断",
-            "v0.0.1": "修改为Emby媒体刷新接口"
+            "v1.7.1": "修复删除剧集辅种失败报错问题",
+            "v1.7": "修复重新整理被一并删除问题",
+            "v1.6": "修复删除辅种",
+            "v1.5": "支持手动删除订阅历史记录（本次更新之后的历史）"
         }
     }
 }
