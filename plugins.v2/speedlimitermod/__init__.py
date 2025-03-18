@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.6"
+    plugin_version = "3.0.7"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -565,6 +565,7 @@ class SpeedLimiterMod(_PluginBase):
             # 开启智能限速计算上传限速
             if self._auto_limit:
                 play_up_speed = self.__calc_limit(total_bit_rate)
+                logger.info(f"当前播放总比特率：{total_bit_rate}")
             else:
                 play_up_speed = self._play_up_speed
 
@@ -572,8 +573,14 @@ class SpeedLimiterMod(_PluginBase):
             self.__set_limiter(limit_type="播放", upload_limit=play_up_speed,
                                download_limit=self._play_down_speed)
         else:
-            # 当前没有播放，取消限速
-            self.__set_limiter(limit_type="未播放", upload_limit=self._noplay_up_speed,
+            if self._auto_limit:
+                play_up_speed = int(self._bandwidth_up / 8 * 1024)
+                play_down_speed = int(self._bandwidth_down / 8 * 1024)
+                self.__set_limiter(limit_type="未播放", upload_limit=play_up_speed,
+                                 download_limit=play_down_speed)
+            else:
+                # 当前没有播放，取消限速
+                self.__set_limiter(limit_type="未播放", upload_limit=self._noplay_up_speed,
                                download_limit=self._noplay_down_speed)
 
     def __path_execluded(self, path: str) -> bool:
