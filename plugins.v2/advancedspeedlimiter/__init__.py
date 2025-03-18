@@ -1,88 +1,130 @@
 import ipaddress
-import time
 from typing import List, Tuple, Dict, Any, Optional
-from collections import defaultdict
-from threading import Lock
 
 from app.core.event import eventmanager, Event
 from app.helper.downloader import DownloaderHelper
 from app.helper.mediaserver import MediaServerHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas import NotificationType, WebhookEventInfo
+from app.schemas import NotificationType, WebhookEventInfo, ServiceInfo
 from app.schemas.types import EventType
 from app.utils.ip import IpUtils
 
 
 class AdvancedSpeedLimiter(_PluginBase):
-    plugin_name = "智能播放限速"
-    plugin_desc = "根据播放情况智能调整下载器带宽分配，支持路径定向限速"
+    # 插件名称
+    plugin_name = "播放限速"
+    # 插件描述
+    plugin_desc = "外网播放媒体库视频时，自动对下载器进行限速。"
+    # 插件图标
     plugin_icon = "Librespeed_A.png"
-    plugin_version = "3.0.3"
+    # 插件版本
+    plugin_version = "3.0.0"
+    # 插件作者
     plugin_author = "Shurelol, justzerock"
+    # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
-    plugin_config_prefix = "advancedspeedlimiter_"
+    # 插件配置项ID前缀
+    plugin_config_prefix = "advancedspeedlimit_"
+    # 加载顺序
     plugin_order = 11
+    # 可使用的用户级别
     auth_level = 1
 
     # 私有属性
     downloader_helper = None
     mediaserver_helper = None
+    _scheduler = None
     _enabled: bool = False
-    _notify: bool = True
-    _interval: int = 30
-    _notify_delay: int = 5
+    _notify: bool = False
+    _interval: int = 60
     _downloader: list = []
-    _upload_weights: dict = {}
-    _download_weights: dict = {}
+    _play_up_speed: float = 0
+    _play_down_speed: float = 0
+    _noplay_up_speed: float = 0
+    _noplay_down_speed: float = 0
     _bandwidth_up: float = 0
     _bandwidth_down: float = 0
-    _limit_upload_paths: list = []
-    _limit_download_paths: list = []
-    _last_notify_time: float = 0
-    _notification_cache: dict = defaultdict(list)
-    _lock = Lock()
-    _current_limits: dict = {}
+    _allocation_ratio_up: str = ""
+    _allocation_ratio_down: str = ""
+    _auto_limit: bool = False
+    _limit_enabled: bool = False
+    # 不限速地址
+    _unlimited_ips = {}
+    # 当前限速状态
+    _current_state = ""
+    _exclude_path_up = ""
 
     def init_plugin(self, config: dict = None):
         self.downloader_helper = DownloaderHelper()
         self.mediaserver_helper = MediaServerHelper()
-        
+        # 读取配置
         if config:
             self._enabled = config.get("enabled")
             self._notify = config.get("notify")
-            self._interval = int(config.get("interval") or 30)
-            self._notify_delay = int(config.get("notify_delay") or 5)
-            self._bandwidth_up = float(config.get("bandwidth_up") or 0) * 1e6  # 转换为bps
-            self._bandwidth_down = float(config.get("bandwidth_down") or 0) * 1e6
-            self._limit_upload_paths = [p.strip().lower() for p in (config.get("limit_upload_paths") or "").split("\n") if p.strip()]
-            self._limit_download_paths = [p.strip().lower() for p in (config.get("limit_download_paths") or "").split("\n") if p.strip()]
+            self._play_up_speed = float(config.get("play_up_speed")) if config.get("play_up_speed") else 0
+            self._play_down_speed = float(config.get("play_down_speed")) if config.get("play_down_speed") else 0
+            self._noplay_up_speed = float(config.get("noplay_up_speed")) if config.get("noplay_up_speed") else 0
+            self._noplay_down_speed = float(config.get("noplay_down_speed")) if config.get("noplay_down_speed") else 0
+            self._current_state = f"U:{self._noplay_up_speed},D:{self._noplay_down_speed}"
+            self._exclude_path_up = config.get("exclude_path_up")
+
+            try:
+                # 总带宽
+                self._bandwidth_up = int(float(config.get("bandwidth_up") or 0)) * 1000000
+                self._bandwidth_down = int(float(config.get("bandwidth_down") or 0)) * 1000000
+                # 自动限速开关
+                if self._bandwidth_up > 0 or self._bandwidth_down > 0:
+                    self._auto_limit = True
+                else:
+                    self._auto_limit = False
+            except Exception as e:
+                logger.error(f"智能限速上行带宽设置错误：{str(e)}")
+                self._bandwidth_up = 0
+                self._bandwidth_down = 0
+
+            # 限速服务开关
+            self._limit_enabled = True if (self._play_up_speed
+                                           or self._play_down_speed
+                                           or self._auto_limit) else False
+            self._allocation_ratio_up = config.get("allocation_ratio_up") or ""
+            # 不限速地址
+            self._unlimited_ips["ipv4"] = config.get("ipv4") or ""
+            self._unlimited_ips["ipv6"] = config.get("ipv6") or ""
+
             self._downloader = config.get("downloader") or []
-            # 解析权重配置
-            self._upload_weights = {}
-            self._download_weights = {}
-            weights = [w.strip() for w in (config.get("weights") or "").split(",") if w.strip()]
-            for idx, weight in enumerate(weights):
-                try:
-                    up, down = map(float, weight.split())
-                    dl_name = self._downloader[idx] if idx < len(self._downloader) else f"downloader_{idx+1}"
-                    self._upload_weights[dl_name] = up
-                    self._download_weights[dl_name] = down
-                except Exception as e:
-                    logger.error(f"权重配置解析失败：{weight} - {str(e)}")
-            # 在初始化时增加调试日志
-            logger.debug(f"加载下载器配置：{self._downloader}")
-            logger.debug(f"可用下载器：{ [config.name for config in self.downloader_helper.get_configs().values()] }")
+
+    def get_state(self) -> bool:
+        return self._enabled
+
+    @staticmethod
+    def get_command() -> List[Dict[str, Any]]:
+        pass
+
+    def get_api(self) -> List[Dict[str, Any]]:
+        pass
 
     def get_service(self) -> List[Dict[str, Any]]:
-        if self._enabled:
-            return [{
-                "id": "AdvancedSpeedLimiter",
-                "name": "智能限速服务",
-                "trigger": "interval",
-                "func": self.check_playing_sessions,
-                "kwargs": {"seconds": self._interval}
-            }]
+        """
+        注册插件公共服务
+        [{
+            "id": "服务ID",
+            "name": "服务名称",
+            "trigger": "触发器：cron/interval/date/CronTrigger.from_crontab()",
+            "func": self.xxx,
+            "kwargs": {} # 定时器参数
+        }]
+        """
+        if self._enabled and self._limit_enabled and self._interval:
+            return [
+                {
+                    "id": "AdvancedSpeedLimiter",
+                    "name": "播放限速检查服务",
+                    "trigger": "interval",
+                    "func": self.check_playing_sessions,
+                    "kwargs": {"seconds": self._interval}
+                }
+            ]
         return []
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
@@ -90,13 +132,15 @@ class AdvancedSpeedLimiter(_PluginBase):
             {
                 'component': 'VForm',
                 'content': [
-                    # 启用开关和通知开关
                     {
                         'component': 'VRow',
                         'content': [
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
                                         'component': 'VSwitch',
@@ -109,7 +153,10 @@ class AdvancedSpeedLimiter(_PluginBase):
                             },
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
                                         'component': 'VSwitch',
@@ -122,13 +169,14 @@ class AdvancedSpeedLimiter(_PluginBase):
                             }
                         ]
                     },
-                    # 下载器选择（关键修复点）
                     {
                         'component': 'VRow',
                         'content': [
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12},
+                                'props': {
+                                    'cols': 12
+                                },
                                 'content': [
                                     {
                                         'component': 'VSelect',
@@ -137,133 +185,221 @@ class AdvancedSpeedLimiter(_PluginBase):
                                             'chips': True,
                                             'clearable': True,
                                             'model': 'downloader',
-                                            'label': '选择下载器',
-                                            'items': [
-                                                {"title": config.name, "value": config.name}
-                                                for config in self.downloader_helper.get_configs().values()
-                                            ]
+                                            'label': '下载器',
+                                            'items': [{"title": config.name, "value": config.name}
+                                                      for config in self.downloader_helper.get_configs().values()]
                                         }
                                     }
                                 ]
                             }
                         ]
                     },
-                    # 带宽设置
                     {
                         'component': 'VRow',
                         'content': [
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'play_up_speed',
+                                            'label': '播放限速（上传）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'play_down_speed',
+                                            'label': '播放限速（下载）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'noplay_up_speed',
+                                            'label': '未播放限速（上传）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'noplay_down_speed',
+                                            'label': '未播放限速（下载）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'bandwidth_up',
-                                            'label': '总上行带宽(Mbps)'
+                                            'label': '智能限速上行带宽',
+                                            'placeholder': 'Mbps'
                                         }
                                     }
                                 ]
                             },
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'allocation_ratio_up',
+                                            'label': '智能限速分配比例',
+                                            'placeholder': '3:2:1'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'bandwidth_down',
-                                            'label': '总下行带宽(Mbps)'
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    # 权重配置
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12},
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'weights',
-                                            'label': '下载器权重配置',
-                                            'placeholder': '''格式：上传权重1 下载权重1, 上传权重2 下载权重2,
-                                            权重为0表示不限速，多个下载器用逗号,分隔
-                                            如：1 1, 0 0, 2 1'''
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    # 路径限制
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
-                                'content': [
-                                    {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'limit_upload_paths',
-                                            'label': '限制上传路径',
-                                            'rows': 3,
-                                            'placeholder': '外网播放时生效，每行一个路径'
+                                            'label': '智能限速下行带宽',
+                                            'placeholder': 'Mbps'
                                         }
                                     }
                                 ]
                             },
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
-                                        'component': 'VTextarea',
+                                        'component': 'VTextField',
                                         'props': {
-                                            'model': 'limit_download_paths',
-                                            'label': '限制下载路径',
-                                            'rows': 3,
-                                            'placeholder': '内网播放时生效，每行一个路径'
+                                            'model': 'allocation_ratio_down',
+                                            'label': '智能限速分配比例',
+                                            'placeholder': '0:0:1'
                                         }
                                     }
                                 ]
                             }
                         ]
                     },
-                    # 间隔设置
                     {
                         'component': 'VRow',
                         'content': [
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'interval',
-                                            'label': '检查间隔(秒)'
+                                            'model': 'ipv4',
+                                            'label': '不限速地址范围（ipv4）',
+                                            'placeholder': '留空默认不限速内网ipv4'
                                         }
                                     }
                                 ]
                             },
                             {
                                 'component': 'VCol',
-                                'props': {'cols': 12, 'md': 6},
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
                                 'content': [
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'notify_delay',
-                                            'label': '通知延迟(秒)'
+                                            'model': 'ipv6',
+                                            'label': '不限速地址范围（ipv6）',
+                                            'placeholder': '留空默认不限速内网ipv6'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'exclude_path_up',
+                                            'label': '上传不限速路径',
+                                            'placeholder': '包含该路径的媒体不限速,多个请换行'
                                         }
                                     }
                                 ]
@@ -276,170 +412,311 @@ class AdvancedSpeedLimiter(_PluginBase):
             "enabled": False,
             "notify": True,
             "downloader": [],
-            "bandwidth_up": '100',
-            "bandwidth_down": '500',
-            "weights": "0 0",
-            "limit_upload_paths": "",
-            "limit_download_paths": "",
-            "interval": '30',
-            "notify_delay": '10'
+            "play_up_speed": None,
+            "play_down_speed": None,
+            "noplay_up_speed": None,
+            "noplay_down_speed": None,
+            "bandwidth_up": None,
+            "allocation_ratio_up": "",
+            "ipv4": "",
+            "ipv6": "",
+            "exclude_path_up": ""
         }
+
+    def get_page(self) -> List[dict]:
+        pass
+
+    @property
+    def service_infos(self) -> Optional[Dict[str, ServiceInfo]]:
+        """
+        服务信息
+        """
+        if not self._downloader:
+            logger.warning("尚未配置下载器，请检查配置")
+            return None
+
+        services = self.downloader_helper.get_services(name_filters=self._downloader)
+        if not services:
+            logger.warning("获取下载器实例失败，请检查配置")
+            return None
+
+        active_services = {}
+        for service_name, service_info in services.items():
+            if service_info.instance.is_inactive():
+                logger.warning(f"下载器 {service_name} 未连接，请检查配置")
+            else:
+                active_services[service_name] = service_info
+
+        if not active_services:
+            logger.warning("没有已连接的下载器，请检查配置")
+            return None
+
+        return active_services
 
     @eventmanager.register(EventType.WebhookMessage)
     def check_playing_sessions(self, event: Event = None):
-        """核心逻辑：检查播放会话并调整限速"""
+        """
+        检查播放会话
+        """
+        if not self.service_infos:
+            return
         if not self._enabled:
             return
-
-        total_bitrate_up = 0
-        total_bitrate_down = 0
-        playing_sessions = []
+        if event:
+            event_data: WebhookEventInfo = event.event_data
+            if event_data.event not in [
+                "playback.start",
+                "PlaybackStart",
+                "media.play",
+                "media.stop",
+                "PlaybackStop",
+                "playback.stop"
+            ]:
+                return
+        # 当前播放的总比特率
+        total_bit_rate = 0
         media_servers = self.mediaserver_helper.get_services()
-
-        # 获取播放会话（保留原有逻辑）
-        for server, service in media_servers.items():
-            sessions = []
-            if service.type == "emby":
-                sessions = self._get_emby_sessions(service)
-            # elif service.type == "jellyfin":
-            #     sessions = self._get_jellyfin_sessions(service)
-            # elif service.type == "plex":
-            #     sessions = self._get_plex_sessions(service)
-
-            for session in sessions:
-                # 路径检查（新增逻辑）
-                path = session.get('Path', '').lower()
-                is_external = self._is_external_ip(session)
-                
-                # 判断是否需要限速
-                should_limit = False
-                if is_external and any(p in path for p in self._limit_upload_paths):
-                    should_limit = True
-                    total_bitrate_up += session.get('Bitrate', 0)
-                elif not is_external and any(p in path for p in self._limit_download_paths):
-                    should_limit = True
-                    total_bitrate_down += session.get('Bitrate', 0)
-
-                if should_limit:
-                    playing_sessions.append(session)
-
-        # 计算可用带宽（新增逻辑）
-        available_up = max(self._bandwidth_up - total_bitrate_up, 0)
-        available_down = max(self._bandwidth_down - total_bitrate_down, 0)
-
-        # 执行限速（修改后的分配逻辑）
-        self._apply_speed_limits(available_up, available_down)
-
-        # 处理通知（新增聚合逻辑）
-        self._process_notification(playing_sessions, available_up, available_down)
-
-    def _apply_speed_limits(self, available_up: float, available_down: float):
-        """根据权重分配带宽"""
-        total_up_weight = sum(self._upload_weights.values()) or 1
-        total_down_weight = sum(self._download_weights.values()) or 1
-
-        for dl_name in self._downloader:
-            service = self.downloader_helper.get_downloader(dl_name)
-            if not service:
-                continue
-
-            # 计算分配速率
-            up_limit = (available_up * self._upload_weights.get(dl_name, 0) / total_up_weight) / 1024  # 转换为KB/s
-            down_limit = (available_down * self._download_weights.get(dl_name, 0) / total_down_weight) / 1024
-
-            # 应用限速
-            try:
-                service.instance.set_speed_limit(
-                    download_limit=int(down_limit),
-                    upload_limit=int(up_limit)
-                )
-                self._cache_limit_status(dl_name, up_limit, down_limit)
-            except Exception as e:
-                logger.error(f"限速设置失败：{dl_name} - {str(e)}")
-
-    def _cache_limit_status(self, name: str, up: float, down: float):
-        """缓存当前限速状态"""
-        with self._lock:
-            self._current_limits[name] = {
-                'up': up / 1024,  # 转换为MB/s
-                'down': down / 1024
-            }
-
-    def _process_notification(self, sessions: list, available_up: float, available_down: float):
-        """处理聚合通知"""
-        with self._lock:
-            now = time.time()
-            # 缓存播放信息
-            self._notification_cache['sessions'].extend(sessions)
-            self._notification_cache['available_up'] = available_up
-            self._notification_cache['available_down'] = available_down
-
-            # 达到延迟时间或立即通知
-            if self._notify_delay == 0 or now - self._last_notify_time >= self._notify_delay:
-                self._send_notification()
-                self._last_notify_time = now
-                self._notification_cache.clear()
-
-    def _send_notification(self):
-        """发送格式化通知"""
-        if not self._notification_cache:
+        if not media_servers:
             return
+        # 查询所有媒体服务器状态
+        for server, service in media_servers.items():
+            # 查询播放中会话
+            playing_sessions = []
+            if service.type == "emby":
+                req_url = "[HOST]emby/Sessions?api_key=[APIKEY]"
+                try:
+                    res = service.instance.get_data(req_url)
+                    if res and res.status_code == 200:
+                        sessions = res.json()
+                        for session in sessions:
+                            if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
+                                if not self.__path_execluded(session.get("NowPlayingItem").get("Path")):
+                                    playing_sessions.append(session)
 
-        # 构建通知内容
-        msg = "═══ 限速状态 ═══\n"
-        for name, limits in self._current_limits.items():
-            up_icon = "⇡" if limits['up'] > 0 else " "
-            down_icon = "⇣" if limits['down'] > 0 else " "
-            msg += f"{name} {up_icon} {limits['up']:.1f} {down_icon} {limits['down']:.1f} MB/s\n"
-
-        msg += "\n═══ 正在播放 ═══\n"
-        msg += f"总码率: ⇡ {self._notification_cache['available_up']/1e6:.2f} ⇣ {self._notification_cache['available_down']/1e6:.2f} Mbps\n"
-        for idx, session in enumerate(self._notification_cache.get('sessions', []), 1):
-            title = session.get('Title', '未知媒体')
-            user = session.get('User', '未知用户')
-            bitrate = session.get('Bitrate', 0) / 1e6
-            msg += f"{idx}. {title}\n   用户: {user} | 码率: ⇡ {bitrate:.2f}Mbps\n"
-
-        if self._notify:
-            self.post_message(
-                mtype=NotificationType.MediaServer,
-                title="【智能限速状态】",
-                text=msg
-            )
-
-    # 保留原有媒体服务器会话获取方法
-    def _get_emby_sessions(self, service):
-        """获取Emby播放会话（保持原有实现）"""
-        sessions = []
-        try:
-            res = service.instance.get_data("[HOST]emby/Sessions?api_key=[APIKEY]")
-            if res and res.status_code == 200:
-                for session in res.json():
-                    if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
-                        sessions.append({
-                            'Path': session.get("NowPlayingItem", {}).get("Path", ""),
-                            'Bitrate': session.get("NowPlayingItem", {}).get("Bitrate", 0),
-                            'User': session.get("UserName"),
-                            'Title': session.get("NowPlayingItem", {}).get("Name"),
-                            'RemoteEndPoint': session.get("RemoteEndPoint")
+                except Exception as e:
+                    logger.error(f"获取Emby播放会话失败：{str(e)}")
+                    continue
+                # 计算有效比特率
+                for session in playing_sessions:
+                    # 设置了不限速范围则判断session ip是否在不限速范围内
+                    if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
+                        if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
+                                and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
+                            total_bit_rate += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                    # 未设置不限速范围，则默认不限速内网ip
+                    elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
+                            and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
+                        total_bit_rate += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+            elif service.type == "jellyfin":
+                req_url = "[HOST]Sessions?api_key=[APIKEY]"
+                try:
+                    res = service.instance.get_data(req_url)
+                    if res and res.status_code == 200:
+                        sessions = res.json()
+                        for session in sessions:
+                            if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
+                                if not self.__path_execluded(session.get("NowPlayingItem").get("Path")):
+                                    playing_sessions.append(session)
+                except Exception as e:
+                    logger.error(f"获取Jellyfin播放会话失败：{str(e)}")
+                    continue
+                # 计算有效比特率
+                for session in playing_sessions:
+                    # 设置了不限速范围则判断session ip是否在不限速范围内
+                    if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
+                        if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
+                                and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
+                            media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
+                            for media_stream in media_streams:
+                                total_bit_rate += int(media_stream.get("BitRate") or 0)
+                    # 未设置不限速范围，则默认不限速内网ip
+                    elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
+                            and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
+                        media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
+                        for media_stream in media_streams:
+                            total_bit_rate += int(media_stream.get("BitRate") or 0)
+            elif service.type == "plex":
+                _plex = service.instance.get_plex()
+                if _plex:
+                    sessions = _plex.sessions()
+                    for session in sessions:
+                        bitrate = sum([m.bitrate or 0 for m in session.media])
+                        playing_sessions.append({
+                            "type": session.TAG,
+                            "bitrate": bitrate,
+                            "address": session.player.address
                         })
-        except Exception as e:
-            logger.error(f"获取Emby会话失败：{str(e)}")
-        return sessions
-    
-    def _is_external_ip(self, session):
-        """判断是否为外网IP（保持原有逻辑）"""
-        ip = session.get('RemoteEndPoint') or session.get('address')
-        return not IpUtils.is_private_ip(ip)
+                    # 计算有效比特率
+                    for session in playing_sessions:
+                        # 设置了不限速范围则判断session ip是否在不限速范围内
+                        if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
+                            if not self.__allow_access(self._unlimited_ips, session.get("address")) \
+                                    and session.get("type") == "Video":
+                                total_bit_rate += int(session.get("bitrate") or 0)
+                        # 未设置不限速范围，则默认不限速内网ip
+                        elif not IpUtils.is_private_ip(session.get("address")) \
+                                and session.get("type") == "Video":
+                            total_bit_rate += int(session.get("bitrate") or 0)
 
-    # 其他原有方法保持不变...
-    # ...（保留原有Jellyfin/Plex处理逻辑）
+        if total_bit_rate:
+            # 开启智能限速计算上传限速
+            if self._auto_limit:
+                play_up_speed = self.__calc_limit(total_bit_rate)
+            else:
+                play_up_speed = self._play_up_speed
+
+            # 当前正在播放，开始限速
+            self.__set_limiter(limit_type="播放", upload_limit=play_up_speed,
+                               download_limit=self._play_down_speed)
+        else:
+            # 当前没有播放，取消限速
+            self.__set_limiter(limit_type="未播放", upload_limit=self._noplay_up_speed,
+                               download_limit=self._noplay_down_speed)
+
+    def __path_execluded(self, path: str) -> bool:
+        """
+        判断是否在不限速路径内
+        """
+        if self._exclude_path_up:
+            exclude_paths = self._exclude_path_up.split("\n")
+            for exclude_path_up in exclude_paths:
+                if exclude_path_up in path:
+                    logger.info(f"{path} 在不限速路径：{exclude_path_up} 内，跳过限速")
+                    return True
+        return False
     
+    def __calc_limit(self, total_bit_rate: float) -> float:
+        """
+        计算智能上传限速
+        """
+        if not self._bandwidth_up:
+            return 10
+        return round((self._bandwidth_up - total_bit_rate) / 8 / 1024, 2)
+
+    def __set_limiter(self, limit_type: str, upload_limit: float, download_limit: float):
+        """
+        设置限速
+        """
+        if not self.service_infos:
+            return
+        state = f"U:{upload_limit},D:{download_limit}"
+        if self._current_state == state:
+            # 限速状态没有改变
+            return
+        else:
+            self._current_state = state
+            
+        try:
+            cnt = 0
+            for download in self._downloader:
+                service = self.service_infos.get(download)
+                if self._auto_limit and limit_type == "播放":
+                    # 开启了播放智能限速
+                    if len(self._downloader) == 1:
+                        # 只有一个下载器
+                        upload_limit = int(upload_limit)
+                        download_limit = int(download_limit)
+                    else:
+                        # 多个下载器
+                        if not self._allocation_ratio_up:
+                            # 平均
+                            upload_limit = int(upload_limit / len(self._downloader))
+                        else:
+                            # 按比例
+                            allocation_count = sum([int(i) for i in self._allocation_ratio_up.split(":")])
+                            upload_limit = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count)
+                            cnt += 1
+                        if not self._allocation_ratio_down:
+                            # 平均
+                            download_limit = int(download_limit / len(self._downloader))
+                        else:
+                            # 按比例
+                            allocation_count = sum([int(i) for i in self._allocation_ratio_down.split(":")])
+                            download_limit = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count)
+                            cnt += 1
+                if upload_limit:
+                    text = f"上传：{upload_limit} KB/s"
+                else:
+                    text = f"上传：未限速"
+                if download_limit:
+                    text = f"{text}\n下载：{download_limit} KB/s"
+                else:
+                    text = f"{text}\n下载：未限速"
+                if service.type == 'qbittorrent':
+                    service.instance.set_speed_limit(download_limit=download_limit, upload_limit=upload_limit)
+                    # 发送通知
+                    if self._notify:
+                        title = "【播放限速】"
+                        if upload_limit or download_limit:
+                            subtitle = f"Qbittorrent 开始{limit_type}限速"
+                            self.post_message(
+                                mtype=NotificationType.MediaServer,
+                                title=title,
+                                text=f"{subtitle}\n{text}"
+                            )
+                        else:
+                            self.post_message(
+                                mtype=NotificationType.MediaServer,
+                                title=title,
+                                text=f"Qbittorrent 已取消限速"
+                            )
+                else:
+                    service.instance.set_speed_limit(download_limit=download_limit, upload_limit=upload_limit)
+                    # 发送通知
+                    if self._notify:
+                        title = "【播放限速】"
+                        if upload_limit or download_limit:
+                            subtitle = f"Transmission 开始{limit_type}限速"
+                            self.post_message(
+                                mtype=NotificationType.MediaServer,
+                                title=title,
+                                text=f"{subtitle}\n{text}"
+                            )
+                        else:
+                            self.post_message(
+                                mtype=NotificationType.MediaServer,
+                                title=title,
+                                text=f"Transmission 已取消限速"
+                            )
+        except Exception as e:
+            logger.error(f"设置限速失败：{str(e)}")
+
+    @staticmethod
+    def __allow_access(allow_ips: dict, ip: str) -> bool:
+        """
+        判断IP是否合法
+        :param allow_ips: 充许的IP范围 {"ipv4":, "ipv6":}
+        :param ip: 需要检查的ip
+        """
+        if not allow_ips:
+            return True
+        try:
+            ipaddr = ipaddress.ip_address(ip)
+            if ipaddr.version == 4:
+                if not allow_ips.get('ipv4'):
+                    return True
+                allow_ipv4s = allow_ips.get('ipv4').split(",")
+                for allow_ipv4 in allow_ipv4s:
+                    if ipaddr in ipaddress.ip_network(allow_ipv4, strict=False):
+                        return True
+            elif ipaddr.ipv4_mapped:
+                if not allow_ips.get('ipv4'):
+                    return True
+                allow_ipv4s = allow_ips.get('ipv4').split(",")
+                for allow_ipv4 in allow_ipv4s:
+                    if ipaddr.ipv4_mapped in ipaddress.ip_network(allow_ipv4, strict=False):
+                        return True
+            else:
+                if not allow_ips.get('ipv6'):
+                    return True
+                allow_ipv6s = allow_ips.get('ipv6').split(",")
+                for allow_ipv6 in allow_ipv6s:
+                    if ipaddr in ipaddress.ip_network(allow_ipv6, strict=False):
+                        return True
+        except Exception as err:
+            print(str(err))
+            return False
+        return False
+
     def stop_service(self):
-        """停止服务时重置限速"""
-        for dl in self.downloader_helper.get_downloaders():
-            try:
-                dl.set_speed_limit(upload_limit=0, download_limit=0)
-            except:
-                pass
-        logger.info("已重置所有下载器限速设置")
+        pass
