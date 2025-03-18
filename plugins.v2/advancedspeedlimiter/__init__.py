@@ -18,7 +18,7 @@ class AdvancedSpeedLimiter(_PluginBase):
     plugin_name = "智能播放限速"
     plugin_desc = "根据播放情况智能调整下载器带宽分配，支持路径定向限速"
     plugin_icon = "Librespeed_A.png"
-    plugin_version = "3.0"
+    plugin_version = "3.0.1"
     plugin_author = "Shurelol, justzerock"
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     plugin_config_prefix = "advancedspeedlimiter_"
@@ -57,7 +57,7 @@ class AdvancedSpeedLimiter(_PluginBase):
             self._bandwidth_down = float(config.get("bandwidth_down") or 0) * 1e6
             self._limit_upload_paths = [p.strip().lower() for p in (config.get("limit_upload_paths") or "").split("\n") if p.strip()]
             self._limit_download_paths = [p.strip().lower() for p in (config.get("limit_download_paths") or "").split("\n") if p.strip()]
-            
+            self._downloader = config.get("downloader") or []
             # 解析权重配置
             self._upload_weights = {}
             self._download_weights = {}
