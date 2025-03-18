@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.5"
+    plugin_version = "3.0.6"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -615,7 +615,8 @@ class SpeedLimiterMod(_PluginBase):
             download_limit_final = None
             for download in self._downloader:
                 service = self.service_infos.get(download)
-                if self._auto_limit and limit_type == "播放":
+                # if self._auto_limit and limit_type == "播放":
+                if self._auto_limit:
                     # 开启了播放智能限速
                     if len(self._downloader) == 1:
                         # 只有一个下载器
@@ -631,10 +632,18 @@ class SpeedLimiterMod(_PluginBase):
                             # 按比例
                             allocation_count_up = sum([int(i) for i in self._allocation_ratio_up.split(":")])
                             logger.info(f"上传分配比例：{self._allocation_ratio_up}，总数：{allocation_count_up}, 当前上传速度：{upload_limit}")
-                            upload_limit_final = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count_up)
+                            weight_up = int(self._allocation_ratio_up.split(":")[cnt])
+                            if weight_up == 0:
+                                upload_limit_final = upload_limit
+                            else:
+                                upload_limit_final = int(upload_limit * weight_up / allocation_count_up)
                             allocation_count_down = sum([int(i) for i in self._allocation_ratio_down.split(":")])
                             logger.info(f"下载分配比例：{self._allocation_ratio_down}，总数：{allocation_count_down}，当前下载速度：{download_limit}")
-                            download_limit_final = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count_down)
+                            weight_down = int(self._allocation_ratio_down.split(":")[cnt])
+                            if weight_down == 0:
+                                download_limit_final = download_limit
+                            else:
+                                download_limit_final = int(download_limit * weight_down / allocation_count_down)
                             cnt += 1
                 if upload_limit_final:
                     text = f"上传：{upload_limit_final} KB/s"
