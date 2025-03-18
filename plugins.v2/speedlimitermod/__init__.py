@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.7"
+    plugin_version = "3.0.8"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -574,14 +574,16 @@ class SpeedLimiterMod(_PluginBase):
                                download_limit=self._play_down_speed)
         else:
             if self._auto_limit:
-                play_up_speed = int(self._bandwidth_up / 8 * 1024)
-                play_down_speed = int(self._bandwidth_down / 8 * 1024)
-                self.__set_limiter(limit_type="未播放", upload_limit=play_up_speed,
-                                 download_limit=play_down_speed)
+                noplay_up_speed = int(self._bandwidth_up / 8 * 1024)
+                noplay_down_speed = int(self._bandwidth_down / 8 * 1024)
             else:
                 # 当前没有播放，取消限速
-                self.__set_limiter(limit_type="未播放", upload_limit=self._noplay_up_speed,
-                               download_limit=self._noplay_down_speed)
+                noplay_up_speed = self._noplay_up_speed
+                noplay_down_speed = self._noplay_down_speed
+
+            self.__set_limiter(limit_type="未播放", upload_limit=noplay_up_speed,
+                                download_limit=noplay_down_speed)
+
 
     def __path_execluded(self, path: str) -> bool:
         """
@@ -609,12 +611,12 @@ class SpeedLimiterMod(_PluginBase):
         """
         if not self.service_infos:
             return
-        state = f"U:{upload_limit},D:{download_limit}"
-        if self._current_state == state:
-            # 限速状态没有改变
-            return
-        else:
-            self._current_state = state
+        # state = f"U:{upload_limit},D:{download_limit}"
+        # if self._current_state == state:
+        #     # 限速状态没有改变
+        #     return
+        # else:
+        #     self._current_state = state
             
         try:
             cnt = 0
