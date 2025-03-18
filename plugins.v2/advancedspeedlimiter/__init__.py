@@ -19,7 +19,7 @@ class AdvancedSpeedLimiter(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.0"
+    plugin_version = "3.0.1"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -88,6 +88,7 @@ class AdvancedSpeedLimiter(_PluginBase):
                                            or self._play_down_speed
                                            or self._auto_limit) else False
             self._allocation_ratio_up = config.get("allocation_ratio_up") or ""
+            self._allocation_ratio_down = config.get("allocation_ratio_down") or ""
             # 不限速地址
             self._unlimited_ips["ipv4"] = config.get("ipv4") or ""
             self._unlimited_ips["ipv6"] = config.get("ipv6") or ""
@@ -417,7 +418,9 @@ class AdvancedSpeedLimiter(_PluginBase):
             "noplay_up_speed": None,
             "noplay_down_speed": None,
             "bandwidth_up": None,
+            "bandwidth_down": None,
             "allocation_ratio_up": "",
+            "allocation_ratio_down": "",
             "ipv4": "",
             "ipv6": "",
             "exclude_path_up": ""
