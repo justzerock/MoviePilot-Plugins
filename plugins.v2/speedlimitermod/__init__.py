@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.4"
+    plugin_version = "3.0.5"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -611,43 +611,45 @@ class SpeedLimiterMod(_PluginBase):
             
         try:
             cnt = 0
+            upload_limit_final = None
+            download_limit_final = None
             for download in self._downloader:
                 service = self.service_infos.get(download)
                 if self._auto_limit and limit_type == "播放":
                     # 开启了播放智能限速
                     if len(self._downloader) == 1:
                         # 只有一个下载器
-                        upload_limit = int(upload_limit)
-                        download_limit = int(download_limit)
+                        upload_limit_final = int(upload_limit)
+                        download_limit_final = int(download_limit)
                     else:
                         # 多个下载器
                         if not self._allocation_ratio_up or not self._allocation_ratio_down:
                             # 平均
-                            upload_limit = int(upload_limit / len(self._downloader))
-                            download_limit = int(download_limit / len(self._downloader))
+                            upload_limit_final = int(upload_limit / len(self._downloader))
+                            download_limit_final = int(download_limit / len(self._downloader))
                         else:
                             # 按比例
                             allocation_count_up = sum([int(i) for i in self._allocation_ratio_up.split(":")])
                             logger.info(f"上传分配比例：{self._allocation_ratio_up}，总数：{allocation_count_up}, 当前上传速度：{upload_limit}")
-                            upload_limit = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count_up)
+                            upload_limit_final = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count_up)
                             allocation_count_down = sum([int(i) for i in self._allocation_ratio_down.split(":")])
                             logger.info(f"下载分配比例：{self._allocation_ratio_down}，总数：{allocation_count_down}，当前下载速度：{download_limit}")
-                            download_limit = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count_down)
+                            download_limit_final = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count_down)
                             cnt += 1
-                if upload_limit:
-                    text = f"上传：{upload_limit} KB/s"
+                if upload_limit_final:
+                    text = f"上传：{upload_limit_final} KB/s"
                 else:
                     text = f"上传：未限速"
-                if download_limit:
-                    text = f"{text}\n下载：{download_limit} KB/s"
+                if download_limit_final:
+                    text = f"{text}\n下载：{download_limit_final} KB/s"
                 else:
                     text = f"{text}\n下载：未限速"
                 if service.type == 'qbittorrent':
-                    service.instance.set_speed_limit(download_limit=download_limit, upload_limit=upload_limit)
+                    service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
                     # 发送通知
                     if self._notify:
                         title = "【播放限速】"
-                        if upload_limit or download_limit:
+                        if upload_limit_final or download_limit_final:
                             subtitle = f"Qbittorrent 开始{limit_type}限速"
                             self.post_message(
                                 mtype=NotificationType.MediaServer,
@@ -661,11 +663,11 @@ class SpeedLimiterMod(_PluginBase):
                                 text=f"Qbittorrent 已取消限速"
                             )
                 else:
-                    service.instance.set_speed_limit(download_limit=download_limit, upload_limit=upload_limit)
+                    service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
                     # 发送通知
                     if self._notify:
                         title = "【播放限速】"
-                        if upload_limit or download_limit:
+                        if upload_limit_final or download_limit_final:
                             subtitle = f"Transmission 开始{limit_type}限速"
                             self.post_message(
                                 mtype=NotificationType.MediaServer,
