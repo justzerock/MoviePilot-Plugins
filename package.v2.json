@@ -32,18 +32,16 @@
             "v0.0.1": "修改评分筛选"
         }
     },
-    "MediaServerMsgMod": {
-        "name": "媒体库服务器通知（自用修改）",
-        "description": "发送Emby/Jellyfin/Plex服务器的播放、入库等通知消息。",
-        "labels": "消息通知,媒体库",
-        "version": "0.2.1",
-        "icon": "mediaplay.png",
-        "author": "jxxghp,justzerock",
+    "AdvancedSpeedLimiter": {
+        "name": "智能播放限速",
+        "description": "根据播放情况智能调整下载器带宽分配，支持路径定向限速",
+        "labels": "播放通知,限速",
+        "version": "0.3.1",
+        "icon": "Speedlimit.png",
+        "author": "Shurelol,justzerock",
         "level": 1,
         "history": {
-            "v0.2.1": "测试",
-            "v0.2": "精简通知详情",
-            "v0.1": "有声书改为音乐"
+            "v0.3.1": "测试"
         }
     }
 }
