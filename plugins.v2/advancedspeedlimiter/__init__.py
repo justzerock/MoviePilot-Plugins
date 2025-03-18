@@ -74,7 +74,7 @@ class AdvancedSpeedLimiter(_PluginBase):
     def get_service(self) -> List[Dict[str, Any]]:
         if self._enabled:
             return [{
-                "id": "SpeedLimiter",
+                "id": "AdvancedSpeedLimiter",
                 "name": "智能限速服务",
                 "trigger": "interval",
                 "func": self.check_playing_sessions,
