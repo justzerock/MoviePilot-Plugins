@@ -18,7 +18,7 @@ class AdvancedSpeedLimiter(_PluginBase):
     plugin_name = "智能播放限速"
     plugin_desc = "根据播放情况智能调整下载器带宽分配，支持路径定向限速"
     plugin_icon = "Librespeed_A.png"
-    plugin_version = "3.0.2"
+    plugin_version = "3.0.3"
     plugin_author = "Shurelol, justzerock"
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     plugin_config_prefix = "advancedspeedlimiter_"
@@ -160,9 +160,7 @@ class AdvancedSpeedLimiter(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'bandwidth_up',
-                                            'label': '总上行带宽(Mbps)',
-                                            'type': 'number',
-                                            'min': 0
+                                            'label': '总上行带宽(Mbps)'
                                         }
                                     }
                                 ]
@@ -175,9 +173,7 @@ class AdvancedSpeedLimiter(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'bandwidth_down',
-                                            'label': '总下行带宽(Mbps)',
-                                            'type': 'number',
-                                            'min': 0
+                                            'label': '总下行带宽(Mbps)'
                                         }
                                     }
                                 ]
@@ -197,8 +193,9 @@ class AdvancedSpeedLimiter(_PluginBase):
                                         'props': {
                                             'model': 'weights',
                                             'label': '下载器权重配置',
-                                            'placeholder': '格式：上传权重1 下载权重1, 上传权重2 下载权重2',
-                                            'hint': '权重为0表示不限速，多个下载器用逗号分隔'
+                                            'placeholder': '''格式：上传权重1 下载权重1, 上传权重2 下载权重2,
+                                            权重为0表示不限速，多个下载器用逗号,分隔
+                                            如：1 1, 0 0, 2 1'''
                                         }
                                     }
                                 ]
@@ -253,9 +250,7 @@ class AdvancedSpeedLimiter(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'interval',
-                                            'label': '检查间隔(秒)',
-                                            'type': 'number',
-                                            'min': 5
+                                            'label': '检查间隔(秒)'
                                         }
                                     }
                                 ]
@@ -268,9 +263,7 @@ class AdvancedSpeedLimiter(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'notify_delay',
-                                            'label': '通知延迟(秒)',
-                                            'type': 'number',
-                                            'min': 0
+                                            'label': '通知延迟(秒)'
                                         }
                                     }
                                 ]
@@ -283,13 +276,13 @@ class AdvancedSpeedLimiter(_PluginBase):
             "enabled": False,
             "notify": True,
             "downloader": [],
-            "bandwidth_up": 100,
-            "bandwidth_down": 500,
+            "bandwidth_up": '100',
+            "bandwidth_down": '500',
             "weights": "0 0",
             "limit_upload_paths": "",
             "limit_download_paths": "",
-            "interval": 30,
-            "notify_delay": 5
+            "interval": '30',
+            "notify_delay": '10'
         }
 
     @eventmanager.register(EventType.WebhookMessage)
