@@ -17,7 +17,7 @@ from app.utils.ip import IpUtils
 class AdvancedSpeedLimiter(_PluginBase):
     plugin_name = "智能播放限速"
     plugin_desc = "根据播放情况智能调整下载器带宽分配，支持路径定向限速"
-    plugin_icon = "Speedlimit.png"
+    plugin_icon = "Librespeed_A.png"
     plugin_version = "3.0"
     plugin_author = "Shurelol, justzerock"
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
@@ -83,22 +83,17 @@ class AdvancedSpeedLimiter(_PluginBase):
         return []
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        # 保持原有表单结构，添加新配置项
         return [
             {
                 'component': 'VForm',
                 'content': [
-                    # 原有基础配置项...
-                    # 新增配置项
+                    # 启用开关和通知开关
                     {
                         'component': 'VRow',
                         'content': [
                             {
                                 'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
+                                'props': {'cols': 12, 'md': 6},
                                 'content': [
                                     {
                                         'component': 'VSwitch',
@@ -111,10 +106,7 @@ class AdvancedSpeedLimiter(_PluginBase):
                             },
                             {
                                 'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
+                                'props': {'cols': 12, 'md': 6},
                                 'content': [
                                     {
                                         'component': 'VSwitch',
@@ -127,14 +119,13 @@ class AdvancedSpeedLimiter(_PluginBase):
                             }
                         ]
                     },
+                    # 下载器选择（关键修复点）
                     {
                         'component': 'VRow',
                         'content': [
                             {
                                 'component': 'VCol',
-                                'props': {
-                                    'cols': 12
-                                },
+                                'props': {'cols': 12},
                                 'content': [
                                     {
                                         'component': 'VSelect',
@@ -143,76 +134,144 @@ class AdvancedSpeedLimiter(_PluginBase):
                                             'chips': True,
                                             'clearable': True,
                                             'model': 'downloader',
-                                            'label': '下载器',
-                                            'items': [{"title": config.name, "value": config.name}
-                                                      for config in self.downloader_helper.get_configs().values()]
+                                            'label': '选择下载器',
+                                            'items': [
+                                                {"title": config.name, "value": config.name}
+                                                for config in self.downloader_helper.get_configs().values()
+                                            ]
                                         }
                                     }
                                 ]
                             }
                         ]
                     },
+                    # 带宽设置
                     {
                         'component': 'VRow',
                         'content': [
-                            {'component': 'VCol', 'props': {'cols': 6}, 'content': [
-                                {'component': 'VTextField', 'props': {
-                                    'model': 'bandwidth_up', 'label': '总上行带宽(Mbps)', 'type': 'number'
-                                }}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 6}, 'content': [
-                                {'component': 'VTextField', 'props': {
-                                    'model': 'bandwidth_down', 'label': '总下行带宽(Mbps)', 'type': 'number'
-                                }}
-                            ]}
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'bandwidth_up',
+                                            'label': '总上行带宽(Mbps)',
+                                            'type': 'number',
+                                            'min': 0
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'bandwidth_down',
+                                            'label': '总下行带宽(Mbps)',
+                                            'type': 'number',
+                                            'min': 0
+                                        }
+                                    }
+                                ]
+                            }
                         ]
                     },
+                    # 权重配置
                     {
                         'component': 'VRow',
                         'content': [
-                            {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                                {'component': 'VTextarea', 'props': {
-                                    'model': 'weights', 
-                                    'label': '下载器权重（上传 下载，多个用逗号分隔）',
-                                    'placeholder': '示例：1 0, 2 1 表示第一个下载器上传权重1不限速，第二个上传权重2下载权重1'
-                                }}
-                            ]}
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12},
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'weights',
+                                            'label': '下载器权重配置',
+                                            'placeholder': '格式：上传权重1 下载权重1, 上传权重2 下载权重2',
+                                            'hint': '权重为0表示不限速，多个下载器用逗号分隔'
+                                        }
+                                    }
+                                ]
+                            }
                         ]
                     },
+                    # 路径限制
                     {
                         'component': 'VRow',
                         'content': [
-                            {'component': 'VCol', 'props': {'cols': 6}, 'content': [
-                                {'component': 'VTextarea', 'props': {
-                                    'model': 'limit_upload_paths', 
-                                    'label': '限制上传路径（外网播放时生效）',
-                                    'rows': 3,
-                                    'placeholder': '每行一个路径（不区分大小写）'
-                                }}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 6}, 'content': [
-                                {'component': 'VTextarea', 'props': {
-                                    'model': 'limit_download_paths', 
-                                    'label': '限制下载路径（内网播放时生效）',
-                                    'rows': 3,
-                                    'placeholder': '每行一个路径（不区分大小写）'
-                                }}
-                            ]}
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VTextarea',
+                                        'props': {
+                                            'model': 'limit_upload_paths',
+                                            'label': '限制上传路径',
+                                            'rows': 3,
+                                            'placeholder': '外网播放时生效，每行一个路径'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VTextarea',
+                                        'props': {
+                                            'model': 'limit_download_paths',
+                                            'label': '限制下载路径',
+                                            'rows': 3,
+                                            'placeholder': '内网播放时生效，每行一个路径'
+                                        }
+                                    }
+                                ]
+                            }
                         ]
                     },
+                    # 间隔设置
                     {
                         'component': 'VRow',
                         'content': [
-                            {'component': 'VCol', 'props': {'cols': 6}, 'content': [
-                                {'component': 'VTextField', 'props': {
-                                    'model': 'interval', 'label': '检查间隔（秒）', 'type': 'number'
-                                }}
-                            ]},
-                            {'component': 'VCol', 'props': {'cols': 6}, 'content': [
-                                {'component': 'VTextField', 'props': {
-                                    'model': 'notify_delay', 'label': '通知延迟（秒）', 'type': 'number'
-                                }}
-                            ]}
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'interval',
+                                            'label': '检查间隔(秒)',
+                                            'type': 'number',
+                                            'min': 5
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {'cols': 12, 'md': 6},
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'notify_delay',
+                                            'label': '通知延迟(秒)',
+                                            'type': 'number',
+                                            'min': 0
+                                        }
+                                    }
+                                ]
+                            }
                         ]
                     }
                 ]
@@ -223,7 +282,7 @@ class AdvancedSpeedLimiter(_PluginBase):
             "downloader": [],
             "bandwidth_up": 100,
             "bandwidth_down": 500,
-            "weights": "1 0, 2 0",
+            "weights": "0 0",
             "limit_upload_paths": "",
             "limit_download_paths": "",
             "interval": 30,
