@@ -11,7 +11,7 @@ from app.schemas.types import EventType
 from app.utils.ip import IpUtils
 
 
-class AdvancedSpeedLimiter(_PluginBase):
+class SpeedLimiterMod(_PluginBase):
     # 插件名称
     plugin_name = "播放限速"
     # 插件描述
@@ -19,13 +19,13 @@ class AdvancedSpeedLimiter(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.1"
+    plugin_version = "3.0.2"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀
-    plugin_config_prefix = "advancedspeedlimit_"
+    plugin_config_prefix = "speedlimitmod_"
     # 加载顺序
     plugin_order = 11
     # 可使用的用户级别
