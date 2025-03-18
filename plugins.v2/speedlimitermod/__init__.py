@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.3"
+    plugin_version = "3.0.4"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -628,8 +628,10 @@ class SpeedLimiterMod(_PluginBase):
                         else:
                             # 按比例
                             allocation_count_up = sum([int(i) for i in self._allocation_ratio_up.split(":")])
+                            logger.info(f"上传分配比例：{self._allocation_ratio_up}，总数：{allocation_count_up}, 当前上传速度：{upload_limit}")
                             upload_limit = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count_up)
                             allocation_count_down = sum([int(i) for i in self._allocation_ratio_down.split(":")])
+                            logger.info(f"下载分配比例：{self._allocation_ratio_down}，总数：{allocation_count_down}，当前下载速度：{download_limit}")
                             download_limit = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count_down)
                             cnt += 1
                 if upload_limit:
