@@ -21,7 +21,7 @@ class AdvancedSpeedLimiter(_PluginBase):
     plugin_version = "3.0"
     plugin_author = "Shurelol, justzerock"
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
-    plugin_config_prefix = "advancedspeedlimit_"
+    plugin_config_prefix = "advancedspeedlimiter_"
     plugin_order = 11
     auth_level = 1
 
