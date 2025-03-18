@@ -41,6 +41,7 @@
         "author": "Shurelol,justzerock",
         "level": 1,
         "history": {
+            "v0.3.2": "增加日志",
             "v0.3.1": "修改下载器",
             "v0.3.0": "改名"
         }
