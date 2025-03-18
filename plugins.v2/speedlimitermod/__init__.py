@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.2"
+    plugin_version = "3.0.3"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -621,21 +621,16 @@ class SpeedLimiterMod(_PluginBase):
                         download_limit = int(download_limit)
                     else:
                         # 多个下载器
-                        if not self._allocation_ratio_up:
+                        if not self._allocation_ratio_up or not self._allocation_ratio_down:
                             # 平均
                             upload_limit = int(upload_limit / len(self._downloader))
-                        else:
-                            # 按比例
-                            allocation_count = sum([int(i) for i in self._allocation_ratio_up.split(":")])
-                            upload_limit = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count)
-                            cnt += 1
-                        if not self._allocation_ratio_down:
-                            # 平均
                             download_limit = int(download_limit / len(self._downloader))
                         else:
                             # 按比例
-                            allocation_count = sum([int(i) for i in self._allocation_ratio_down.split(":")])
-                            download_limit = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count)
+                            allocation_count_up = sum([int(i) for i in self._allocation_ratio_up.split(":")])
+                            upload_limit = int(upload_limit * int(self._allocation_ratio_up.split(":")[cnt]) / allocation_count_up)
+                            allocation_count_down = sum([int(i) for i in self._allocation_ratio_down.split(":")])
+                            download_limit = int(download_limit * int(self._allocation_ratio_down.split(":")[cnt]) / allocation_count_down)
                             cnt += 1
                 if upload_limit:
                     text = f"上传：{upload_limit} KB/s"
