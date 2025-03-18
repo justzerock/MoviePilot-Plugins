@@ -36,12 +36,12 @@
         "name": "智能播放限速",
         "description": "根据播放情况智能调整下载器带宽分配，支持路径定向限速",
         "labels": "播放通知,限速",
-        "version": "0.3.1",
+        "version": "0.3",
         "icon": "Speedlimit.png",
         "author": "Shurelol,justzerock",
         "level": 1,
         "history": {
-            "v0.3.1": "测试"
+            "v0.3": "测试"
         }
     }
 }
