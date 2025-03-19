@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.0.9"
+    plugin_version = "3.1.1"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -400,7 +400,7 @@ class SpeedLimiterMod(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextArea',
+                                        'component': 'VTextarea',
                                         'props': {
                                             'model': 'include_path_up',
                                             'label': '外网上传限速路径',
@@ -417,7 +417,7 @@ class SpeedLimiterMod(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VTextArea',
+                                        'component': 'VTextarea',
                                         'props': {
                                             'model': 'include_path_down',
                                             'label': '内网下载限速路径',
@@ -483,12 +483,14 @@ class SpeedLimiterMod(_PluginBase):
         """
         检查播放会话
         """
+        media_info = {}
         if not self.service_infos:
             return
         if not self._enabled:
             return
         if event:
             event_data: WebhookEventInfo = event.event_data
+            # logger.info(event_data)
             if event_data.event not in [
                 "playback.start",
                 "PlaybackStart",
@@ -498,6 +500,13 @@ class SpeedLimiterMod(_PluginBase):
                 "playback.stop"
             ]:
                 return
+            else:
+                media_info['event'] = self.__get_play_event(event_data.event)
+                media_info['title'] = event_data.item_name
+                media_info['user'] = event_data.user_name
+                media_info['path'] = event_data.path
+                media_info['is_up'] = self.__path_included(event_data.path, is_up=True)
+                media_info['is_down'] = self.__path_included(event_data.path, is_up=False)
         # 当前播放的总比特率
         total_bit_rate_up = 0
         total_bit_rate_down = 0
@@ -516,6 +525,7 @@ class SpeedLimiterMod(_PluginBase):
                     if res and res.status_code == 200:
                         sessions = res.json()
                         for session in sessions:
+                            # logger.info(session)
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
@@ -531,21 +541,29 @@ class SpeedLimiterMod(_PluginBase):
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
                         if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                            total_bit_rate_up += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                            current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                            total_bit_rate_up += current_bit_rate
+                            media_info['bitrate'] = current_bit_rate
                     # 未设置不限速范围，则默认不限速内网ip
                     elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                        total_bit_rate_up += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                        current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                        total_bit_rate_up += current_bit_rate
+                        media_info['bitrate'] = current_bit_rate
                 for session in playing_sessions_down:
                     # 设置了不限速范围则判断session ip是否在不限速范围内
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
                         if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                            total_bit_rate_down += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                            current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                            total_bit_rate_down += current_bit_rate
+                            media_info['bitrate'] = current_bit_rate
                     # 未设置不限速范围，则默认限速内网ip
                     elif IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                        total_bit_rate_down += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                        current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
+                        total_bit_rate_down += current_bit_rate
+                        media_info['bitrate'] = current_bit_rate
             elif service.type == "jellyfin":
                 req_url = "[HOST]Sessions?api_key=[APIKEY]"
                 try:
@@ -569,13 +587,17 @@ class SpeedLimiterMod(_PluginBase):
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                             media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                             for media_stream in media_streams:
-                                total_bit_rate_up += int(media_stream.get("BitRate") or 0)
+                                current_bit_rate = int(media_stream.get("BitRate") or 0)
+                                total_bit_rate_up += current_bit_rate
+                                media_info['bitrate'] = current_bit_rate
                     # 未设置不限速范围，则默认不限速内网ip
                     elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                         media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                         for media_stream in media_streams:
-                            total_bit_rate_up += int(media_stream.get("BitRate") or 0)
+                            current_bit_rate = int(media_stream.get("BitRate") or 0)
+                            total_bit_rate_up += current_bit_rate
+                            media_info['bitrate'] = current_bit_rate
                 for session in playing_sessions_down:
                     # 设置了不限速范围则判断session ip是否在不限速范围内
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
@@ -583,13 +605,17 @@ class SpeedLimiterMod(_PluginBase):
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                             media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                             for media_stream in media_streams:
-                                total_bit_rate_down += int(media_stream.get("BitRate") or 0)
+                                current_bit_rate = int(media_stream.get("BitRate") or 0)
+                                total_bit_rate_down += current_bit_rate
+                                media_info['bitrate'] = current_bit_rate
                     # 未设置不限速范围，则默认限速内网ip
                     elif IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                         media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                         for media_stream in media_streams:
-                            total_bit_rate_down += int(media_stream.get("BitRate") or 0)
+                            current_bit_rate = int(media_stream.get("BitRate") or 0)
+                            total_bit_rate_down += current_bit_rate
+                            media_info['bitrate'] = current_bit_rate
             elif service.type == "plex":
                 _plex = service.instance.get_plex()
                 if _plex:
@@ -607,11 +633,15 @@ class SpeedLimiterMod(_PluginBase):
                         if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
                             if not self.__allow_access(self._unlimited_ips, session.get("address")) \
                                     and session.get("type") == "Video":
-                                total_bit_rate_up += int(session.get("bitrate") or 0)
+                                current_bit_rate = int(session.get("bitrate") or 0)
+                                total_bit_rate_up += current_bit_rate
+                                media_info['bitrate'] = current_bit_rate
                         # 未设置不限速范围，则默认不限速内网ip
                         elif not IpUtils.is_private_ip(session.get("address")) \
                                 and session.get("type") == "Video":
-                            total_bit_rate_up += int(session.get("bitrate") or 0)
+                            current_bit_rate = int(session.get("bitrate") or 0)
+                            total_bit_rate_up += current_bit_rate
+                            media_info['bitrate'] = current_bit_rate
 
         if total_bit_rate_up or total_bit_rate_down:
             # 开启智能限速计算上传限速
@@ -623,8 +653,10 @@ class SpeedLimiterMod(_PluginBase):
                 play_down_speed = self._play_down_speed
 
             # 当前正在播放，开始限速
-            self.__set_limiter(limit_type="播放", upload_limit=play_up_speed,
-                               download_limit=play_down_speed)
+            self.__set_limiter(limit_type="播放", 
+                               upload_limit=play_up_speed,
+                               download_limit=play_down_speed,
+                               media_info=media_info)
         else:
             if self._auto_limit:
                 noplay_up_speed = int(self._bandwidth_up / 8 / 1024)
@@ -634,8 +666,10 @@ class SpeedLimiterMod(_PluginBase):
                 noplay_up_speed = self._noplay_up_speed
                 noplay_down_speed = self._noplay_down_speed
 
-            self.__set_limiter(limit_type="未播放", upload_limit=noplay_up_speed,
-                                download_limit=noplay_down_speed)
+            self.__set_limiter(limit_type="未播放", 
+                               upload_limit=noplay_up_speed,
+                                download_limit=noplay_down_speed,
+                                media_info=media_info)
 
 
     def __path_included(self, path: str, is_up: bool) -> bool:
@@ -658,6 +692,19 @@ class SpeedLimiterMod(_PluginBase):
                         logger.info(f"{path} 在限速路径：{include_path_down} 内，限速")
                         return True
             return False
+        
+    def __get_play_event(self, event: str) -> str:
+        """
+        获取播放事件
+        """
+        if event in [
+                "playback.start",
+                "PlaybackStart",
+                "media.play",
+            ]:
+            return "start"
+        else:
+            return "stop"
     
     def __calc_limit(self, total_bit_rate: float, is_up: bool) -> float:
         """
@@ -672,7 +719,7 @@ class SpeedLimiterMod(_PluginBase):
                 return 10
             return round((self._bandwidth_down - total_bit_rate) / 8 / 1024, 2)
 
-    def __set_limiter(self, limit_type: str, upload_limit: float, download_limit: float):
+    def __set_limiter(self, limit_type: str, upload_limit: float, download_limit: float, media_info: dict):
         """
         设置限速
         """
@@ -689,6 +736,11 @@ class SpeedLimiterMod(_PluginBase):
             cnt = 0
             upload_limit_final = None
             download_limit_final = None
+            logger.info(media_info)
+            if media_info['event'] == 'start':
+                notify_title = '[+] ' + media_info['title'] + '\n'
+            else:
+                notify_title = '[-] ' + media_info['title'] + '\n'
             notify_text_speed = "═══ 限速状态 ═══\n"
             for download in self._downloader:
                 service = self.service_infos.get(download)
@@ -770,7 +822,7 @@ class SpeedLimiterMod(_PluginBase):
             if self._notify:
                 self.post_message(
                     mtype = NotificationType.MediaServer,
-                    title = "【播放限速】",
+                    title = notify_title,
                     text = notify_text_speed
                 )
         except Exception as e:
