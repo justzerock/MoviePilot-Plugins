@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.1.4"
+    plugin_version = "3.1.5"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -643,7 +643,7 @@ class SpeedLimiterMod(_PluginBase):
                             current_bit_rate = int(session.get("bitrate") or 0)
                             total_bit_rate_up += current_bit_rate
                             media_info['bitrate_up'] = current_bit_rate
-        # media_info['playing'] = media_now
+        media_info['playing'] = media_now
         if total_bit_rate_up or total_bit_rate_down:
             # 开启智能限速计算上传限速
             if self._auto_limit:
@@ -682,7 +682,7 @@ class SpeedLimiterMod(_PluginBase):
         if series_name:
             title = f"{series_name} S{item.get('ParentIndexNumber')}E{item.get('IndexNumber')} {item.get('Name')}"
         else:
-            title = f"{item.get("Name")} ({item.get('ProductionYear')})"
+            title = f"{item.get('Name')} ({item.get('ProductionYear')})"
         path = item.get("Path", "")
         bitrate = round(int(item.get("Bitrate", 0))/1024/1024, 1)
         logger.info(f"获取媒体信息：{session}")
@@ -796,7 +796,7 @@ class SpeedLimiterMod(_PluginBase):
                     text = f"{text} ⇣ {round(download_limit_final/1024,1)} MB/s"
                 else:
                     text = f"{text} ⇣ ∞ MB/s"
-                notify_text_speed = f"{notify_text_speed} {download} {text}\n\n"
+                notify_text_speed = f"{notify_text_speed} {download} {text}\n"
                 if service.type == 'qbittorrent':
                     service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
                     # 发送通知
@@ -847,13 +847,13 @@ class SpeedLimiterMod(_PluginBase):
                 notify_title = ''
             index = 1
             playing_text = ''
-            # if media_info['playing']:
-            #     playing_text = '═══ 正在播放 ═══\n'
-            #     playing_items = media_info['playing']
-            #     for item in playing_items:
-            #         playing_text += f"{index}. {item.get('title')}\n"
-            #         playing_text += f"   用户：{item.get('user')} 码率：{item.get('bitrate')}\n"
-            #         index += 1
+            if media_info['playing']:
+                playing_text = '\n═══ 正在播放 ═══\n'
+                playing_items = media_info['playing']
+                for item in playing_items:
+                    playing_text += f"{index}. {item.get('title')}\n"
+                    playing_text += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n"
+                    index += 1
             if self._notify:
                 self.post_message(
                     mtype = NotificationType.MediaServer,
