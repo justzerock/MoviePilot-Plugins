@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.1.6"
+    plugin_version = "3.1.7"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -495,12 +495,11 @@ class SpeedLimiterMod(_PluginBase):
             media_info['user'] = event_data.user_name
             media_info['is_up'] = self.__path_included(event_data.item_path, is_up=True)
             media_info['is_down'] = self.__path_included(event_data.item_path, is_up=False)
-            service = self.service_infos.get(event_data.service_name)
+            service = self.service_infos().get(event_data.server_name)
             if service:
                 media_info['link'] = service.instance.get_play_url(event_data.item_id)
             else:
                 media_info['link'] = ''
-            logger.info(event_data.item_path)
             if event_data.event not in [
                 "playback.start",
                 "PlaybackStart",
@@ -541,7 +540,6 @@ class SpeedLimiterMod(_PluginBase):
                     logger.error(f"获取Emby播放会话失败：{str(e)}")
                     continue
                 # 计算有效比特率
-                logger.info(media_now)
                 for session in playing_sessions_up:
                     # 设置了不限速范围则判断session ip是否在不限速范围内
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
@@ -670,9 +668,8 @@ class SpeedLimiterMod(_PluginBase):
             title = f"{series_name} S{item.get('ParentIndexNumber')}E{item.get('IndexNumber')} {item.get('Name')}"
         else:
             title = f"{item.get('Name')} ({item.get('ProductionYear')})"
-        path = item.get("Path", "")
+        # path = item.get("Path", "")
         bitrate = round(int(item.get("Bitrate", 0))/1024/1024, 1)
-        logger.info(f"获取媒体信息：{session}")
         media_info = {
             "user": user,
             "title": title,
