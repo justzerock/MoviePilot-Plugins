@@ -19,7 +19,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.1.5"
+    plugin_version = "3.1.6"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -495,6 +495,11 @@ class SpeedLimiterMod(_PluginBase):
             media_info['user'] = event_data.user_name
             media_info['is_up'] = self.__path_included(event_data.item_path, is_up=True)
             media_info['is_down'] = self.__path_included(event_data.item_path, is_up=False)
+            service = self.service_infos.get(event_data.service_name)
+            if service:
+                media_info['link'] = service.instance.get_play_url(event_data.item_id)
+            else:
+                media_info['link'] = ''
             logger.info(event_data.item_path)
             if event_data.event not in [
                 "playback.start",
@@ -542,29 +547,21 @@ class SpeedLimiterMod(_PluginBase):
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
                         if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                            current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
-                            total_bit_rate_up += current_bit_rate
-                            media_info['bitrate_up'] = current_bit_rate
+                            total_bit_rate_up += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
                     # 未设置不限速范围，则默认不限速内网ip
                     elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                        current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
-                        total_bit_rate_up += current_bit_rate
-                        media_info['bitrate_up'] = current_bit_rate
+                        total_bit_rate_up += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
                 for session in playing_sessions_down:
                     # 设置了不限速范围则判断session ip是否在不限速范围内
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
                         if not self.__allow_access(self._unlimited_ips, session.get("RemoteEndPoint")) \
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                            current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
-                            total_bit_rate_down += current_bit_rate
-                            media_info['bitrate_down'] = current_bit_rate
+                            total_bit_rate_down += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
                     # 未设置不限速范围，则默认限速内网ip
                     elif IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
-                        current_bit_rate = int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
-                        total_bit_rate_down += current_bit_rate
-                        media_info['bitrate_down'] = current_bit_rate
+                        total_bit_rate_down += int(session.get("NowPlayingItem", {}).get("Bitrate") or 0)
             elif service.type == "jellyfin":
                 req_url = "[HOST]Sessions?api_key=[APIKEY]"
                 try:
@@ -588,17 +585,13 @@ class SpeedLimiterMod(_PluginBase):
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                             media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                             for media_stream in media_streams:
-                                current_bit_rate = int(media_stream.get("BitRate") or 0)
-                                total_bit_rate_up += current_bit_rate
-                                media_info['bitrate_up'] = current_bit_rate
+                                total_bit_rate_up += int(media_stream.get("BitRate") or 0)
                     # 未设置不限速范围，则默认不限速内网ip
                     elif not IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                         media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                         for media_stream in media_streams:
-                            current_bit_rate = int(media_stream.get("BitRate") or 0)
-                            total_bit_rate_up += current_bit_rate
-                            media_info['bitrate_up'] = current_bit_rate
+                            total_bit_rate_up += int(media_stream.get("BitRate") or 0)
                 for session in playing_sessions_down:
                     # 设置了不限速范围则判断session ip是否在不限速范围内
                     if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
@@ -606,17 +599,13 @@ class SpeedLimiterMod(_PluginBase):
                                 and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                             media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                             for media_stream in media_streams:
-                                current_bit_rate = int(media_stream.get("BitRate") or 0)
-                                total_bit_rate_down += current_bit_rate
-                                media_info['bitrate_down'] = current_bit_rate
+                                total_bit_rate_down += int(media_stream.get("BitRate") or 0)
                     # 未设置不限速范围，则默认限速内网ip
                     elif IpUtils.is_private_ip(session.get("RemoteEndPoint")) \
                             and session.get("NowPlayingItem", {}).get("MediaType") == "Video":
                         media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
                         for media_stream in media_streams:
-                            current_bit_rate = int(media_stream.get("BitRate") or 0)
-                            total_bit_rate_down += current_bit_rate
-                            media_info['bitrate_down'] = current_bit_rate
+                            total_bit_rate_down += int(media_stream.get("BitRate") or 0)
             elif service.type == "plex":
                 _plex = service.instance.get_plex()
                 if _plex:
@@ -634,16 +623,14 @@ class SpeedLimiterMod(_PluginBase):
                         if self._unlimited_ips["ipv4"] or self._unlimited_ips["ipv6"]:
                             if not self.__allow_access(self._unlimited_ips, session.get("address")) \
                                     and session.get("type") == "Video":
-                                current_bit_rate = int(session.get("bitrate") or 0)
-                                total_bit_rate_up += current_bit_rate
-                                media_info['bitrate_up'] = current_bit_rate
+                                total_bit_rate_up += int(session.get("bitrate") or 0)
                         # 未设置不限速范围，则默认不限速内网ip
                         elif not IpUtils.is_private_ip(session.get("address")) \
                                 and session.get("type") == "Video":
-                            current_bit_rate = int(session.get("bitrate") or 0)
-                            total_bit_rate_up += current_bit_rate
-                            media_info['bitrate_up'] = current_bit_rate
+                            total_bit_rate_up += int(session.get("bitrate") or 0)
         media_info['playing'] = media_now
+        media_info['bitrate_up'] = total_bit_rate_up
+        media_info['bitrate_down'] = total_bit_rate_down
         if total_bit_rate_up or total_bit_rate_down:
             # 开启智能限速计算上传限速
             if self._auto_limit:
@@ -799,42 +786,11 @@ class SpeedLimiterMod(_PluginBase):
                 notify_text_speed = f"{notify_text_speed} {download} {text}\n"
                 if service.type == 'qbittorrent':
                     service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
-                    # 发送通知
-                    # if self._notify:
-                    #     title = "【播放限速】"
-                    #     if upload_limit_final or download_limit_final:
-                    #         subtitle = f"{download} {limit_type}限速"
-                    #         self.post_message(
-                    #             mtype=NotificationType.MediaServer,
-                    #             title=title,
-                    #             text=f"{subtitle}\n{text}"
-                    #         )
-                    #     else:
-                    #         self.post_message(
-                    #             mtype=NotificationType.MediaServer,
-                    #             title=title,
-                    #             text=f"{download} 已取消限速"
-                    #         )
                 else:
                     upload_limit_final = upload_limit_final if upload_limit_final > 0 else -1
                     download_limit_final = download_limit_final if download_limit_final > 0 else -1
                     service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
-                    # 发送通知
-                    # if self._notify:
-                    #     title = "【播放限速】"
-                    #     if upload_limit_final or download_limit_final:
-                    #         subtitle = f"{download} {limit_type}限速"
-                    #         self.post_message(
-                    #             mtype=NotificationType.MediaServer,
-                    #             title=title,
-                    #             text=f"{subtitle}\n{text}"
-                    #         )
-                    #     else:
-                    #         self.post_message(
-                    #             mtype=NotificationType.MediaServer,
-                    #             title=title,
-                    #             text=f"{download} 已取消限速"
-                    #         )
+
             notify_title = ''
             if media_info['title']:
                 text_up = ' ⇡' if media_info['is_up'] else ''
@@ -845,21 +801,37 @@ class SpeedLimiterMod(_PluginBase):
                     notify_title = f"[-] {media_info['title']}\n"
             else:
                 notify_title = ''
+            link = media_info['link']
             index = 1
             playing_text = ''
             if media_info['playing']:
                 playing_text = '\n═══ 正在播放 ═══\n'
+                bitrate_up = ''
+                bitrate_down = ''
+                if media_info['bitrate_up']:
+                    bitrate_up = f"⇡ {round(int(media_info['bitrate_up'])/1024/1024,1)} mbps "
+                if media_info['bitrate_down']:
+                    bitrate_down = f"⇣ {round(int(media_info['bitrate_down'])/1024/1024,1)} mbps "
+                playing_text += f"总码率：{bitrate_up} {bitrate_down} \n\n"
                 playing_items = media_info['playing']
                 for item in playing_items:
                     playing_text += f"{index}. {item.get('title')}\n"
-                    playing_text += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n"
+                    playing_text += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n\n"
                     index += 1
             if self._notify:
-                self.post_message(
-                    mtype = NotificationType.MediaServer,
-                    title = notify_title,
-                    text = notify_text_speed + playing_text
-                )
+                if link:
+                    self.post_message(
+                        mtype = NotificationType.MediaServer,
+                        title = notify_title,
+                        text = notify_text_speed + playing_text,
+                        link = link
+                    )
+                else:
+                    self.post_message(
+                        mtype = NotificationType.MediaServer,
+                        title = notify_title,
+                        text = notify_text_speed + playing_text
+                    )
         except Exception as e:
             logger.error(f"设置限速失败：{str(e)}")
 
