@@ -1,4 +1,6 @@
 import ipaddress
+import threading
+from threading import Lock
 from typing import List, Tuple, Dict, Any, Optional
 
 from app.core.event import eventmanager, Event
@@ -19,7 +21,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.1.7"
+    plugin_version = "3.2.0"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -34,10 +36,19 @@ class SpeedLimiterMod(_PluginBase):
     # 私有属性
     downloader_helper = None
     mediaserver_helper = None
+    notification_timer = None
+    timer_lock = Lock()
     _scheduler = None
     _enabled: bool = False
     _notify: bool = False
     _interval: int = 60
+    _notify_delay: int = 0  
+    _notify_title: str = ""
+    _notify_text_speed: str = ""
+    _notify_link: str = ""
+    _playing_items: list = []
+    _total_bit_rate_up: float = 0
+    _total_bit_rate_down: float = 0
     _downloader: list = []
     _play_up_speed: float = 0
     _play_down_speed: float = 0
@@ -63,6 +74,8 @@ class SpeedLimiterMod(_PluginBase):
         if config:
             self._enabled = config.get("enabled")
             self._notify = config.get("notify")
+            self._interval = int(config.get("interval")) if config.get("interval") else 60
+            self._notify_delay = int(config.get("notify_delay")) if config.get("notify_delay") else 0
             self._play_up_speed = float(config.get("play_up_speed")) if config.get("play_up_speed") else 0
             self._play_down_speed = float(config.get("play_down_speed")) if config.get("play_down_speed") else 0
             self._noplay_up_speed = float(config.get("noplay_up_speed")) if config.get("noplay_up_speed") else 0
@@ -168,6 +181,45 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'notify',
                                             'label': '发送通知',
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'interval',
+                                            'label': '定时检查间隔（秒）',
+                                            'placeholder': '定时检查间隔，默认 60秒'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'notify_delay',
+                                            'label': '通知延迟时间（秒）',
+                                            'placeholder': '合并时间段内的通知，默认 0，立即发送'
                                         }
                                     }
                                 ]
@@ -308,7 +360,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'allocation_ratio_up',
-                                            'label': '智能限速分配比例',
+                                            'label': '智能分配上行比例',
                                             'placeholder': '3:2:1'
                                         }
                                     }
@@ -347,7 +399,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'allocation_ratio_down',
-                                            'label': '智能限速分配比例',
+                                            'label': '智能分配下行比例',
                                             'placeholder': '0:0:1'
                                         }
                                     }
@@ -433,6 +485,8 @@ class SpeedLimiterMod(_PluginBase):
         ], {
             "enabled": False,
             "notify": True,
+            "interval": 60,
+            "notify_delay": 0,
             "downloader": [],
             "play_up_speed": None,
             "play_down_speed": None,
@@ -460,15 +514,26 @@ class SpeedLimiterMod(_PluginBase):
             logger.warning("尚未配置下载器，请检查配置")
             return None
 
-        services = self.downloader_helper.get_services(name_filters=self._downloader)
-        if not services:
+        downloader_services = self.downloader_helper.get_services(name_filters=self._downloader)
+        if not downloader_services:
             logger.warning("获取下载器实例失败，请检查配置")
+            return None
+        
+        media_services = self.mediaserver_helper.get_services()
+        if not media_services:
+            logger.warning("获取媒体服务器实例失败，请检查配置")
             return None
 
         active_services = {}
-        for service_name, service_info in services.items():
+        for service_name, service_info in downloader_services.items():
             if service_info.instance.is_inactive():
                 logger.warning(f"下载器 {service_name} 未连接，请检查配置")
+            else:
+                active_services[service_name] = service_info
+
+        for service_name, service_info in media_services.items():
+            if service_info.instance.is_inactive():
+                logger.warning(f"媒体服务器 {service_name} 未连接，请检查配置")
             else:
                 active_services[service_name] = service_info
 
@@ -490,16 +555,6 @@ class SpeedLimiterMod(_PluginBase):
             return
         if event:
             event_data: WebhookEventInfo = event.event_data
-            media_info['event'] = self.__get_play_event(event_data.event)
-            media_info['title'] = event_data.item_name
-            media_info['user'] = event_data.user_name
-            media_info['is_up'] = self.__path_included(event_data.item_path, is_up=True)
-            media_info['is_down'] = self.__path_included(event_data.item_path, is_up=False)
-            service = self.service_infos().get(event_data.server_name)
-            if service:
-                media_info['link'] = service.instance.get_play_url(event_data.item_id)
-            else:
-                media_info['link'] = ''
             if event_data.event not in [
                 "playback.start",
                 "PlaybackStart",
@@ -509,10 +564,15 @@ class SpeedLimiterMod(_PluginBase):
                 "playback.stop"
             ]:
                 return
+            else:
+                self._notify_title += self.__get_play_history(event_data)
+                embyservice = self.service_infos.get(event_data.server_name)
+                if embyservice:
+                    self._notify_link = embyservice.instance.get_play_url(event_data.item_id)
+
         # 当前播放的总比特率
         total_bit_rate_up = 0
         total_bit_rate_down = 0
-        media_now = []
         media_servers = self.mediaserver_helper.get_services()
         if not media_servers:
             return
@@ -530,7 +590,7 @@ class SpeedLimiterMod(_PluginBase):
                         for session in sessions:
                             # logger.info(session)
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
-                                media_now.append(self.__get_media_info(session))
+                                self._playing_items.append(self.__get_media_info(session))
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
                                 elif self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=False):
@@ -626,9 +686,10 @@ class SpeedLimiterMod(_PluginBase):
                         elif not IpUtils.is_private_ip(session.get("address")) \
                                 and session.get("type") == "Video":
                             total_bit_rate_up += int(session.get("bitrate") or 0)
-        media_info['playing'] = media_now
-        media_info['bitrate_up'] = total_bit_rate_up
-        media_info['bitrate_down'] = total_bit_rate_down
+
+        self._total_bit_rate_up = total_bit_rate_up
+        self._total_bit_rate_down = total_bit_rate_down
+
         if total_bit_rate_up or total_bit_rate_down:
             # 开启智能限速计算上传限速
             if self._auto_limit:
@@ -641,8 +702,7 @@ class SpeedLimiterMod(_PluginBase):
             # 当前正在播放，开始限速
             self.__set_limiter(limit_type="播放", 
                                upload_limit=play_up_speed,
-                               download_limit=play_down_speed,
-                               media_info=media_info)
+                               download_limit=play_down_speed)
         else:
             if self._auto_limit:
                 noplay_up_speed = int(self._bandwidth_up / 8 / 1024)
@@ -654,8 +714,57 @@ class SpeedLimiterMod(_PluginBase):
 
             self.__set_limiter(limit_type="未播放", 
                                upload_limit=noplay_up_speed,
-                                download_limit=noplay_down_speed,
-                                media_info=media_info)
+                                download_limit=noplay_down_speed)
+
+    def __delayed_notification(self):
+        """执行延迟通知"""
+        
+        with self.timer_lock:
+            self.__notify()
+            self.notification_timer = None
+
+    def __schedule_notification(self):
+        """调度通知任务"""
+        
+        with self.timer_lock:
+            # 如果存在待执行的通知，取消它
+            if self.notification_timer:
+                self.notification_timer.cancel()
+                
+            if self._notify_delay > 0:
+                # 创建新的定时器
+                self.notification_timer = threading.Timer(
+                    self._notify_delay,
+                    self.__delayed_notification
+                )
+                self.notification_timer.daemon = True
+                self.notification_timer.start()
+            else:
+                # 立即发送通知
+                self.__notify()
+
+    def __clean_notify_history(self):
+        """清理通知历史"""
+        self._notify_title = ""
+        self._notify_text_speed = ""
+        self._playing_items = []
+
+    def __get_play_history(self, event: WebhookEventInfo) -> str:
+        notify_title = event.item_name
+        notify_state = ''
+        notify_tip_up = ''
+        notify_tip_down = ''
+        if event.event in [
+                "playback.start",
+                "PlaybackStart",
+                "media.play",
+            ]:
+            notify_state = '[+] '
+            notify_tip_up = ' ⇡' if self.__path_included(event.item_path, is_up=True) else ''
+            notify_tip_down = ' ⇣' if self.__path_included(event.item_path, is_up=False) else ''
+        else:
+            notify_state = '[-] '
+        return f"{notify_state}{notify_title}{notify_tip_up}{notify_tip_down}\n"
 
     def __get_media_info(self, session: dict) -> dict:
         """
@@ -697,19 +806,7 @@ class SpeedLimiterMod(_PluginBase):
                         # logger.info(f"{path} 在限速路径：{include_path_down} 内，限速")
                         return True
             return False
-        
-    def __get_play_event(self, event: str) -> str:
-        """
-        获取播放事件
-        """
-        if event in [
-                "playback.start",
-                "PlaybackStart",
-                "media.play",
-            ]:
-            return "start"
-        else:
-            return "stop"
+        # 
     
     def __calc_limit(self, total_bit_rate: float, is_up: bool) -> float:
         """
@@ -723,8 +820,46 @@ class SpeedLimiterMod(_PluginBase):
             if not self._bandwidth_down:
                 return 10
             return round((self._bandwidth_down - total_bit_rate) / 8 / 1024, 2)
+    
+    def __notify(self):
+        """
+        发送通知
+        """
+        if self._notify:
+            index = 1
+            notify_text_playing = ''
+            if self._playing_items:
+                notify_text_playing = '\n═══ 正在播放 ═══\n'
+                bitrate_up = ''
+                bitrate_down = ''
+                if self._total_bit_rate_up:
+                    bitrate_up = f"⇡ {round(int(self._total_bit_rate_up)/1024/1024,1)} mbps "
+                if self._total_bit_rate_down:
+                    bitrate_down = f"⇣ {round(int(self._total_bit_rate_down)/1024/1024,1)} mbps "
+                notify_text_playing += f"总码率：{bitrate_up} {bitrate_down} \n\n"
+                for item in self._playing_items:
+                    notify_text_playing += f"{index}. {item.get('title')}\n"
+                    notify_text_playing += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n\n"
+                    index += 1
 
-    def __set_limiter(self, limit_type: str, upload_limit: float, download_limit: float, media_info: dict):
+            if self._notify_link:
+                self.post_message(
+                    mtype = NotificationType.MediaServer,
+                    title = self._notify_title,
+                    text = self._notify_text_speed + notify_text_playing,
+                    link = self._notify_link
+                )
+                self.__clean_notify_history()
+            else:
+                self.post_message(
+                    mtype = NotificationType.MediaServer,
+                    title = self._notify_title,
+                    text = self._notify_text_speed + notify_text_playing
+                )
+                self.__clean_notify_history()
+
+
+    def __set_limiter(self, limit_type: str, upload_limit: float, download_limit: float):
         """
         设置限速
         """
@@ -741,7 +876,7 @@ class SpeedLimiterMod(_PluginBase):
             cnt = 0
             upload_limit_final = None
             download_limit_final = None
-            notify_text_speed = "═══ 限速状态 ═══\n"
+            self._notify_text_speed = "═══ 限速状态 ═══\n"
             for download in self._downloader:
                 service = self.service_infos.get(download)
                 # if self._auto_limit and limit_type == "播放":
@@ -773,62 +908,24 @@ class SpeedLimiterMod(_PluginBase):
                                 download_limit_final = int(download_limit * weight_down / allocation_count_down)
                             cnt += 1
                 if upload_limit_final:
-                    text = f"⇡ {round(upload_limit_final/1024,1)}"
+                    text_speed = f"⇡ {round(upload_limit_final/1024,1)}"
                 else:
-                    text = f"⇡ ∞"
+                    text_speed = f"⇡ ∞"
                 if download_limit_final:
-                    text = f"{text} ⇣ {round(download_limit_final/1024,1)} MB/s"
+                    text_speed = f"{text_speed} ⇣ {round(download_limit_final/1024,1)} MB/s"
                 else:
-                    text = f"{text} ⇣ ∞ MB/s"
-                notify_text_speed = f"{notify_text_speed} {download} {text}\n"
+                    text_speed = f"{text_speed} ⇣ ∞ MB/s"
+                self._notify_text_speed += f"{download} {text_speed}\n"
                 if service.type == 'qbittorrent':
                     service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
                 else:
                     upload_limit_final = upload_limit_final if upload_limit_final > 0 else -1
                     download_limit_final = download_limit_final if download_limit_final > 0 else -1
                     service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
+            
+            if self._notify_title:
+                self.__schedule_notification()
 
-            notify_title = ''
-            if media_info['title']:
-                text_up = ' ⇡' if media_info['is_up'] else ''
-                text_down = ' ⇣' if media_info['is_down'] else ''
-                if media_info['event'] == "start":
-                    notify_title = f"[+] {media_info['title']}{text_up}{text_down}\n"
-                elif media_info['event'] == "stop":
-                    notify_title = f"[-] {media_info['title']}\n"
-            else:
-                notify_title = ''
-            link = media_info['link']
-            index = 1
-            playing_text = ''
-            if media_info['playing']:
-                playing_text = '\n═══ 正在播放 ═══\n'
-                bitrate_up = ''
-                bitrate_down = ''
-                if media_info['bitrate_up']:
-                    bitrate_up = f"⇡ {round(int(media_info['bitrate_up'])/1024/1024,1)} mbps "
-                if media_info['bitrate_down']:
-                    bitrate_down = f"⇣ {round(int(media_info['bitrate_down'])/1024/1024,1)} mbps "
-                playing_text += f"总码率：{bitrate_up} {bitrate_down} \n\n"
-                playing_items = media_info['playing']
-                for item in playing_items:
-                    playing_text += f"{index}. {item.get('title')}\n"
-                    playing_text += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n\n"
-                    index += 1
-            if self._notify:
-                if link:
-                    self.post_message(
-                        mtype = NotificationType.MediaServer,
-                        title = notify_title,
-                        text = notify_text_speed + playing_text,
-                        link = link
-                    )
-                else:
-                    self.post_message(
-                        mtype = NotificationType.MediaServer,
-                        title = notify_title,
-                        text = notify_text_speed + playing_text
-                    )
         except Exception as e:
             logger.error(f"设置限速失败：{str(e)}")
 

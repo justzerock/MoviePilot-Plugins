@@ -41,6 +41,9 @@
         "author": "Shurelol,justzerock",
         "level": 1,
         "history": {
+            "v3.2.0": "修复bug",
+            "v3.1.9": "添加延迟通知",
+            "v3.1.8": "修复bug",
             "v3.1.7": "修复通知bug",
             "v3.1.6": "添加通知链接",
             "v3.1.5": "修复通知bug",
