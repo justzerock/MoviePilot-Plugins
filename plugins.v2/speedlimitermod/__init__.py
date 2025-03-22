@@ -21,7 +21,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.2.0"
+    plugin_version = "3.2.1"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -251,84 +251,7 @@ class SpeedLimiterMod(_PluginBase):
                             }
                         ]
                     },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'play_up_speed',
-                                            'label': '播放限速（上传）',
-                                            'placeholder': 'KB/s'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'play_down_speed',
-                                            'label': '播放限速（下载）',
-                                            'placeholder': 'KB/s'
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'noplay_up_speed',
-                                            'label': '未播放限速（上传）',
-                                            'placeholder': 'KB/s'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'noplay_down_speed',
-                                            'label': '未播放限速（下载）',
-                                            'placeholder': 'KB/s'
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
+                    
                     {
                         'component': 'VRow',
                         'content': [
@@ -479,6 +402,84 @@ class SpeedLimiterMod(_PluginBase):
                                 ]
                             }
                         ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'play_up_speed',
+                                            'label': '播放限速（上传）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'play_down_speed',
+                                            'label': '播放限速（下载）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'noplay_up_speed',
+                                            'label': '未播放限速（上传）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'noplay_down_speed',
+                                            'label': '未播放限速（下载）',
+                                            'placeholder': 'KB/s'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 ]
             }
@@ -573,6 +574,7 @@ class SpeedLimiterMod(_PluginBase):
         # 当前播放的总比特率
         total_bit_rate_up = 0
         total_bit_rate_down = 0
+        playing_items = []
         media_servers = self.mediaserver_helper.get_services()
         if not media_servers:
             return
@@ -590,12 +592,12 @@ class SpeedLimiterMod(_PluginBase):
                         for session in sessions:
                             # logger.info(session)
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
-                                self._playing_items.append(self.__get_media_info(session))
+                                playing_items.append(self.__get_media_info(session))
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
                                 elif self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=False):
                                     playing_sessions_down.append(session)
-
+                        self._playing_items = playing_items
                 except Exception as e:
                     logger.error(f"获取Emby播放会话失败：{str(e)}")
                     continue
