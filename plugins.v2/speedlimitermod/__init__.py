@@ -284,7 +284,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'allocation_ratio_up',
                                             'label': '智能分配上行比例',
-                                            'placeholder': '3:2:1'
+                                            'placeholder': '例如 1:1:0，0表示不限速'
                                         }
                                     }
                                 ]
@@ -323,7 +323,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'allocation_ratio_down',
                                             'label': '智能分配下行比例',
-                                            'placeholder': '0:0:1'
+                                            'placeholder': '例如 0:0:1，0表示不限速'
                                         }
                                     }
                                 ]
@@ -549,7 +549,6 @@ class SpeedLimiterMod(_PluginBase):
         """
         检查播放会话
         """
-        media_info = {}
         if not self.service_infos:
             return
         if not self._enabled:
@@ -567,6 +566,7 @@ class SpeedLimiterMod(_PluginBase):
                 return
             else:
                 self._notify_title += self.__get_play_history(event_data)
+                logger.info(self.__get_play_history(event_data))
                 embyservice = self.service_infos.get(event_data.server_name)
                 if embyservice:
                     self._notify_link = embyservice.instance.get_play_url(event_data.item_id)
@@ -748,8 +748,6 @@ class SpeedLimiterMod(_PluginBase):
     def __clean_notify_history(self):
         """清理通知历史"""
         self._notify_title = ""
-        self._notify_text_speed = ""
-        self._playing_items = []
 
     def __get_play_history(self, event: WebhookEventInfo) -> str:
         notify_title = event.item_name
