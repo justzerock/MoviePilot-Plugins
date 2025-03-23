@@ -15,13 +15,13 @@ from app.utils.ip import IpUtils
 
 class SpeedLimiterMod(_PluginBase):
     # 插件名称
-    plugin_name = "播放限速"
+    plugin_name = "播放通知 & 智能限速"
     # 插件描述
-    plugin_desc = "外网播放媒体库视频时，自动对下载器进行限速。"
+    plugin_desc = "根据播放媒体码率按权重分配带宽，播放状态通知。"
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.2.3"
+    plugin_version = "3.2.4"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -284,7 +284,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'allocation_ratio_up',
                                             'label': '智能分配上行比例',
-                                            'placeholder': '例如 1:1:0，0表示不限速'
+                                            'placeholder': '例如 1:1:0，0表示不限速，数量与下载器数量一致'
                                         }
                                     }
                                 ]
@@ -323,7 +323,46 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'allocation_ratio_down',
                                             'label': '智能分配下行比例',
-                                            'placeholder': '例如 0:0:1，0表示不限速'
+                                            'placeholder': '例如 0:0:1，0表示不限速，数量与下载器数量一致'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextarea',
+                                        'props': {
+                                            'model': 'include_path_up',
+                                            'label': '外网上传限速路径（本地文件）',
+                                            'placeholder': '包含该路径的媒体限速,多个请换行'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextarea',
+                                        'props': {
+                                            'model': 'include_path_down',
+                                            'label': '内网下载限速路径（网盘挂载）',
+                                            'placeholder': '包含该路径的媒体限速,多个请换行'
                                         }
                                     }
                                 ]
@@ -363,40 +402,6 @@ class SpeedLimiterMod(_PluginBase):
                                             'model': 'ipv6',
                                             'label': '不限速地址范围（ipv6）',
                                             'placeholder': '留空默认不限速内网ipv6'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'include_path_up',
-                                            'label': '外网上传限速路径',
-                                            'placeholder': '包含该路径的媒体限速,多个请换行'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'include_path_down',
-                                            'label': '内网下载限速路径',
-                                            'placeholder': '包含该路径的媒体限速,多个请换行'
                                         }
                                     }
                                 ]
