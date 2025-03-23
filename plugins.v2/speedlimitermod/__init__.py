@@ -21,7 +21,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.2.1"
+    plugin_version = "3.2.3"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -86,8 +86,8 @@ class SpeedLimiterMod(_PluginBase):
 
             try:
                 # 总带宽
-                self._bandwidth_up = int(float(config.get("bandwidth_up") or 0)) * 1024*1024
-                self._bandwidth_down = int(float(config.get("bandwidth_down") or 0)) * 1024*1024
+                self._bandwidth_up = int(float(config.get("bandwidth_up") or 0)) * 10**6
+                self._bandwidth_down = int(float(config.get("bandwidth_down") or 0)) * 10**6
                 # 自动限速开关
                 if self._bandwidth_up > 0 or self._bandwidth_down > 0:
                     self._auto_limit = True
@@ -592,12 +592,11 @@ class SpeedLimiterMod(_PluginBase):
                         for session in sessions:
                             # logger.info(session)
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
-                                playing_items.append(self.__get_media_info(session))
+                                playing_items.append(self.__get_media_info(session, 'emby'))
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
                                 elif self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=False):
                                     playing_sessions_down.append(session)
-                        self._playing_items = playing_items
                 except Exception as e:
                     logger.error(f"获取Emby播放会话失败：{str(e)}")
                     continue
@@ -630,6 +629,7 @@ class SpeedLimiterMod(_PluginBase):
                         sessions = res.json()
                         for session in sessions:
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
+                                playing_items.append(self.__get_media_info(session, 'jellyfin'))
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
                                 elif self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=False):
@@ -688,7 +688,7 @@ class SpeedLimiterMod(_PluginBase):
                         elif not IpUtils.is_private_ip(session.get("address")) \
                                 and session.get("type") == "Video":
                             total_bit_rate_up += int(session.get("bitrate") or 0)
-
+        self._playing_items = playing_items
         self._total_bit_rate_up = total_bit_rate_up
         self._total_bit_rate_down = total_bit_rate_down
 
@@ -766,24 +766,34 @@ class SpeedLimiterMod(_PluginBase):
             notify_state = '[-] '
         return f"{notify_state}{notify_title}{notify_tip_up}{notify_tip_down}\n"
 
-    def __get_media_info(self, session: dict) -> dict:
+    def __get_media_info(self, session: dict, type: str) -> dict:
         """
         获取媒体信息
         """
+        media_info = {}
         user = session.get("UserName", "")
         item = session.get("NowPlayingItem", {})
         series_name = item.get('SeriesName', '')
-        if series_name:
-            title = f"{series_name} S{item.get('ParentIndexNumber')}E{item.get('IndexNumber')} {item.get('Name')}"
-        else:
-            title = f"{item.get('Name')} ({item.get('ProductionYear')})"
-        # path = item.get("Path", "")
-        bitrate = round(int(item.get("Bitrate", 0))/1024/1024, 1)
-        media_info = {
-            "user": user,
-            "title": title,
-            'bitrate': f"{bitrate} mbps",
-        }
+        media_type = item.get('MediaType', '')
+        if media_type == "Video":
+            if series_name:
+                title = f"{series_name} S{item.get('ParentIndexNumber', 0)}E{item.get('IndexNumber', 0)} {item.get('Name', '')}"
+            else:
+                title = f"{item.get('Name', '')} ({item.get('ProductionYear', 0)})"
+            # path = item.get("Path", "")
+            if type == "emby":
+                bitrate = round(int(item.get("Bitrate") or 0)/10**6, 1)
+            elif type == "jellyfin":
+                media_streams = item.get("MediaStreams", [])
+                bitrate = 0
+                for media_stream in media_streams:
+                    bitrate += int(media_stream.get("BitRate") or 0)/10**6
+                bitrate = round(bitrate, 1)
+            media_info = {
+                "user": user,
+                "title": title,
+                'bitrate': f"{bitrate} Mbps",
+            }
         return media_info
 
     def __path_included(self, path: str, is_up: bool) -> bool:
@@ -833,9 +843,9 @@ class SpeedLimiterMod(_PluginBase):
                 bitrate_up = ''
                 bitrate_down = ''
                 if self._total_bit_rate_up:
-                    bitrate_up = f"⇡ {round(int(self._total_bit_rate_up)/1024/1024,1)} mbps "
+                    bitrate_up = f"⇡ {round(int(self._total_bit_rate_up)/10**6,1)} Mbps "
                 if self._total_bit_rate_down:
-                    bitrate_down = f"⇣ {round(int(self._total_bit_rate_down)/1024/1024,1)} mbps "
+                    bitrate_down = f"⇣ {round(int(self._total_bit_rate_down)/10**6,1)} Mbps "
                 notify_text_playing += f"总码率：{bitrate_up} {bitrate_down} \n\n"
                 for item in self._playing_items:
                     notify_text_playing += f"{index}. {item.get('title')}\n"
@@ -912,9 +922,9 @@ class SpeedLimiterMod(_PluginBase):
                 else:
                     text_speed = f"⇡ ∞"
                 if download_limit_final:
-                    text_speed = f"{text_speed} ⇣ {round(download_limit_final/1024,1)} MB/s"
+                    text_speed = f"{text_speed} ⇣ {round(download_limit_final/1024,1)}  MiB/s"
                 else:
-                    text_speed = f"{text_speed} ⇣ ∞ MB/s"
+                    text_speed = f"{text_speed} ⇣ ∞  MiB/s"
                 self._notify_text_speed += f"{download} {text_speed}\n"
                 if service.type == 'qbittorrent':
                     service.instance.set_speed_limit(download_limit=download_limit_final, upload_limit=upload_limit_final)
