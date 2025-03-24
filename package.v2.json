@@ -34,13 +34,14 @@
     },
     "SpeedLimiterMod": {
         "name": "播放通知 & 智能限速",
-        "description": "根据播放媒体码率按权重分配带宽，播放状态通知。",
+        "description": "根据媒体码率按比例分配带宽，通知播放状态",
         "labels": "播放通知,智能限速",
-        "version": "3.2.4",
+        "version": "3.2.5",
         "icon": "Librespeed_A.png",
         "author": "Shurelol,justzerock",
         "level": 1,
         "history": {
+            "v3.2.5": "比例分隔支持多种符号",
             "v3.2.4": "小改界面",
             "v3.2.3": "修改换算单位",
             "v3.2.2": "添加jellyfin支持",

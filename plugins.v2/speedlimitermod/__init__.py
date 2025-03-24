@@ -1,5 +1,6 @@
 import ipaddress
 import threading
+import re
 from threading import Lock
 from typing import List, Tuple, Dict, Any, Optional
 
@@ -17,11 +18,11 @@ class SpeedLimiterMod(_PluginBase):
     # 插件名称
     plugin_name = "播放通知 & 智能限速"
     # 插件描述
-    plugin_desc = "根据播放媒体码率按权重分配带宽，播放状态通知。"
+    plugin_desc = "根据媒体码率按比例分配带宽，通知播放状态"
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.2.4"
+    plugin_version = "3.2.5"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页
@@ -909,14 +910,16 @@ class SpeedLimiterMod(_PluginBase):
                             download_limit_final = int(download_limit / len(self._downloader))
                         else:
                             # 按比例
-                            allocation_count_up = sum([int(i) for i in self._allocation_ratio_up.split(":")])
-                            weight_up = int(self._allocation_ratio_up.split(":")[cnt])
+                            # 定义常用的分隔符
+                            separators = r'[:：,，;；\s\-\|\./]'
+                            allocation_count_up = sum([int(i) for i in re.split(separators, self._allocation_ratio_up)])
+                            weight_up = int(re.split(separators, self._allocation_ratio_up)[cnt])
                             if weight_up == 0:
                                 upload_limit_final = 0
                             else:
                                 upload_limit_final = int(upload_limit * weight_up / allocation_count_up)
-                            allocation_count_down = sum([int(i) for i in self._allocation_ratio_down.split(":")])
-                            weight_down = int(self._allocation_ratio_down.split(":")[cnt])
+                            allocation_count_down = sum([int(i) for i in re.split(separators, self._allocation_ratio_down)])
+                            weight_down = int(re.split(separators, self._allocation_ratio_down)[cnt])
                             if weight_down == 0:
                                 download_limit_final = 0
                             else:
