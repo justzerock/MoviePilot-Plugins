@@ -385,7 +385,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'ipv4',
                                             'label': '不限速地址范围（ipv4）',
-                                            'placeholder': '留空默认不限速内网ipv4'
+                                            'placeholder': '留空默认外网限速上传，内网限速下载'
                                         }
                                     }
                                 ]
@@ -402,7 +402,7 @@ class SpeedLimiterMod(_PluginBase):
                                         'props': {
                                             'model': 'ipv6',
                                             'label': '不限速地址范围（ipv6）',
-                                            'placeholder': '留空默认不限速内网ipv6'
+                                            'placeholder': '留空默认外网限速上传，内网限速下载'
                                         }
                                     }
                                 ]
