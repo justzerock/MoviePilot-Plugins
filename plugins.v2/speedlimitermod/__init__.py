@@ -16,13 +16,13 @@ from app.utils.ip import IpUtils
 
 class SpeedLimiterMod(_PluginBase):
     # 插件名称
-    plugin_name = "播放通知 & 智能限速"
+    plugin_name = "播放限速·自用修改"
     # 插件描述
-    plugin_desc = "根据媒体码率按比例分配带宽，通知播放状态"
+    plugin_desc = "按媒体码率限速，通知播放状态"
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "3.2.5"
+    plugin_version = "3.0.0"
     # 插件作者
     plugin_author = "Shurelol, justzerock"
     # 作者主页

@@ -1,6 +1,6 @@
-import datetime
 import re
-import xml.dom.minidom
+import json
+import datetime
 from threading import Event
 from typing import Tuple, List, Dict, Any
 
@@ -24,13 +24,13 @@ from app.utils.http import RequestUtils
 
 class DoubanRankMod(_PluginBase):
     # 插件名称
-    plugin_name = "豆瓣榜单订阅（豆瓣评分）"
+    plugin_name = "豆瓣榜单订阅·自用修改"
     # 插件描述
-    plugin_desc = "监控豆瓣热门榜单，自动添加订阅。基于原版，改用豆瓣评分筛选，不同分类使用不同分数。"
+    plugin_desc = "获取豆瓣榜单信息，筛选添加订阅"
     # 插件图标
-    plugin_icon = "movie.jpg"
+    plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "0.2.3"
+    plugin_version = "0.0.1"
     # 插件作者
     plugin_author = "jxxghp,justzerock"
     # 作者主页
@@ -49,24 +49,50 @@ class DoubanRankMod(_PluginBase):
     subscribechain: SubscribeChain = None
     mediachain: MediaChain = None
     _scheduler = None
-    _rss_domain = 'https://rsshub.app'
-    _douban_address = {
-        'movie-ustop': 'https://rsshub.app/douban/movie/ustop',
-        'movie-weekly': 'https://rsshub.app/douban/movie/weekly',
-        'movie-real-time': 'https://rsshub.app/douban/movie/weekly/movie_real_time_hotest',
-        'show-domestic': 'https://rsshub.app/douban/movie/weekly/show_domestic',
-        'movie-hot-gaia': 'https://rsshub.app/douban/movie/weekly/movie_hot_gaia',
-        'tv-hot': 'https://rsshub.app/douban/movie/weekly/tv_hot',
-        'movie-top250': 'https://rsshub.app/douban/movie/weekly/movie_top250',
-        'movie-top250-full': 'https://rsshub.app/douban/list/movie_top250',
-    }
+    _douban_list = [
+        {
+            'title':'实时热门书影音', 
+            'value':'subject_real_time_hotest',
+            'referer':'https://m.douban.com/subject_collection/subject_real_time_hotest', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/subject_real_time_hotest/items?type=subject&start=0&count=20&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'一周口碑电影榜', 
+            'value':'movie_weekly_best',
+            'referer':'https://m.douban.com/subject_collection/movie_weekly_best', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_weekly_best/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'华语口碑剧集榜', 
+            'value':'tv_chinese_best_weekly',
+            'referer':'https://m.douban.com/subject_collection/tv_chinese_best_weekly', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_chinese_best_weekly/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'全球口碑剧集榜', 
+            'value':'tv_global_best_weekly',
+            'referer':'https://m.douban.com/subject_collection/tv_global_best_weekly', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_global_best_weekly/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'近期热门动画', 
+            'value':'tv_animation',
+            'referer':'https://m.douban.com/subject_collection/tv_animation', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_animation/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'影院热映', 
+            'value':'movie_showing',
+            'referer':'https://m.douban.com/app_topic/movie_showing', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_showing/items?start=0&count=18&updated_at&items_only=1&for_mobile=1'
+        }
+    ]
     _enabled = False
     _cron = ""
     _onlyonce = False
-    _rss_addrs = []
-    _ranks = []
-    _rss_domain = 'https://rsshub.app'
-    _type_rate = []
+    _douban_ranks = []
+    _count = 5000
+    _genre_rate = []
     _blacklist = []
     _cn_movie = 0
     _jp_movie = 0
@@ -79,19 +105,6 @@ class DoubanRankMod(_PluginBase):
     _clearflag = False
     _proxy = False
 
-    def __get_douban_address(self, rss_domain) -> Dict:
-
-        return {
-            'movie-ustop': f'{rss_domain}/douban/movie/ustop',
-            'movie-weekly': f'{rss_domain}/douban/movie/weekly',
-            'movie-real-time': f'{rss_domain}/douban/movie/weekly/movie_real_time_hotest',
-            'show-domestic': f'{rss_domain}/douban/movie/weekly/show_domestic',
-            'movie-hot-gaia': f'{rss_domain}/douban/movie/weekly/movie_hot_gaia',
-            'tv-hot': f'{rss_domain}/douban/movie/weekly/tv_hot',
-            'movie-top250': f'{rss_domain}/douban/movie/weekly/movie_top250',
-            'movie-top250-full': f'{rss_domain}/douban/list/movie_top250',
-        }
-
     def init_plugin(self, config: dict = None):
         self.downloadchain = DownloadChain()
         self.subscribechain = SubscribeChain()
@@ -102,8 +115,6 @@ class DoubanRankMod(_PluginBase):
             self._cron = config.get("cron")
             self._proxy = config.get("proxy")
             self._onlyonce = config.get("onlyonce")
-            self._rss_domain = config.get("rss_domain") or 'https://rsshub.app'
-            self._douban_address = self.__get_douban_address(self._rss_domain)
             self._cn_movie = float(config.get("cn_movie")) if config.get("cn_movie") else 0
             self._jp_movie = float(config.get("jp_movie")) if config.get("jp_movie") else 0
             self._etc_movie = float(config.get("etc_movie")) if config.get("etc_movie") else 0
@@ -111,23 +122,16 @@ class DoubanRankMod(_PluginBase):
             self._jp_tv = float(config.get("jp_tv")) if config.get("jp_tv") else 0
             self._etc_tv = float(config.get("etc_tv")) if config.get("etc_tv") else 0
             self._year = int(config.get("year")) if config.get("year") else 2000
-            rss_addrs = config.get("rss_addrs")
-            if rss_addrs:
-                if isinstance(rss_addrs, str):
-                    self._rss_addrs = rss_addrs.split('\n')
+            self._count = int(config.get("count")) if config.get("count") else 5000
+            genre_rate = config.get("genre_rate")
+            if genre_rate:
+                if isinstance(genre_rate, str):
+                    self._genre_rate = genre_rate.split('\n')
                 else:
-                    self._rss_addrs = rss_addrs
+                    self._genre_rate = genre_rate
             else:
-                self._rss_addrs = []
-            type_rate = config.get("type_rate")
-            if type_rate:
-                if isinstance(type_rate, str):
-                    self._type_rate = type_rate.split('\n')
-                else:
-                    self._type_rate = type_rate
-            else:
-                self._type_rate = []
-            self._ranks = config.get("ranks") or []
+                self._genre_rate = []
+            self._douban_ranks = config.get("douban_ranks") or []
             self._blacklist = config.get("blacklist") or []
             self._clear = config.get("clear")
 
@@ -307,7 +311,7 @@ class DoubanRankMod(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'cn_tv',
-                                            'label': '国产剧集评分',
+                                            'label': '中国大陆剧集评分',
                                             'placeholder': '评分大于等于该值才订阅'
                                         }
                                     }
@@ -373,7 +377,7 @@ class DoubanRankMod(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 4,
-                                    'md': 2
+                                    'md': 3
                                 },
                                 'content': [
                                     {
@@ -433,9 +437,50 @@ class DoubanRankMod(_PluginBase):
                                 },
                                 'content': [
                                     {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'chips': True,
+                                            'multiple': True,
+                                            'model': 'douban_ranks',
+                                            'label': '豆瓣榜单',
+                                            'items': [{"title": item.get("title"), "value": item.get("value")}
+                                                      for item in self._douban_list]
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'count',
+                                            'label': '最低评分人数',
+                                            'placeholder': '默认 5000'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12
+                                },
+                                'content': [
+                                    {
                                         'component': 'VTextarea',
                                         'props': {
-                                            'model': 'type_rate',
+                                            'model': 'genre_rate',
                                             'label': '类型评分',
                                             'placeholder': '类型评分，数据包含设定的全部类型时生效，如：科幻,恐怖:7.0'
                                         }
@@ -474,77 +519,6 @@ class DoubanRankMod(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VSelect',
-                                        'props': {
-                                            'chips': True,
-                                            'multiple': True,
-                                            'model': 'ranks',
-                                            'label': '热门榜单',
-                                            'items': [
-                                                {'title': '电影北美票房榜', 'value': 'movie-ustop'},
-                                                {'title': '一周口碑电影榜', 'value': 'movie-weekly'},
-                                                {'title': '实时热门电影', 'value': 'movie-real-time'},
-                                                {'title': '热门综艺', 'value': 'show-domestic'},
-                                                {'title': '热门电影', 'value': 'movie-hot-gaia'},
-                                                {'title': '热门电视剧', 'value': 'tv-hot'},
-                                                {'title': '电影TOP10', 'value': 'movie-top250'},
-                                                {'title': '电影TOP250', 'value': 'movie-top250-full'},
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 6
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'rss_domain',
-                                            'label': 'RSSHub 域名',
-                                            'placeholder': '默认 https://rsshub.app'
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'content': [
-                                    {
-                                        'component': 'VTextarea',
-                                        'props': {
-                                            'model': 'rss_addrs',
-                                            'label': '自定义榜单地址',
-                                            'placeholder': '''每行一个地址，支持单独添加评分筛选，精确到整数，如：
-                                            https://rsshub.app/douban/list/movie_weekly_best/score=7
-                                            https://rsshub.app/douban/list/tv_global_best_weekly/score=8
-                                            '''
-                                        }
-                                    }   
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        'component': 'VRow',
-                        'content': [
-                            {
-                                'component': 'VCol',
-                                'props': {
                                     'cols': 6,
                                     'md': 3
                                 },
@@ -557,24 +531,6 @@ class DoubanRankMod(_PluginBase):
                                         }
                                     }
                                 ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 6,
-                                    'md': 3,
-                                    'style': 'display: flex; align-items: center;'
-                                },
-                                'content': [
-                                    {
-                                        'component': 'a',
-                                        'props': {
-                                            'href': 'https://docs.rsshub.app/zh/routes/social-media#%E8%B1%86%E7%93%A3%E6%A6%9C%E5%8D%95%E4%B8%8E%E9%9B%86%E5%90%88',
-                                            'target': '_blank'
-                                        },
-                                        'text': "RSSHub - 豆瓣榜单与集合"
-                                    }
-                                ]
                             }
                         ]
                     }
@@ -585,16 +541,16 @@ class DoubanRankMod(_PluginBase):
             "cron": "",
             "proxy": False,
             "onlyonce": False,
-            "cn_movie": "0",
-            "jp_movie": "0",
-            "etc_movie": "0",
-            "cn_tv": "0",
-            "jp_tv": "0",
-            "etc_tv": "0",
-            "year": "2000",
-            "ranks": [],
-            "rss_domain": "https://rsshub.app",
-            "rss_addrs": "",
+            "cn_movie": "",
+            "jp_movie": "",
+            "etc_movie": "",
+            "cn_tv": "",
+            "jp_tv": "",
+            "etc_tv": "",
+            "year": "",
+            "douban_ranks": [],
+            "count": "",
+            "genre_rate": "",
             "clear": False
         }
 
@@ -621,6 +577,8 @@ class DoubanRankMod(_PluginBase):
         for history in historys:
             title = history.get("title")
             rate = history.get("rate")
+            count = history.get("count")
+            genres = history.get("genres")
             year = history.get("year")
             poster = history.get("poster")
             rtype = history.get("type")
@@ -693,7 +651,14 @@ class DoubanRankMod(_PluginBase):
                                             'props': {
                                                 'class': 'pa-0 px-2'
                                             },
-                                            'text': f'类型：{rtype} - {rate}分'
+                                            'text': f'评分：{rate} ({count})'
+                                        },
+                                        {
+                                            'component': 'VCardText',
+                                            'props': {
+                                                'class': 'pa-0 px-2'
+                                            },
+                                            'text': f'类型：{rtype}/{genres}'
                                         },
                                         {
                                             'component': 'VCardText',
@@ -765,11 +730,10 @@ class DoubanRankMod(_PluginBase):
             "jp_tv": self._jp_tv,
             "etc_tv": self._etc_tv,
             "year": self._year,
-            "ranks": self._ranks,
-            "rss_domain": self._rss_domain,
+            "count": self._count,
+            "douban_ranks": self._douban_ranks,
             "blacklist": self._blacklist,
-            "rss_addrs": '\n'.join(map(str, self._rss_addrs)),
-            "type_rate": '\n'.join(map(str, self._type_rate)),
+            "genre_rate": '\n'.join(map(str, self._genre_rate)),
             "clear": self._clear
         })
 
@@ -778,7 +742,11 @@ class DoubanRankMod(_PluginBase):
         刷新RSS
         """
         logger.info(f"开始刷新豆瓣榜单 ...")
-        addr_list = self._rss_addrs + [self._douban_address.get(rank) for rank in self._ranks]
+        addr_list = []
+        for douban_item in self._douban_list:
+            for rank in self._douban_ranks:
+                if rank == douban_item.get("value"):
+                    addr_list.append(douban_item)
         if not addr_list:
             logger.info(f"未设置榜单RSS地址")
             return
@@ -806,48 +774,21 @@ class DoubanRankMod(_PluginBase):
                     if self._event.is_set():
                         logger.info(f"订阅服务停止")
                         return
-                    mtype = None
                     title = rss_info.get('title')
-                    douban_id = rss_info.get('doubanid')
+                    type = rss_info.get('type')
+                    doubanid = rss_info.get('doubanid')
                     year = rss_info.get('year')
                     rate = rss_info.get('rate')
-                    rtype = '电影'
+                    count = rss_info.get('count')
+                    genres = rss_info.get('genres')
 
-                    logger.info(f"片名：{title}，类型：{rss_info['genres']}，豆瓣链接：https://movie.douban.com/subject/{douban_id}")
+                    rtype = '电影' if type == 'movie' else '电视剧'
 
+                    mtype = MediaType.TV if type == 'tv' else MediaType.MOVIE
 
-                    if int(year) < self._year:
-                        logger.info(f"跳过：{title} ，年份：{year} ，低于设定年份：{self._year}")
-                        continue
-
-                    score_match = re.search(r"score=(\d+(?:\.\d+)?)", addr)
-
-                    if score_match:
-                        rate_limit = float(score_match.group(1))
-                        if 'movie_' in addr:
-                            rtype = '电影'
-
-                        elif 'tv_' in addr:
-                            rtype = '电视剧'
-
-                        elif 'show_' in addr:
-                            rtype = '综艺'
-                    elif 'movie_top250' in addr:
-                        rtype = '电影'
-                    elif 'tv_' in addr:
-                        rtype = '电视剧'
-
-                    elif 'show_' in addr:
-                        rtype = '综艺'
-                    # 判断评分是否符合要求
-                    if rate < rate_limit:
-                        logger.info(f'{title} 评分{rate}低于 {rate_limit}，不符合要求')
-                        continue
-                    if 'tv_' in addr or 'show_' in addr:
-                        mtype = MediaType.TV
-                    else:
-                        mtype = MediaType.MOVIE
-                    unique_flag = f"doubanrank: {title} (DB:{douban_id})"
+                    logger.info(f"片名：{title}，类型：{genres}，评分：{rate}，链接：https://movie.douban.com/subject/{doubanid}")
+  
+                    unique_flag = f"doubanrank: {title} (DB:{doubanid})"
                     # 检查是否已处理过
                     if unique_flag in [h.get("unique") for h in history]:
                         continue
@@ -857,62 +798,60 @@ class DoubanRankMod(_PluginBase):
                     if mtype:
                         meta.type = mtype
                     # 识别媒体信息
-                    if douban_id:
+                    if doubanid:
                         # 识别豆瓣信息
                         if settings.RECOGNIZE_SOURCE == "themoviedb":
-                            tmdbinfo = self.mediachain.get_tmdbinfo_by_doubanid(doubanid=douban_id, mtype=meta.type)
+                            tmdbinfo = self.mediachain.get_tmdbinfo_by_doubanid(doubanid=doubanid, mtype=meta.type)
                             if not tmdbinfo:
-                                logger.warn(f'未能通过豆瓣ID {douban_id} 获取到TMDB信息，标题：{title}，豆瓣ID：{douban_id}')
+                                logger.warn(f'未能通过豆瓣ID {doubanid} 获取到TMDB信息，标题：{title}，豆瓣ID：{doubanid}')
                                 continue
                             mediainfo = self.chain.recognize_media(meta=meta, tmdbid=tmdbinfo.get("id"))
                             if not mediainfo:
                                 logger.warn(f'TMDBID {tmdbinfo.get("id")} 未识别到媒体信息')
                                 continue
                         else:
-                            mediainfo = self.chain.recognize_media(meta=meta, doubanid=douban_id)
+                            mediainfo = self.chain.recognize_media(meta=meta, doubanid=doubanid)
                             if not mediainfo:
-                                logger.warn(f'豆瓣ID {douban_id} 未识别到媒体信息')
+                                logger.warn(f'豆瓣ID {doubanid} 未识别到媒体信息')
                                 continue
                     else:
                         # 匹配媒体信息
                         mediainfo: MediaInfo = self.chain.recognize_media(meta=meta)
                         if not mediainfo:
-                            logger.warn(f'未识别到媒体信息，标题：{title}，豆瓣ID：{douban_id}')
+                            logger.warn(f'未识别到媒体信息，标题：{title}，豆瓣ID：{doubanid}')
                             continue
-                    # 判断评分是否符合要求
-                    # if self._rate and rate < self._rate:
-                    #     logger.info(f'{mediainfo.title_year} 评分不符合要求')
-                    #     continue
                     # 查询缺失的媒体信息
-                    # exist_flag, _ = self.downloadchain.get_no_exists_info(meta=meta, mediainfo=mediainfo)
-                    # if exist_flag:
-                    #     logger.info(f'{mediainfo.title_year} 媒体库中已存在')
-                    #     continue
-                    # # 判断用户是否已经添加订阅
-                    # if self.subscribechain.exists(mediainfo=mediainfo, meta=meta):
-                    #     logger.info(f'{mediainfo.title_year} 订阅已存在')
-                    #     continue
-                    # # 添加订阅
-                    # self.subscribechain.add(title=mediainfo.title,
-                    #                         year=mediainfo.year,
-                    #                         mtype=mediainfo.type,
-                    #                         tmdbid=mediainfo.tmdb_id,
-                    #                         season=meta.begin_season,
-                    #                         exist_ok=True,
-                    #                         username="豆瓣榜单")
-                    # # 存储历史记录
-                    # history.append({
-                    #     "title": title,
-                    #     "rate": rate,
-                    #     "type": rtype,
-                    #     "year": mediainfo.year,
-                    #     "poster": mediainfo.get_poster_image(),
-                    #     "overview": mediainfo.overview,
-                    #     "tmdbid": mediainfo.tmdb_id,
-                    #     "doubanid": douban_id,
-                    #     "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    #     "unique": unique_flag
-                    # })
+                    exist_flag, _ = self.downloadchain.get_no_exists_info(meta=meta, mediainfo=mediainfo)
+                    if exist_flag:
+                        logger.info(f'{mediainfo.title_year} 媒体库中已存在')
+                        continue
+                    # 判断用户是否已经添加订阅
+                    if self.subscribechain.exists(mediainfo=mediainfo, meta=meta):
+                        logger.info(f'{mediainfo.title_year} 订阅已存在')
+                        continue
+                    # 添加订阅
+                    self.subscribechain.add(title=mediainfo.title,
+                                            year=mediainfo.year,
+                                            mtype=mediainfo.type,
+                                            tmdbid=mediainfo.tmdb_id,
+                                            season=meta.begin_season,
+                                            exist_ok=True,
+                                            username="豆瓣榜单")
+                    # 存储历史记录
+                    history.append({
+                        "title": title,
+                        "rate": rate,
+                        "count": count,
+                        "type": rtype,
+                        "genres": genres,
+                        "year": mediainfo.year,
+                        "poster": mediainfo.get_poster_image(),
+                        "overview": mediainfo.overview,
+                        "tmdbid": mediainfo.tmdb_id,
+                        "doubanid": doubanid,
+                        "time": datetime.datetime.now().strftime("%m-%d %H:%M"),
+                        "unique": unique_flag
+                    })
             except Exception as e:
                 logger.error(str(e))
 
@@ -921,6 +860,51 @@ class DoubanRankMod(_PluginBase):
         # 缓存只清理一次
         self._clearflag = False
         logger.info(f"所有榜单RSS刷新完成")
+    
+    def check_genre_rate(self, all_genres, rate, _genre_rate):
+        for genre_rate in _genre_rate:
+            # 分割genre和rate
+            genre, threshold_rate = genre_rate.split(':')
+            
+            # 将genre转换为列表
+            genre_list = genre.split(',')
+            
+            # 检查genre_list中的所有类型是否都在all_genres中
+            if all(g in all_genres for g in genre_list):
+                # 如果所有类型都存在，则需要满足评分要求
+                if float(rate) >= float(threshold_rate):
+                    return True
+            else:
+                # 如果有类型不存在，则不做评分判断
+                continue
+        return False
+            
+    def check_country_rate(self, card_subtitle, rate, type):
+        if '中国大陆' in card_subtitle:
+            threshold = self._cn_tv if type == 'tv' else self._cn_movie
+        elif '日本' in card_subtitle:
+            threshold = self._jp_tv if type == 'tv' else self._jp_movie
+        else:
+            threshold = self._etc_tv if type == 'tv' else self._etc_movie
+        
+        return float(rate) >= threshold
+    
+    def filter_item(self, year, count, all_genres, card_subtitle, rate, type):
+        # 基本条件：年份和评分人数
+        if int(year) < self._year or int(count) < self._count:
+            return False
+        
+        # 黑名单类型
+        if any(genre in self._blacklist for genre in all_genres):
+            return False
+        
+        # 国家和评分筛选
+        country_rate_pass = self.check_country_rate(card_subtitle, rate, type)
+        # 自定义类型和评分筛选
+        genre_rate_pass = self.check_genre_rate(all_genres, rate, self._genre_rate)
+        
+        # 只要地区评分或分类评分有一个通过即可
+        return country_rate_pass or genre_rate_pass
 
     def __get_rss_info(self, addr) -> List[dict]:
         """
@@ -928,83 +912,60 @@ class DoubanRankMod(_PluginBase):
         """
         try:
             if self._proxy:
-                ret = RequestUtils(proxies=settings.PROXY).get_res(addr)
+                ret = RequestUtils(proxies=settings.PROXY, referer=addr.get("referer")).get_res(addr.get("address"))
             else:
-                ret = RequestUtils().get_res(addr)
+                ret = RequestUtils(referer=addr.get("referer")).get_res(addr.get("address"))
             if not ret:
                 return []
-            ret_xml = ret.text
-            ret_array = []
-            # 解析XML
-            dom_tree = xml.dom.minidom.parseString(ret_xml)
-            rootNode = dom_tree.documentElement
-            items = rootNode.getElementsByTagName("item")
-            for item in items:
+            douban_items = json.loads(ret.text).get('subject_collection_items')
+            douban_array = []
+            for item in douban_items:
                 try:
                     rss_info = {}
-
+                    card_subtitle = item.get("card_subtitle")
                     # 标题
-                    title = DomUtils.tag_value(item, "title", default="")
-                    # 链接
-                    link = DomUtils.tag_value(item, "link", default="")
+                    title = item.get("title")
+                    # 豆瓣ID
+                    doubanid = item.get("id")
+                    # 类型
+                    type = item.get("type")
                     # 年份
-                    description = DomUtils.tag_value(item, "description", default="")
-
-                    if not title and not link:
-                        logger.warn(f"条目标题和链接均为空，无法处理")
-                        continue
-                    rss_info['title'] = title
-                    rss_info['link'] = link
-
-                    doubanid = re.findall(r"/(\d+)/", link)
-                    if doubanid:
-                        doubanid = doubanid[0]
-                    if doubanid and not str(doubanid).isdigit():
-                        logger.warn(f"解析的豆瓣ID格式不正确：{doubanid}")
-                        continue
-                    rss_info['doubanid'] = doubanid
-
-                    # 匹配4位独立数字1900-2099年
-                    year = re.findall(r"\b(19\d{2}|20\d{2})\b", description)
-                    if year:
-                        rss_info['year'] = year[0]
-
-                    all_genres = []
-                    p_tags = re.findall(r'<p>([^<]+)</p>', description)
-            
-                    for p_text in p_tags:
-                        # 查找符合"年份 / 地区 / 类型 / 导演 / 主演"格式的文本
-                        if re.search(r'\d{4}\s*/\s*[^/]+/\s*[^/]+/\s*', p_text):
-                            # 提取类型部分（在第二个和第三个斜杠之间）
-                            match = re.search(r'\d{4}\s*/\s*[^/]+/\s*([^/]+)/\s*', p_text)
-                            if match:
-                                genres_text = match.group(1).strip()
-                                # 分割类型（假设类型之间有空格）
-                                genres = [genre.strip() for genre in genres_text.split()]
-                                all_genres.extend(genres)
-                    
-                    rss_info['genres'] = all_genres
-
-                    # 提取评分
-                    if '评分' in description:
-                        rate_match = re.search(r"评分：(\d+\.?\d*|\无)", description)
-                        if rate_match:
-                            if rate_match.group(1) == "无":
-                                rss_info['rate'] = 0
-                            else:
-                                rss_info['rate'] = float(rate_match.group(1))
+                    year = card_subtitle.split()[0]
+                    # 评分
+                    rating = item.get("rating", {})
+                    if rating:
+                        rate = rating.get("value")
+                        count = rating.get("count")
                     else:
-                        rate_match = re.search(r"<p>(\d+(?:\.\d+)?)</p>", description)
-                        if rate_match:
-                            rss_info['rate'] = float(rate_match.group(1))
+                        rate = 0
+                        count = 0
+                    # 人数
+                    all_genres = []
+                    genres_text = ''
+                    if re.search(r'\d{4}\s*/\s*[^/]+/\s*[^/]+/\s*', card_subtitle):
+                        # 提取类型部分（在第二个和第三个斜杠之间）
+                        match = re.search(r'\d{4}\s*/\s*[^/]+/\s*([^/]+)/\s*', card_subtitle)
+                        if match:
+                            genres_text = match.group(1).strip()
+                            # 分割类型（假设类型之间有空格）
+                            genres = [genre.strip() for genre in genres_text.split()]
+                            all_genres.extend(genres)
+                    
+                    if not self.filter_item(year, count, all_genres, card_subtitle, rate, type):
+                        continue
 
-
-                    # 返回对象
-                    ret_array.append(rss_info)
+                    rss_info['title'] = title
+                    rss_info['doubanid'] = doubanid
+                    rss_info['type'] = type
+                    rss_info['year'] = year
+                    rss_info['rate'] = rate
+                    rss_info['count'] = count
+                    rss_info['genres'] = genres_text
+                    douban_array.append(rss_info)
                 except Exception as e1:
-                    logger.error("解析RSS条目失败：" + str(e1))
+                    logger.error("解析RSS条目失败：" + str(e1) + "，条目：" + str(item))
                     continue
-            return ret_array
+            return douban_array
         except Exception as e:
             logger.error("获取RSS失败：" + str(e))
             return []
