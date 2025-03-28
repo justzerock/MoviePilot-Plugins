@@ -30,9 +30,9 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "0.0.1"
+    plugin_version = "1.0"
     # 插件作者
-    plugin_author = "jxxghp,justzerock"
+    plugin_author = "justzerock"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀

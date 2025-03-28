@@ -3,24 +3,24 @@
         "name": "豆瓣榜单订阅·自用修改",
         "description": "获取豆瓣榜单信息，筛选添加订阅",
         "labels": "订阅",
-        "version": "0.0.1",
+        "version": "1.0",
         "icon": "douban.png",
-        "author": "jxxghp,justzerock",
+        "author": "justzerock",
         "level": 2,
         "history": {
-            "v0.0.1": "直接从豆瓣获取信息"
+            "v1.0": "根据豆瓣评分筛选"
         }
     },
     "SpeedLimiterMod": {
         "name": "播放限速·自用修改",
         "description": "按媒体码率限速，通知播放状态",
         "labels": "播放通知,智能限速",
-        "version": "3.0.0",
+        "version": "1.0",
         "icon": "Librespeed_A.png",
-        "author": "Shurelol,justzerock",
+        "author": "justzerock",
         "level": 1,
         "history": {
-            "v3.0.0": "通知 & 限速"
+            "v1.0": "通知 & 限速"
         }
     }
 }
