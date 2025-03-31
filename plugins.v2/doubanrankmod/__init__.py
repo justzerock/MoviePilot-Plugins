@@ -30,7 +30,7 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -124,7 +124,8 @@ class DoubanRankMod(_PluginBase):
     _cn_tv = 0
     _jp_tv = 0
     _etc_tv = 0
-    _year = 2000
+    _year = 2020
+    _db_year = 2020
     _clear = False
     _clearflag = False
     _proxy = False
@@ -145,7 +146,8 @@ class DoubanRankMod(_PluginBase):
             self._cn_tv = float(config.get("cn_tv")) if config.get("cn_tv") else 0
             self._jp_tv = float(config.get("jp_tv")) if config.get("jp_tv") else 0
             self._etc_tv = float(config.get("etc_tv")) if config.get("etc_tv") else 0
-            self._year = int(config.get("year")) if config.get("year") else 2000
+            self._year = int(config.get("year")) if config.get("year") else 2020
+            self._db_year = int(config.get("db_year")) if config.get("db_year") else 2020
             self._count = int(config.get("count")) if config.get("count") else 5000
             genre_rate = config.get("genre_rate")
             if genre_rate:
@@ -392,7 +394,7 @@ class DoubanRankMod(_PluginBase):
                                         'props': {
                                             'model': 'year',
                                             'label': '年份筛选',
-                                            'placeholder': '年份大于等于该值才订阅'
+                                            'placeholder': '默认 2020'
                                         }
                                     }
                                 ]
@@ -461,14 +463,11 @@ class DoubanRankMod(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VSelect',
+                                        'component': 'VTextField',
                                         'props': {
-                                            'chips': True,
-                                            'multiple': True,
-                                            'model': 'douban_ranks',
-                                            'label': '豆瓣榜单',
-                                            'items': [{"title": item.get("title"), "value": item.get("value")}
-                                                      for item in self._douban_list]
+                                            'model': 'count',
+                                            'label': '最低评分人数',
+                                            'placeholder': '默认 5000'
                                         }
                                     }
                                 ]
@@ -483,9 +482,9 @@ class DoubanRankMod(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'count',
-                                            'label': '最低评分人数',
-                                            'placeholder': '默认 5000'
+                                            'model': 'db_year',
+                                            'label': '豆瓣年份',
+                                            'placeholder': '豆瓣TOP250筛选年份 默认 2020'
                                         }
                                     }
                                 ]
@@ -502,11 +501,35 @@ class DoubanRankMod(_PluginBase):
                                 },
                                 'content': [
                                     {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'chips': True,
+                                            'multiple': True,
+                                            'model': 'douban_ranks',
+                                            'label': '豆瓣榜单',
+                                            'items': [{"title": item.get("title"), "value": item.get("value")}
+                                                      for item in self._douban_list]
+                                        }
+                                    }
+                                ]
+                            },
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12
+                                },
+                                'content': [
+                                    {
                                         'component': 'VTextarea',
                                         'props': {
                                             'model': 'genre_rate',
-                                            'label': '类型评分',
-                                            'placeholder': '类型评分，数据包含设定的全部类型时生效，如：科幻,恐怖:7.0'
+                                            'label': '自定义规则',
+                                            'placeholder': '数据包含设定的全部类型时生效，如：科幻,恐怖:7.0'
                                         }
                                     }
                                 ]
@@ -529,7 +552,7 @@ class DoubanRankMod(_PluginBase):
                                             'chips': True,
                                             'clearable': True,
                                             'model': 'blacklist',
-                                            'label': '不订阅的类型（可自定义）',
+                                            'label': '类型黑名单',
                                             'items': ["真人秀", "脱口秀", "纪录片", "歌舞", "同性"]
                                         }
                                     }
@@ -572,6 +595,7 @@ class DoubanRankMod(_PluginBase):
             "jp_tv": "",
             "etc_tv": "",
             "year": "",
+            "db_year": "",
             "douban_ranks": [],
             "count": "",
             "genre_rate": "",
@@ -754,6 +778,7 @@ class DoubanRankMod(_PluginBase):
             "jp_tv": self._jp_tv,
             "etc_tv": self._etc_tv,
             "year": self._year,
+            "db_year": self._db_year,
             "count": self._count,
             "douban_ranks": self._douban_ranks,
             "blacklist": self._blacklist,
@@ -913,9 +938,11 @@ class DoubanRankMod(_PluginBase):
         
         return float(rate) >= threshold
     
-    def filter_item(self, year, count, all_genres, card_subtitle, rate, type):
+    def filter_item(self, year, count, all_genres, card_subtitle, rate, type, isTop250):
         # 基本条件：年份和评分人数
-        if int(year) < self._year or int(count) < self._count:
+        min_year = self._db_year if isTop250 else self._year
+
+        if int(year) < min_year or int(count) < self._count:
             return False
         
         # 黑名单类型
@@ -975,7 +1002,11 @@ class DoubanRankMod(_PluginBase):
                             genres = [genre.strip() for genre in genres_text.split()]
                             all_genres.extend(genres)
                     
-                    if not self.filter_item(year, count, all_genres, card_subtitle, rate, type):
+                    if addr.get("value") == "movie_top250":
+                        isTop250 = True
+                    else:
+                        isTop250 = False
+                    if not self.filter_item(year, count, all_genres, card_subtitle, rate, type, isTop250):
                         continue
 
                     rss_info['title'] = title
