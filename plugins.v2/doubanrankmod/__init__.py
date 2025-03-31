@@ -30,7 +30,7 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "1.2"
+    plugin_version = "1.3"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -392,9 +392,9 @@ class DoubanRankMod(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'year',
-                                            'label': '年份筛选',
-                                            'placeholder': '默认 2020'
+                                            'model': 'count',
+                                            'label': '最低评分人数',
+                                            'placeholder': '默认 5000'
                                         }
                                     }
                                 ]
@@ -465,9 +465,9 @@ class DoubanRankMod(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'count',
-                                            'label': '最低评分人数',
-                                            'placeholder': '默认 5000'
+                                            'model': 'year',
+                                            'label': '年份筛选',
+                                            'placeholder': '默认 2020'
                                         }
                                     }
                                 ]
@@ -869,6 +869,11 @@ class DoubanRankMod(_PluginBase):
                         if not mediainfo:
                             logger.warn(f'未识别到媒体信息，标题：{title}，豆瓣ID：{doubanid}')
                             continue
+                    
+                    if mediainfo.title != title:
+                        logger.warn(f'识别到的标题与豆瓣标题不一致，豆瓣标题：{title}，识别到的标题：{mediainfo.title}')
+                        continue
+
                     # 查询缺失的媒体信息
                     exist_flag, _ = self.downloadchain.get_no_exists_info(meta=meta, mediainfo=mediainfo)
                     if exist_flag:
