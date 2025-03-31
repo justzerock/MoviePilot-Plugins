@@ -22,7 +22,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -854,9 +854,10 @@ class SpeedLimiterMod(_PluginBase):
                     bitrate_down = f"⇣ {round(int(self._total_bit_rate_down)/10**6,1)} Mbps "
                 notify_text_playing += f"总码率：{bitrate_up} {bitrate_down} \n\n"
                 for item in self._playing_items:
-                    notify_text_playing += f"{index}. {item.get('title')}\n"
-                    notify_text_playing += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n\n"
-                    index += 1
+                    if item.get('title'):
+                        notify_text_playing += f"{index}. {item.get('title')}\n"
+                        notify_text_playing += f"    用户：{item.get('user')} | 码率：{item.get('bitrate')}\n\n"
+                        index += 1
 
             if self._notify_link:
                 self.post_message(

@@ -16,11 +16,12 @@
         "name": "播放限速·自用修改",
         "description": "按媒体码率限速，通知播放状态",
         "labels": "播放通知,智能限速",
-        "version": "1.0",
+        "version": "1.1",
         "icon": "Librespeed_A.png",
         "author": "justzerock",
         "level": 1,
         "history": {
+            "v1.1": "修复部分问题",
             "v1.0": "通知 & 限速"
         }
     }
