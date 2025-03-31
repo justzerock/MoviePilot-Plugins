@@ -30,7 +30,7 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -51,6 +51,12 @@ class DoubanRankMod(_PluginBase):
     _scheduler = None
     _douban_list = [
         {
+            'title':'豆瓣TOP250', 
+            'value':'movie_top250',
+            'referer':'https://m.douban.com/subject_collection/movie_top250', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_top250/items?start=0&count=250&items_only=1&type_tag&ck=gF8K&for_mobile=1'
+        },
+        {
             'title':'实时热门书影音', 
             'value':'subject_real_time_hotest',
             'referer':'https://m.douban.com/subject_collection/subject_real_time_hotest', 
@@ -60,31 +66,49 @@ class DoubanRankMod(_PluginBase):
             'title':'一周口碑电影榜', 
             'value':'movie_weekly_best',
             'referer':'https://m.douban.com/subject_collection/movie_weekly_best', 
-            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_weekly_best/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_weekly_best/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
         },
         {
             'title':'华语口碑剧集榜', 
             'value':'tv_chinese_best_weekly',
             'referer':'https://m.douban.com/subject_collection/tv_chinese_best_weekly', 
-            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_chinese_best_weekly/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_chinese_best_weekly/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
         },
         {
             'title':'全球口碑剧集榜', 
             'value':'tv_global_best_weekly',
             'referer':'https://m.douban.com/subject_collection/tv_global_best_weekly', 
-            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_global_best_weekly/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_global_best_weekly/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'国内口碑综艺榜', 
+            'value':'show_chinese_best_weekly',
+            'referer':'https://m.douban.com/subject_collection/show_chinese_best_weekly', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/show_chinese_best_weekly/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'国外口碑综艺榜', 
+            'value':'show_global_best_weekly',
+            'referer':'https://m.douban.com/subject_collection/show_global_best_weekly', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/show_global_best_weekly/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
         },
         {
             'title':'近期热门动画', 
             'value':'tv_animation',
             'referer':'https://m.douban.com/subject_collection/tv_animation', 
-            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_animation/items?start=0&count=10&updated_at&items_only=1&for_mobile=1'
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/tv_animation/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
         },
         {
             'title':'影院热映', 
             'value':'movie_showing',
             'referer':'https://m.douban.com/app_topic/movie_showing', 
-            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_showing/items?start=0&count=18&updated_at&items_only=1&for_mobile=1'
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_showing/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
+        },
+        {
+            'title':'豆瓣热门', 
+            'value':'movie_hot_gaia',
+            'referer':'https://m.douban.com/app_topic/movie_hot_gaia', 
+            'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_hot_gaia/items?start=0&count=20&updated_at&items_only=1&for_mobile=1'
         }
     ]
     _enabled = False
