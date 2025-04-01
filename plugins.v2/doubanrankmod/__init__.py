@@ -1,5 +1,6 @@
 import re
 import json
+import time
 import datetime
 from threading import Event
 from typing import Tuple, List, Dict, Any
@@ -30,7 +31,7 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "1.3"
+    plugin_version = "1.4"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -111,6 +112,8 @@ class DoubanRankMod(_PluginBase):
             'address':'https://m.douban.com/rexxar/api/v2/subject_collection/movie_hot_gaia/items?start=0&count=20&items_only=1&for_mobile=1'
         }
     ]
+    _cache_duration = 120
+    _cache_duration_top250 = 1200
     _enabled = False
     _cron = ""
     _onlyonce = False
@@ -125,7 +128,7 @@ class DoubanRankMod(_PluginBase):
     _jp_tv = 0
     _etc_tv = 0
     _year = 2020
-    _db_year = 2020
+    _year_top250 = 2020
     _clear = False
     _clearflag = False
     _proxy = False
@@ -147,7 +150,9 @@ class DoubanRankMod(_PluginBase):
             self._jp_tv = float(config.get("jp_tv")) if config.get("jp_tv") else 0
             self._etc_tv = float(config.get("etc_tv")) if config.get("etc_tv") else 0
             self._year = int(config.get("year")) if config.get("year") else 2020
-            self._db_year = int(config.get("db_year")) if config.get("db_year") else 2020
+            self._year_top250 = int(config.get("year_top250")) if config.get("year_top250") else 2020
+            self._cache_duration = int(config.get("cache_duration")) if config.get("cache_duration") else 120
+            self._cache_duration_top250 = int(config.get("cache_duration_top250")) if config.get("cache_duration_top250") else 1200
             self._count = int(config.get("count")) if config.get("count") else 5000
             genre_rate = config.get("genre_rate")
             if genre_rate:
@@ -482,9 +487,48 @@ class DoubanRankMod(_PluginBase):
                                     {
                                         'component': 'VTextField',
                                         'props': {
-                                            'model': 'db_year',
-                                            'label': '豆瓣年份',
+                                            'model': 'year_top250',
+                                            'label': '豆瓣TOP250年份',
                                             'placeholder': '豆瓣TOP250筛选年份 默认 2020'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'cache_duration',
+                                            'label': '榜单本地缓存（分钟）',
+                                            'placeholder': '默认 120'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'cache_duration_top250',
+                                            'label': '豆瓣TOP250榜单本地缓存（分钟）',
+                                            'placeholder': '默认 1200'
                                         }
                                     }
                                 ]
@@ -595,7 +639,9 @@ class DoubanRankMod(_PluginBase):
             "jp_tv": "",
             "etc_tv": "",
             "year": "",
-            "db_year": "",
+            "year_top250": "",
+            "cache_duration": "",
+            "cache_duration_top250": "",
             "douban_ranks": [],
             "count": "",
             "genre_rate": "",
@@ -631,6 +677,7 @@ class DoubanRankMod(_PluginBase):
             poster = history.get("poster")
             rtype = history.get("type")
             time_str = history.get("time")
+            tip = history.get("tip") if history.get("tip") else ""
             doubanid = history.get("doubanid")
             contents.append(
                 {
@@ -680,8 +727,8 @@ class DoubanRankMod(_PluginBase):
                                         {
                                             'component': 'VCardTitle',
                                             'props': {
-                                                'class': 'ps-1 pe-5 break-words whitespace-break-spaces',
-                                                'style': 'font-size: 14px;'
+                                                'class': 'ps-1 pe-5 break-words whitespace-break-spaces text-primary',
+                                                'style': 'font-size: 14px;',
                                             },
                                             'content': [
                                                 {
@@ -690,7 +737,7 @@ class DoubanRankMod(_PluginBase):
                                                         'href': f"https://movie.douban.com/subject/{doubanid}",
                                                         'target': '_blank'
                                                     },
-                                                    'text': f"{title} ({year})"
+                                                    'text': f"{title} ({year}) {tip}"
                                                 }
                                             ]
                                         },
@@ -706,7 +753,7 @@ class DoubanRankMod(_PluginBase):
                                             'props': {
                                                 'class': 'pa-0 px-2'
                                             },
-                                            'text': f'类型：{rtype}/{genres}'
+                                            'text': f'类型：{rtype} / {genres}'
                                         },
                                         {
                                             'component': 'VCardText',
@@ -778,7 +825,9 @@ class DoubanRankMod(_PluginBase):
             "jp_tv": self._jp_tv,
             "etc_tv": self._etc_tv,
             "year": self._year,
-            "db_year": self._db_year,
+            "year_top250": self._year_top250,
+            "cache_duration": self._cache_duration,
+            "cache_duration_top250": self._cache_duration_top250,
             "count": self._count,
             "douban_ranks": self._douban_ranks,
             "blacklist": self._blacklist,
@@ -812,13 +861,13 @@ class DoubanRankMod(_PluginBase):
             if not addr:
                 continue
             try:
-                logger.info(f"获取RSS：{addr} ...")
+                logger.info(f"获取RSS：{addr.get("title")} ...")
                 rss_infos = self.__get_rss_info(addr)
                 if not rss_infos:
-                    logger.error(f"RSS地址：{addr} ，未查询到数据")
+                    logger.error(f"RSS地址：{addr.get("title")} ，无符合条件的数据")
                     continue
                 else:
-                    logger.info(f"RSS地址：{addr} ，共 {len(rss_infos)} 条数据")
+                    logger.info(f"RSS地址：{addr.get("title")} ，共 {len(rss_infos)} 条数据")
                 for rss_info in rss_infos:
                     if self._event.is_set():
                         logger.info(f"订阅服务停止")
@@ -830,6 +879,8 @@ class DoubanRankMod(_PluginBase):
                     rate = rss_info.get('rate')
                     count = rss_info.get('count')
                     genres = rss_info.get('genres')
+
+                    tip = ""
 
                     rtype = '电影' if type == 'movie' else '电视剧'
 
@@ -872,7 +923,7 @@ class DoubanRankMod(_PluginBase):
                     
                     if mediainfo.title != title:
                         logger.warn(f'识别到的标题与豆瓣标题不一致，豆瓣标题：{title}，识别到的标题：{mediainfo.title}')
-                        continue
+                        tip = "标题不一致"
 
                     # 查询缺失的媒体信息
                     exist_flag, _ = self.downloadchain.get_no_exists_info(meta=meta, mediainfo=mediainfo)
@@ -883,14 +934,16 @@ class DoubanRankMod(_PluginBase):
                     if self.subscribechain.exists(mediainfo=mediainfo, meta=meta):
                         logger.info(f'{mediainfo.title_year} 订阅已存在')
                         continue
-                    # 添加订阅
-                    self.subscribechain.add(title=mediainfo.title,
-                                            year=mediainfo.year,
-                                            mtype=mediainfo.type,
-                                            tmdbid=mediainfo.tmdb_id,
-                                            season=meta.begin_season,
-                                            exist_ok=True,
-                                            username="豆瓣榜单")
+
+                    if not tip:
+                        # 添加订阅
+                        self.subscribechain.add(title=mediainfo.title,
+                                                year=mediainfo.year,
+                                                mtype=mediainfo.type,
+                                                tmdbid=mediainfo.tmdb_id,
+                                                season=meta.begin_season,
+                                                exist_ok=True,
+                                                username="豆瓣榜单")
                     # 存储历史记录
                     history.append({
                         "title": title,
@@ -904,6 +957,7 @@ class DoubanRankMod(_PluginBase):
                         "tmdbid": mediainfo.tmdb_id,
                         "doubanid": doubanid,
                         "time": datetime.datetime.now().strftime("%m-%d %H:%M"),
+                        "tip": tip,
                         "unique": unique_flag
                     })
             except Exception as e:
@@ -945,7 +999,7 @@ class DoubanRankMod(_PluginBase):
     
     def filter_item(self, year, count, all_genres, card_subtitle, rate, type, isTop250):
         # 基本条件：年份和评分人数
-        min_year = self._db_year if isTop250 else self._year
+        min_year = self._year_top250 if isTop250 else self._year
 
         if int(year) < min_year or int(count) < self._count:
             return False
@@ -967,14 +1021,31 @@ class DoubanRankMod(_PluginBase):
         获取RSS
         """
         try:
-            if self._proxy:
-                ret = RequestUtils(proxies=settings.PROXY, referer=addr.get("referer")).get_res(addr.get("address"))
-            else:
-                ret = RequestUtils(referer=addr.get("referer")).get_res(addr.get("address"))
-            if not ret:
-                return []
-            douban_items = json.loads(ret.text).get('subject_collection_items')
+            key = addr.get("value")
+            cached_data = self.get_data(key)
+
+            douban_items = []
             douban_array = []
+
+            if key == "movie_top250":
+                cache_duration = int(self._cache_duration_top250) * 60
+            else:
+                cache_duration = int(self._cache_duration) * 60
+
+            if not cached_data or time.time() - cached_data.get("timestamp", 0) > cache_duration:
+                logger.info(f"缓存数据过期，重新获取: {key}")
+                if self._proxy:
+                    ret = RequestUtils(proxies=settings.PROXY, referer=addr.get("referer")).get_res(addr.get("address"))
+                else:
+                    ret = RequestUtils(referer=addr.get("referer")).get_res(addr.get("address"))
+                if not ret:
+                    return []
+                douban_items = json.loads(ret.text).get('subject_collection_items')
+                self.save_data(key, {"data": douban_items, "timestamp": time.time()}) # 保存数据，包含时间戳
+            else:
+                logger.info(f"使用缓存数据: {key}")
+                douban_items = cached_data["data"]
+                    
             for item in douban_items:
                 try:
                     rss_info = {}
