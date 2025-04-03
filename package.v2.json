@@ -3,11 +3,12 @@
         "name": "豆瓣榜单订阅·自用修改",
         "description": "获取豆瓣榜单信息，筛选添加订阅",
         "labels": "订阅",
-        "version": "1.4",
+        "version": "1.5",
         "icon": "douban.png",
         "author": "justzerock",
         "level": 2,
         "history": {
+            "v1.5": "修复bug",
             "v1.4": "增加本地缓存数据",
             "v1.3": "检查前后标题是否一致",
             "v1.2": "单独筛选豆瓣TOP250年份",

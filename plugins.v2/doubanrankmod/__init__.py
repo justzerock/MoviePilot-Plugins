@@ -31,7 +31,7 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "1.4"
+    plugin_version = "1.5"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -861,13 +861,13 @@ class DoubanRankMod(_PluginBase):
             if not addr:
                 continue
             try:
-                logger.info(f"获取RSS：{addr.get("title")} ...")
+                logger.info(f"获取RSS：{addr.get('title')} ...")
                 rss_infos = self.__get_rss_info(addr)
                 if not rss_infos:
-                    logger.error(f"RSS地址：{addr.get("title")} ，无符合条件的数据")
+                    logger.error(f"RSS地址：{addr.get('title')} ，无符合条件的数据")
                     continue
                 else:
-                    logger.info(f"RSS地址：{addr.get("title")} ，共 {len(rss_infos)} 条数据")
+                    logger.info(f"RSS地址：{addr.get('title')} ，共 {len(rss_infos)} 条数据")
                 for rss_info in rss_infos:
                     if self._event.is_set():
                         logger.info(f"订阅服务停止")
