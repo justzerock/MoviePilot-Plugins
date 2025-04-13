@@ -22,7 +22,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件图标
     plugin_icon = "Librespeed_A.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -50,6 +50,7 @@ class SpeedLimiterMod(_PluginBase):
     _playing_items: list = []
     _total_bit_rate_up: float = 0
     _total_bit_rate_down: float = 0
+    _total_bit_rate: float = 0
     _downloader: list = []
     _play_up_speed: float = 0
     _play_down_speed: float = 0
@@ -580,6 +581,7 @@ class SpeedLimiterMod(_PluginBase):
         # 当前播放的总比特率
         total_bit_rate_up = 0
         total_bit_rate_down = 0
+        total_bit_rate = 0
         playing_items = []
         media_servers = self.mediaserver_helper.get_services()
         if not media_servers:
@@ -599,6 +601,7 @@ class SpeedLimiterMod(_PluginBase):
                             # logger.info(session)
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
                                 playing_items.append(self.__get_media_info(session, 'emby'))
+                                total_bit_rate += int(session.get("NowPlayingItem").get("Bitrate") or 0)
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
                                 elif self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=False):
@@ -636,6 +639,9 @@ class SpeedLimiterMod(_PluginBase):
                         for session in sessions:
                             if session.get("NowPlayingItem") and not session.get("PlayState", {}).get("IsPaused"):
                                 playing_items.append(self.__get_media_info(session, 'jellyfin'))
+                                media_streams = session.get("NowPlayingItem", {}).get("MediaStreams") or []
+                                for media_stream in media_streams:
+                                    total_bit_rate += int(media_stream.get("BitRate") or 0)
                                 if self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=True):
                                     playing_sessions_up.append(session)
                                 elif self.__path_included(session.get("NowPlayingItem").get("Path"), is_up=False):
@@ -678,6 +684,7 @@ class SpeedLimiterMod(_PluginBase):
                     sessions = _plex.sessions()
                     for session in sessions:
                         bitrate = sum([m.bitrate or 0 for m in session.media])
+                        total_bit_rate += int(bitrate or 0)
                         playing_sessions_up.append({
                             "type": session.TAG,
                             "bitrate": bitrate,
@@ -697,6 +704,7 @@ class SpeedLimiterMod(_PluginBase):
         self._playing_items = playing_items
         self._total_bit_rate_up = total_bit_rate_up
         self._total_bit_rate_down = total_bit_rate_down
+        self._total_bit_rate = total_bit_rate
 
         if total_bit_rate_up or total_bit_rate_down:
             # 开启智能限速计算上传限速
@@ -708,8 +716,7 @@ class SpeedLimiterMod(_PluginBase):
                 play_down_speed = self._play_down_speed
 
             # 当前正在播放，开始限速
-            self.__set_limiter(limit_type="播放", 
-                               upload_limit=play_up_speed,
+            self.__set_limiter(upload_limit=play_up_speed,
                                download_limit=play_down_speed)
         else:
             if self._auto_limit:
@@ -720,9 +727,8 @@ class SpeedLimiterMod(_PluginBase):
                 noplay_up_speed = self._noplay_up_speed
                 noplay_down_speed = self._noplay_down_speed
 
-            self.__set_limiter(limit_type="未播放", 
-                               upload_limit=noplay_up_speed,
-                                download_limit=noplay_down_speed)
+            self.__set_limiter(upload_limit=noplay_up_speed,
+                               download_limit=noplay_down_speed)
 
     def __delayed_notification(self):
         """执行延迟通知"""
@@ -766,8 +772,8 @@ class SpeedLimiterMod(_PluginBase):
                 "media.play",
             ]:
             notify_state = '[+] '
-            notify_tip_up = ' ⇡' if self.__path_included(event.item_path, is_up=True) else ''
-            notify_tip_down = ' ⇣' if self.__path_included(event.item_path, is_up=False) else ''
+            # notify_tip_up = ' ⇡' if self.__path_included(event.item_path, is_up=True) else ''
+            # notify_tip_down = ' ⇣' if self.__path_included(event.item_path, is_up=False) else ''
         else:
             notify_state = '[-] '
         return f"{notify_state}{notify_title}{notify_tip_up}{notify_tip_down}\n"
@@ -845,14 +851,18 @@ class SpeedLimiterMod(_PluginBase):
             index = 1
             notify_text_playing = ''
             if self._playing_items:
-                notify_text_playing = '\n═══ 正在播放 ═══\n'
+                notify_text_playing = '\n═══ 正在播放 ═══\n\n'
                 bitrate_up = ''
                 bitrate_down = ''
+                bitrate_total = ''
+                if self._total_bit_rate:
+                    bitrate_total = f"{round(int(self._total_bit_rate)/10**6,1)} Mbps "
                 if self._total_bit_rate_up:
-                    bitrate_up = f"⇡ {round(int(self._total_bit_rate_up)/10**6,1)} Mbps "
+                    bitrate_up = f"⇡ {round(int(self._total_bit_rate_up)/10**6,1)} "
                 if self._total_bit_rate_down:
-                    bitrate_down = f"⇣ {round(int(self._total_bit_rate_down)/10**6,1)} Mbps "
-                notify_text_playing += f"总码率：{bitrate_up} {bitrate_down} \n\n"
+                    bitrate_down = f"⇣ {round(int(self._total_bit_rate_down)/10**6,1)} "
+                if bitrate_total:
+                    notify_text_playing += f"总码率：{bitrate_total}{bitrate_up}{bitrate_down}\n\n"
                 for item in self._playing_items:
                     if item.get('title'):
                         notify_text_playing += f"{index}. {item.get('title')}\n"
@@ -876,7 +886,7 @@ class SpeedLimiterMod(_PluginBase):
                 self.__clean_notify_history()
 
 
-    def __set_limiter(self, limit_type: str, upload_limit: float, download_limit: float):
+    def __set_limiter(self, upload_limit: float, download_limit: float):
         """
         设置限速
         """
@@ -884,6 +894,8 @@ class SpeedLimiterMod(_PluginBase):
             return
         state = f"U:{upload_limit},D:{download_limit}"
         if self._current_state == state:
+            if self._notify_title:
+                self.__schedule_notification()
             # 限速状态没有改变
             return
         else:
@@ -893,7 +905,7 @@ class SpeedLimiterMod(_PluginBase):
             cnt = 0
             upload_limit_final = None
             download_limit_final = None
-            self._notify_text_speed = "═══ 限速状态 ═══\n"
+            self._notify_text_speed = "═══ 限速状态 ═══\n\n"
             for download in self._downloader:
                 service = self.service_infos.get(download)
                 # if self._auto_limit and limit_type == "播放":
