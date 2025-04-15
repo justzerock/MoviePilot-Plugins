@@ -31,7 +31,7 @@ class DoubanRankMod(_PluginBase):
     # 插件图标
     plugin_icon = "douban.png"
     # 插件版本
-    plugin_version = "1.5"
+    plugin_version = "1.6"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -921,7 +921,7 @@ class DoubanRankMod(_PluginBase):
                             logger.warn(f'未识别到媒体信息，标题：{title}，豆瓣ID：{doubanid}')
                             continue
                     
-                    if mediainfo.title != title:
+                    if mediainfo.title not in title:
                         logger.warn(f'识别到的标题与豆瓣标题不一致，豆瓣标题：{title}，识别到的标题：{mediainfo.title}')
                         tip = "标题不一致"
 
