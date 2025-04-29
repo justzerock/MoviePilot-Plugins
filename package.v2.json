@@ -30,5 +30,17 @@
             "v1.1": "修复部分问题",
             "v1.0": "通知 & 限速"
         }
+    },
+    "MediaCoverGenerator": {
+        "name": "媒体库封面生成",
+        "description": "获取媒体库的最新媒体，生成封面",
+        "labels": "封面,媒体库",
+        "version": "0.1",
+        "icon": "Emby_A.png",
+        "author": "justzerock",
+        "level": 1,
+        "history": {
+            "v0.1": "自定义字体"
+        }
     }
 }
