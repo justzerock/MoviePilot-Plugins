@@ -6,7 +6,7 @@ import os
 import yaml
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
-from app.plugins.librarybackdrop.image_processor import create_emby_cover
+from app.plugins.mediacovergenerator.image_processor import create_emby_cover
 
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
