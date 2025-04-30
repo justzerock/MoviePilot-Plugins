@@ -1,13 +1,12 @@
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
-from io import BytesIO
 import base64
-import os
-import random
-import math
 import colorsys
-import numpy as np
-from pathlib import Path
 from collections import Counter
+from io import BytesIO
+from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
 
 # ========== 配置 ==========
 canvas_size = (1280, 720)
@@ -33,21 +32,10 @@ def hsv_to_rgb(h, s, v):
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     return (int(r * 255), int(g * 255), int(b * 255))
 
-def adjust_to_macaron(h, s, v, target_saturation_range=(0.2, 0.7), target_value_range=(0.7, 0.95)):
-    """将颜色的饱和度和亮度调整到接近马卡龙色系的范围。"""
-    adjusted_s = s
-    adjusted_v = v
-
-    if s < target_saturation_range[0]:
-        adjusted_s = target_saturation_range[0]
-    elif s > target_saturation_range[1]:
-        adjusted_s = target_saturation_range[1]
-
-    if v < target_value_range[0]:
-        adjusted_v = target_value_range[0]
-    elif v > target_value_range[1]:
-        adjusted_v = target_value_range[1]
-
+def adjust_to_macaron(h, s, v, target_saturation_range=(0.2, 0.7), target_value_range=(0.55, 0.85)):
+    """将颜色的饱和度和亮度调整到接近马卡龙色系的范围，同时避免颜色过亮。"""
+    adjusted_s = min(max(s, target_saturation_range[0]), target_saturation_range[1])
+    adjusted_v = min(max(v, target_value_range[0]), target_value_range[1])
     return adjusted_s, adjusted_v
 
 def find_dominant_vibrant_colors(image, num_colors=5):
@@ -319,7 +307,7 @@ def create_emby_cover(image_data, title_zh, title_en, zh_font_path, en_font_path
         en_font = ImageFont.truetype(en_font_path, en_font_size)
         
         # 设置80%透明度的文字颜色 (255, 255, 255, 204) - 204是80%不透明度
-        text_color = (255, 255, 255, 204)
+        text_color = (255, 255, 255, 216)
         shadow_color_rgba = shadow_color + (210,)  # 原始阴影透明度
         shadow_offset = 12
         shadow_alpha = 210

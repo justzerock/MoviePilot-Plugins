@@ -1,13 +1,14 @@
 import base64
 import datetime
+import hashlib
+import os
 import threading
 import time
-import os
-import hashlib
-import yaml
-import pytz
 from pathlib import Path
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+import pytz
+import yaml
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -29,11 +30,11 @@ class MediaCoverGenerator(_PluginBase):
     # 插件名称
     plugin_name = "媒体库封面生成"
     # 插件描述
-    plugin_desc = "获取媒体库图片，生成封面，仅支持 Emby，Jellyfin"
+    plugin_desc = "自动生成媒体库封面，支持 Emby，Jellyfin"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.4"
+    plugin_version = "0.5"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -600,8 +601,8 @@ class MediaCoverGenerator(_PluginBase):
         self._en_font_path = path / "en.ttf"
 
         # 默认字体链接
-        default_zh_url = "https://fastly.jsdelivr.net/gh/justzerock/assets@master/zh.ttf"
-        default_en_url = "https://fastly.jsdelivr.net/gh/justzerock/assets@master/en.ttf"
+        default_zh_url = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/zh.ttf"
+        default_en_url = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/en.ttf"
 
         zh_font_url = self._zh_font_url or default_zh_url
         en_font_url = self._en_font_url or default_en_url
