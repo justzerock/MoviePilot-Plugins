@@ -544,7 +544,7 @@ class SpeedLimiterMod(_PluginBase):
                 logger.warning(f"媒体服务器 {service_name} 未连接，请检查配置")
             else:
                 active_services[service_name] = service_info
-                logger.info(f"媒体服务器: {service_info}")
+                # logger.info(f"媒体服务器: {service_info}")
 
         if not active_services:
             logger.warning("没有已连接的下载器，请检查配置")

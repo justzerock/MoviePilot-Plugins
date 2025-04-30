@@ -22,7 +22,7 @@
         "description": "按媒体码率限速，通知播放状态",
         "labels": "播放通知,智能限速",
         "version": "1.2",
-        "icon": "Librespeed_A.png",
+        "icon": "speed.png",
         "author": "justzerock",
         "level": 1,
         "history": {
@@ -35,11 +35,12 @@
         "name": "媒体库封面生成",
         "description": "获取媒体库的最新媒体，生成封面",
         "labels": "封面,媒体库",
-        "version": "0.3",
-        "icon": "Emby_A.png",
+        "version": "0.4",
+        "icon": "emby.png",
         "author": "justzerock",
         "level": 1,
         "history": {
+            "v0.4": "自定义背景图目录",
             "v0.3": "修复bug",
             "v0.2": "测试",
             "v0.1": "自定义字体"

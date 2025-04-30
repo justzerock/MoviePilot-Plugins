@@ -8,15 +8,8 @@ import colorsys
 import numpy as np
 from pathlib import Path
 from collections import Counter
-from app.log import logger
 
 # ========== 配置 ==========
-# images_folder = "/opt/1panel/docker/config/emby-cover/pics"
-# chinese_font_path = config['font_path']['ch_font']
-# english_font_path = config['font_path']['en_font']
-# output_file = "/opt/1panel/docker/config/emby-cover/emby_cover.jpg"
-# title_zh = "华语电影"
-# title_en = "Chinese Films"
 canvas_size = (1280, 720)
 
 def is_not_black_white_gray_near(color, threshold=20):
@@ -236,17 +229,13 @@ def create_shadow_mask(size, split_top=0.5, split_bottom=0.33, feather_size=40):
     
     return mask
 
-def create_emby_cover(image_data, title_zh, title_en, zh_path, en_path):
+def create_emby_cover(image_data, title_zh, title_en, zh_font_path, en_font_path):
     try:
-        
+        if not title_zh or not title_en:
+            title_zh = "未配置标题"
+            title_en = "Not Configured"
         image_data = base64.b64decode(image_data)
         image_bytes = BytesIO(image_data)
-        # 随机选择两张不同的图片作为背景和前景
-        # selected_indices = random.sample(range(len(image_paths)), 2)
-        # bg_image_path = image_paths[selected_indices[0]]
-        # fg_image_path = image_paths[selected_indices[1]]
-        # fg_image_path = image_paths[0]
-        # bg_image_path = image_paths[1]
         
         # 定义斜线分割位置
         split_top = 0.55    # 顶部分割点在画面五分之三的位置
@@ -311,13 +300,6 @@ def create_emby_cover(image_data, title_zh, title_en, zh_path, en_path):
         
         # ===== 标题绘制 =====
         # 使用RGBA模式进行绘制，以便设置文字透明度
-        # chinese_font_path = '/app/app/pugins/librarybackdrop/fonts/zh.ttf'
-        # english_font_path = '/app/app/pugins/librarybackdrop/fonts/en.ttf'
-        # logger.info(f"Chinese font path: {chinese_font_path}")
-        # logger.info(f"English font path: {english_font_path}")
-        
-        # zh_font_file = BytesIO(zh_font.content)
-        # en_font_file = BytesIO(en_font.content)
 
         canvas_rgba = canvas.convert('RGBA')
         text_layer = Image.new('RGBA', canvas_size, (255, 255, 255, 0))
@@ -333,8 +315,8 @@ def create_emby_cover(image_data, title_zh, title_en, zh_path, en_path):
         zh_font_size = int(canvas_size[1] * 0.17)
         en_font_size = int(canvas_size[1] * 0.07)
         
-        zh_font = ImageFont.truetype(zh_path, zh_font_size)
-        en_font = ImageFont.truetype(en_path, en_font_size)
+        zh_font = ImageFont.truetype(zh_font_path, zh_font_size)
+        en_font = ImageFont.truetype(en_font_path, en_font_size)
         
         # 设置80%透明度的文字颜色 (255, 255, 255, 204) - 204是80%不透明度
         text_color = (255, 255, 255, 204)
@@ -391,17 +373,3 @@ def create_emby_cover(image_data, title_zh, title_en, zh_path, en_path):
         return base64_str
     except Exception as e:
         return None
-
-# def clear_temp_images(folder_path):
-#     """清除临时图片文件"""
-#     try:
-#         for file in os.listdir(folder_path):
-#             file_path = os.path.join(folder_path, file)
-#             if os.path.isfile(file_path):
-#                 os.unlink(file_path)
-#         logger.info(f"已清除临时图片: {folder_path}")
-#     except Exception as e:
-#         logger.error(f"清除临时图片失败: {e}")
-        
-# if __name__ == "__main__":
-#     create_cover()
