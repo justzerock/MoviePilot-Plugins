@@ -28,11 +28,11 @@ class MediaCoverGenerator(_PluginBase):
     # 插件名称
     plugin_name = "媒体库封面生成"
     # 插件描述
-    plugin_desc = "获取媒体库的最新媒体，生成封面"
+    plugin_desc = "获取媒体库图片，生成封面，仅支持 Emby，Jellyfin"
     # 插件图标
     plugin_icon = "Emby_A.png"
     # 插件版本
-    plugin_version = "0.2"
+    plugin_version = "0.3"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -57,13 +57,15 @@ class MediaCoverGenerator(_PluginBase):
     _cron = None
     _delay = 0
     _mediaservers = []
-    _sort_by = []
+    _sort_by = ''
+    _output = ''
+    _input = ''
     _image_process_enabled = True
     _zh_font_url = 'https://fastly.jsdelivr.net/gh/justzerock/assets@master/zh.ttf'
     _en_font_url = 'https://fastly.jsdelivr.net/gh/justzerock/assets@master/en.ttf'
     _zh_font_path = None
     _en_font_path = None
-    _title_config = ""
+    _title_config = ''
 
     def init_plugin(self, config: dict = None):
         self.mschain = MediaServerChain()
@@ -76,9 +78,11 @@ class MediaCoverGenerator(_PluginBase):
             self._cron = config.get("cron")
             self._delay = config.get("delay") or 0
             self._mediaservers = config.get("mediaservers") or []
-            self._sort_by = config.get("sort_by") or []
+            self._sort_by = config.get("sort_by") or ''
+            self._output = config.get("output") or ''
+            self._input = config.get("input") or ''
             self._image_process_enabled = config.get("image_process_enabled") or True
-            self._title_config = config.get("title_config") or ""
+            self._title_config = config.get("title_config") or ''
             self._zh_font_url = config.get("zh_font_url") or "https://fastly.jsdelivr.net/gh/justzerock/assets@master/zh.ttf"
             self._en_font_url = config.get("en_font_url") or "https://fastly.jsdelivr.net/gh/justzerock/assets@master/en.ttf"
 
@@ -114,6 +118,8 @@ class MediaCoverGenerator(_PluginBase):
             "delay": self._delay,
             "mediaservers": self._mediaservers,
             "sort_by": self._sort_by,
+            "output": self._output,
+            "input": self._input,
             "image_process_enabled": self._image_process_enabled,
             "title_config": self._title_config,
             "zh_font_url": self._zh_font_url,
@@ -236,7 +242,7 @@ class MediaCoverGenerator(_PluginBase):
                                         'props': {
                                             'model': 'delay',
                                             'label': '入库延迟时间（秒）',
-                                            'placeholder': '30'
+                                            'placeholder': '如：30，等待入库再更新'
                                         }
                                     }
                                 ]
@@ -251,7 +257,7 @@ class MediaCoverGenerator(_PluginBase):
                                     {
                                         'component': 'VSelect',
                                         'props': {
-                                            'multiple': False,
+                                            'multiple': True,
                                             'chips': True,
                                             'clearable': True,
                                             'model': 'mediaservers',
@@ -280,10 +286,11 @@ class MediaCoverGenerator(_PluginBase):
                                             'chips': True,
                                             'multiple': False,
                                             'model': 'sort_by',
-                                            'label': '背景图来源排序',
+                                            'label': '背景图来源排序，默认随机',
                                             'items': [
                                                 {"title": "最新加入", "value": "DateCreated"},
-                                                {"title": "最新发行", "value": "PremiereDate"}
+                                                {"title": "最新发行", "value": "PremiereDate"},
+                                                {"title": "随机", "value": ""}
                                                 ]
                                         }
                                     }
@@ -301,7 +308,7 @@ class MediaCoverGenerator(_PluginBase):
                                         'props': {
                                             'model': 'zh_font_url',
                                             'label': '中文字体链接',
-                                            'placeholder': self._zh_font_url
+                                            'placeholder': '留空使用默认字体'
                                         }
                                     }
                                 ]
@@ -318,7 +325,46 @@ class MediaCoverGenerator(_PluginBase):
                                         'props': {
                                             'model': 'en_font_url',
                                             'label': '英文字体链接',
-                                            'placeholder': self._en_font_url
+                                            'placeholder': '留空使用默认字体'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'output',
+                                            'label': '输出图片目录',
+                                            'placeholder': '如：/mnt/covers_output，留空则不输出'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'input',
+                                            'label': '自定义图片来源（要求图片与媒体库同名）',
+                                            'placeholder': '如：/mnt/covers_input，留空则不启用'
                                         }
                                     }
                                 ]
@@ -365,7 +411,7 @@ class MediaCoverGenerator(_PluginBase):
                                         'component': 'VSwitch',
                                         'props': {
                                             'model': 'image_process_enabled',
-                                            'label': '启用图像处理',
+                                            'label': '启用图像处理（取消则为原图）',
                                         }
                                     }
                                 ]
@@ -382,10 +428,19 @@ class MediaCoverGenerator(_PluginBase):
             "delay": 30,
             "mediaservers": [],
             "sort_by": [],
+            "output": "",
+            "input": "",
             "image_process_enabled": True,
-            "title_config": "",
-            "zh_font_url": self._zh_font_url,
-            "en_font_url": self._en_font_url
+            "title_config": '''华语剧集:
+  - 华语剧集
+  - Chinese Series
+  
+华语电影:
+  - 华语电影
+  - Chinese Films
+''',
+            "zh_font_url": '',
+            "en_font_url": ''
         }
 
     def get_page(self) -> List[dict]:
@@ -398,7 +453,6 @@ class MediaCoverGenerator(_PluginBase):
         if not self._mediaservers:
             logger.warning("尚未配置媒体服务器，请检查配置")
             return None
-
         services = self.mediaserver_helper.get_services(type_filter=type_filter, name_filters=self._mediaservers)
         if not services:
             logger.warning("获取媒体服务器实例失败，请检查配置")
@@ -424,6 +478,14 @@ class MediaCoverGenerator(_PluginBase):
         """
         if not self._transfer_update:
             return
+        # 所有媒体服务器
+        service_infos = self.service_infos()
+        if not service_infos:
+            return
+        for server, service in service_infos.items():
+            if service.type == "plex":
+                logger.info("暂不支持Plex")
+                return
         
         # Event data
         mediainfo: MediaInfo = event.event_data.get("mediainfo")
@@ -439,9 +501,6 @@ class MediaCoverGenerator(_PluginBase):
         if not existsinfo or not existsinfo.itemid:
             logger.warning(f"{mediainfo.title_year} does not exist in media library")
             return
-            
-        # Log the existsinfo for debugging
-        # logger.info(f"存在信息: {existsinfo}")
         
         # Get item details including backdrop
         # logger.info(f"Getting backdrop for {mediainfo.title_year}...")
@@ -457,15 +516,6 @@ class MediaCoverGenerator(_PluginBase):
             libraries = media_service.instance.get_emby_virtual_folders()
         elif existsinfo.server_type == "jellyfin":
             libraries = media_service.instance.get_jellyfin_virtual_folders()
-        elif existsinfo.server_type == "plex":
-            # For Plex
-            plex = media_service.instance.get_plex()
-            item = plex.fetchItem(existsinfo.itemid)
-            if item:
-                library_id = item.librarySectionID
-            libraries = plex.get_librarys()
-            library_name = next((library.get('name', '') for library in libraries if library.get('Id', '') == library_id), None)
-
         if libraries and not library_id:
             library_info = next(
                 ((library.get('Id', ''), library.get('Name', '')) for library in libraries if library.get('Path', '') and any(iteminfo.path.startswith(path) for path in library.get('Path', ''))),
@@ -518,6 +568,9 @@ class MediaCoverGenerator(_PluginBase):
             return
             
         for server, service in service_infos.items():
+            if service.type == "plex":
+                logger.info("暂不支持Plex")
+                continue
             # 扫描所有媒体库
             logger.info(f"开始更新服务器 {server} 的媒体库背景...")
             
@@ -539,16 +592,13 @@ class MediaCoverGenerator(_PluginBase):
                     logger.info(f"媒体库 {library.name} 中没有项目")
                     continue
                 
-                if service.type == "plex":
-                    item_id = latest_items[0].item_id
+                latest_item = latest_items.get('Items', {})[0]
+                type = latest_item.get('Type', '')
+                if type == 'Series':
+                    item_id = latest_item.get('Id', '')
                 else:
-                    latest_item = latest_items.get('Items', {})[0]
-                    type = latest_item.get('Type', '')
-                    if type == 'Series':
-                        item_id = latest_item.get('Id', '')
-                    else:
-                        item_id = latest_item.get('PrimaryImageItemId', '') \
-                                    if service.type == 'emby' else latest_item.get('Id', '')
+                    item_id = latest_item.get('PrimaryImageItemId', '') \
+                                if service.type == 'emby' else latest_item.get('Id', '')
                 # 使用第一个项目的背景图
                 if self.__update_library_backdrop(server=server, 
                                                 server_type=service.type,
@@ -568,15 +618,11 @@ class MediaCoverGenerator(_PluginBase):
             if not service:
                 logger.warning(f"未找到媒体服务器 {server} 的实例")
                 return {}
-            if self._sort_by:
-                sort_by = self._sort_by[0].get('value', 'DateCreated')
-            else:
-                sort_by = 'DateCreated'
 
             def __get_emby_iteminfo() -> dict:
                 """获取Emby媒体项详情"""
                 try:
-                    url = f'[HOST]emby/Items/?ParentId={library_id}&SortBy={sort_by}' \
+                    url = f'[HOST]emby/Items/?ParentId={library_id}&SortBy={self._sort_by}' \
                           f'&Limit=1&SortOrder=Descending&api_key=[APIKEY]'
                     res = service.instance.get_data(url=url)
                     if res:
@@ -588,7 +634,7 @@ class MediaCoverGenerator(_PluginBase):
             def __get_jellyfin_iteminfo() -> dict:
                 """获取Jellyfin媒体项详情"""
                 try:
-                    url = f'[HOST]Items/?ParentId={library_id}&SortBy={sort_by}' \
+                    url = f'[HOST]Items/?ParentId={library_id}&SortBy={self._sort_by}' \
                           f'&Limit=1&SortOrder=Descending&api_key=[APIKEY]'
                     res = service.instance.get_data(url=url)
                     if res:
@@ -597,24 +643,12 @@ class MediaCoverGenerator(_PluginBase):
                     logger.error(f"获取Jellyfin媒体项详情失败：{str(err)}")
                 return {}
 
-            def __get_plex_iteminfo() -> dict:
-                """获取Plex媒体项详情"""
-                all_items = self.mschain.items(server, library_id)
-                if not all_items:
-                    return None
-                
-                # 按添加时间排序
-                sorted_items = sorted(all_items, key=lambda x: x.added, reverse=True)
-                
-                # 返回指定数量的最新项目
-                return sorted_items[:1]
-
             if server_type == "emby":
                 return __get_emby_iteminfo()
             elif server_type == "jellyfin":
                 return __get_jellyfin_iteminfo()
             else:
-                return __get_plex_iteminfo()
+                return {}
                 
         except Exception as err:
             logger.error(f"Failed to get latest items: {str(err)}")
@@ -665,7 +699,7 @@ class MediaCoverGenerator(_PluginBase):
                 image_data = create_emby_cover(image_data, zh_title, en_title, self._zh_font_path, self._en_font_path)
             
             # 更新媒体库背景图
-            result = self.__set_library_image(server, server_type, library_id, image_data)
+            result = self.__set_library_image(server, server_type, library_id, library_name, image_data)
             if result:
                 logger.info(f"媒体库 {library_id} 背景图已更新")
                 return True
@@ -687,13 +721,9 @@ class MediaCoverGenerator(_PluginBase):
                 item_id = iteminfo.get("Id")
                 tag = iteminfo["BackdropImageTags"][0]
                 return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
-                # if server_type == "emby":
-                # else:  # jellyfin
-                #     return f'[HOST]Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
         # Plex
         elif server_type == "plex":
-            if iteminfo.get("art"):
-                return iteminfo["art"]
+            return ''
         
         return None
 
@@ -718,7 +748,7 @@ class MediaCoverGenerator(_PluginBase):
                     if r and r.status_code == 200:
                         image_content = r.content
                         # 保存到本地临时文件
-                        self.__save_image_to_local(image_content, f"backdrop_{library_id}_{int(time.time())}.jpg")
+                        # self.__save_image_to_local(image_content, f"backdrop_{library_id}_{int(time.time())}.jpg")
                         return base64.b64encode(image_content).decode()
             # 从外部URL获取图片
             else:
@@ -726,7 +756,7 @@ class MediaCoverGenerator(_PluginBase):
                 if r and r.status_code == 200:
                     image_content = r.content
                     # 保存到本地临时文件
-                    self.__save_image_to_local(image_content, f"external_backdrop_{int(time.time())}.jpg")
+                    # self.__save_image_to_local(image_content, f"external_backdrop_{int(time.time())}.jpg")
                     return base64.b64encode(image_content).decode()
                     
             logger.warning(f"{imageurl} 图片下载失败，请检查网络连通性")
@@ -740,7 +770,7 @@ class MediaCoverGenerator(_PluginBase):
         """
         try:
             # 确保目录存在
-            local_path = "/mnt/Local/temp"
+            local_path = self._output
             import os
             os.makedirs(local_path, exist_ok=True)
             
@@ -783,29 +813,14 @@ class MediaCoverGenerator(_PluginBase):
                 logger.error(f"获取Jellyfin媒体项详情失败：{str(err)}")
             return {}
 
-        def __get_plex_iteminfo() -> dict:
-            """获取Plex媒体项详情"""
-            iteminfo = {}
-            try:
-                plexitem = service.instance.get_plex().library.fetchItem(ekey=itemid)
-                iteminfo['Name'] = plexitem.title
-                iteminfo['Id'] = plexitem.key
-                iteminfo['Path'] = plexitem.locations[0] if plexitem.locations else ""
-                if hasattr(plexitem, 'art'):
-                    iteminfo['art'] = plexitem.art
-                return iteminfo
-            except Exception as err:
-                logger.error(f"获取Plex媒体项详情失败：{str(err)}")
-            return {}
-
         if server_type == "emby":
             return __get_emby_iteminfo()
         elif server_type == "jellyfin":
             return __get_jellyfin_iteminfo()
         else:
-            return __get_plex_iteminfo()
+            return {}
 
-    def __set_library_image(self, server, server_type, library_id, image_base64):
+    def __set_library_image(self, server, server_type, library_id, library_name, image_base64):
         """
         设置媒体库背景图
         """
@@ -823,7 +838,8 @@ class MediaCoverGenerator(_PluginBase):
                 # 在发送前保存一份图片到本地
                 try:
                     image_bytes = base64.b64decode(image_base64)
-                    self.__save_image_to_local(image_bytes, f"sending_to_emby_{library_id}_{int(time.time())}.jpg")
+                    if self._output:
+                        self.__save_image_to_local(image_bytes, f"{library_name}.jpg")
                 except Exception as save_err:
                     logger.error(f"保存发送前图片失败: {str(save_err)}")
                 
@@ -870,36 +886,12 @@ class MediaCoverGenerator(_PluginBase):
                 logger.error(f"设置Jellyfin媒体库背景图失败：{str(err)}")
             return False
 
-        def __set_plex_library_image():
-            """设置Plex媒体库背景图"""
-            try:
-                # Plex需要先将base64保存为临时文件
-                import tempfile
-                import os
-                import base64
-                
-                # 创建临时文件
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
-                    temp_file.write(base64.b64decode(image_base64))
-                    temp_path = temp_file.name
-                
-                # 更新媒体库背景
-                section = service.instance.get_plex().library.sectionByID(library_id)
-                section.uploadArt(filepath=temp_path)
-                
-                # 删除临时文件
-                os.unlink(temp_path)
-                return True
-            except Exception as err:
-                logger.error(f"设置Plex媒体库背景图失败：{str(err)}")
-            return False
-
         if server_type == "emby":
             return __set_emby_library_image()
         elif server_type == "jellyfin":
             return __set_jellyfin_library_image()
         else:
-            return __set_plex_library_image()
+            return False
 
     def stop_service(self):
         """
