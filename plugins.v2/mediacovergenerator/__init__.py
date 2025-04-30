@@ -188,8 +188,8 @@ class MediaCoverGenerator(_PluginBase):
                                     {
                                         'component': 'VSwitch',
                                         'props': {
-                                            'model': 'onlyonce',
-                                            'label': '立即运行一次',
+                                            'model': 'image_process_enabled',
+                                            'label': '封面处理',
                                         }
                                     }
                                 ]
@@ -220,8 +220,8 @@ class MediaCoverGenerator(_PluginBase):
                                     {
                                         'component': 'VSwitch',
                                         'props': {
-                                            'model': 'image_process_enabled',
-                                            'label': '封面处理',
+                                            'model': 'onlyonce',
+                                            'label': '立即运行一次',
                                         }
                                     }
                                 ]
@@ -327,7 +327,7 @@ class MediaCoverGenerator(_PluginBase):
                                         'props': {
                                             'model': 'zh_font_url',
                                             'label': '中文字体链接（可选）',
-                                            'placeholder': '留空使用预设字体，尽量用 TTF 格式'
+                                            'placeholder': '留空使用预设字体，尽量用 .ttf 格式'
                                         }
                                     }
                                 ]
@@ -344,7 +344,7 @@ class MediaCoverGenerator(_PluginBase):
                                         'props': {
                                             'model': 'en_font_url',
                                             'label': '英文字体链接（可选）',
-                                            'placeholder': '留空使用预设字体，尽量用 TTF 格式'
+                                            'placeholder': '留空使用预设字体，尽量用 .ttf 格式'
                                         }
                                     }
                                 ]
