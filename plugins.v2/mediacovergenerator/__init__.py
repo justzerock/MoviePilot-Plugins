@@ -4,11 +4,10 @@ import threading
 import time
 import os
 import yaml
+import pytz
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
-from app.plugins.mediacovergenerator.image_processor import create_emby_cover
 
-import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -22,6 +21,7 @@ from app.schemas import MediaInfo
 from app.schemas.types import EventType
 from app.schemas import ServiceInfo
 from app.utils.http import RequestUtils
+from app.plugins.mediacovergenerator.image_processor import create_emby_cover
 
 
 class MediaCoverGenerator(_PluginBase):
@@ -32,7 +32,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "Emby_A.png"
     # 插件版本
-    plugin_version = "0.1"
+    plugin_version = "0.2"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -40,7 +40,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件配置项ID前缀
     plugin_config_prefix = "mediacovergenerator_"
     # 加载顺序
-    plugin_order = 25
+    plugin_order = 2
     # 可使用的用户级别
     auth_level = 1
 
@@ -61,8 +61,8 @@ class MediaCoverGenerator(_PluginBase):
     _image_process_enabled = True
     _zh_font_url = 'https://fastly.jsdelivr.net/gh/justzerock/assets@master/zh.ttf'
     _en_font_url = 'https://fastly.jsdelivr.net/gh/justzerock/assets@master/en.ttf'
-    _zh_path = None
-    _en_path = None
+    _zh_font_path = None
+    _en_font_path = None
     _title_config = ""
 
     def init_plugin(self, config: dict = None):
@@ -79,8 +79,8 @@ class MediaCoverGenerator(_PluginBase):
             self._sort_by = config.get("sort_by") or []
             self._image_process_enabled = config.get("image_process_enabled") or True
             self._title_config = config.get("title_config") or ""
-            self._zh_font_url = config.get("zh_font_url") or ""
-            self._en_font_url = config.get("en_font_url") or ""
+            self._zh_font_url = config.get("zh_font_url") or "https://fastly.jsdelivr.net/gh/justzerock/assets@master/zh.ttf"
+            self._en_font_url = config.get("en_font_url") or "https://fastly.jsdelivr.net/gh/justzerock/assets@master/en.ttf"
 
         # 停止现有任务
         self.stop_service()
@@ -251,7 +251,7 @@ class MediaCoverGenerator(_PluginBase):
                                     {
                                         'component': 'VSelect',
                                         'props': {
-                                            'multiple': True,
+                                            'multiple': False,
                                             'chips': True,
                                             'clearable': True,
                                             'model': 'mediaservers',
@@ -339,7 +339,7 @@ class MediaCoverGenerator(_PluginBase):
                                         'props': {
                                             'modelvalue': 'title_config',
                                             'lang': 'yaml',
-                                            'theme': 'textmate',
+                                            'theme': 'monokai',
                                             'style': 'height: 30rem',
                                             'label': '中英标题配置',
                                             'placeholder': '''库名:
@@ -384,8 +384,8 @@ class MediaCoverGenerator(_PluginBase):
             "sort_by": [],
             "image_process_enabled": True,
             "title_config": "",
-            "zh_font_url": "",
-            "en_font_url": ""
+            "zh_font_url": self._zh_font_url,
+            "en_font_url": self._en_font_url
         }
 
     def get_page(self) -> List[dict]:
@@ -422,7 +422,7 @@ class MediaCoverGenerator(_PluginBase):
         """
         When media is added to library, update the library backdrop
         """
-        if not self._enabled:
+        if not self._transfer_update:
             return
         
         # Event data
@@ -441,12 +441,11 @@ class MediaCoverGenerator(_PluginBase):
             return
             
         # Log the existsinfo for debugging
-        logger.info(f"Existsinfo: {existsinfo}")
+        # logger.info(f"存在信息: {existsinfo}")
         
         # Get item details including backdrop
-        logger.info(f"Getting backdrop for {mediainfo.title_year}...")
+        # logger.info(f"Getting backdrop for {mediainfo.title_year}...")
         iteminfo = self.mschain.iteminfo(server=existsinfo.server, item_id=existsinfo.itemid)
-        logger.info(f"Iteminfo: {iteminfo.path}")
         if not iteminfo:
             logger.warning(f"Failed to get item details for {mediainfo.title_year}")
             return
@@ -494,19 +493,19 @@ class MediaCoverGenerator(_PluginBase):
 
     def __get_fonts(self):
         data_path = self.get_data_path()
-        logger.info(f"Data path: {data_path}")
+        # logger.info(f"Data path: {data_path}")
         path = Path(data_path)
         if not path.exists():
             os.mkdir(path)
-        self._zh_path = path / "zh.ttf"
-        self._en_path = path / "en.ttf"
-        if not Path(self._zh_path).exists() or not Path(self._en_path).exists():
+        self._zh_font_path = path / "zh.ttf"
+        self._en_font_path = path / "en.ttf"
+        if not Path(self._zh_font_path).exists() or not Path(self._en_font_path).exists():
             logger.info("字体文件不存在，开始下载...")
             zh_font = RequestUtils().get_res(url=self._zh_font_url).content
             en_font = RequestUtils().get_res(url=self._en_font_url).content
-            with open(self._zh_path, "wb") as f:
+            with open(self._zh_font_path, "wb") as f:
                 f.write(zh_font)
-            with open(self._zh_path, "wb") as f:
+            with open(self._en_font_path, "wb") as f:
                 f.write(en_font)
     
     def update_all_libraries(self):
@@ -548,7 +547,8 @@ class MediaCoverGenerator(_PluginBase):
                     if type == 'Series':
                         item_id = latest_item.get('Id', '')
                     else:
-                        item_id = latest_item.get('PrimaryImageItemId', '')
+                        item_id = latest_item.get('PrimaryImageItemId', '') \
+                                    if service.type == 'emby' else latest_item.get('Id', '')
                 # 使用第一个项目的背景图
                 if self.__update_library_backdrop(server=server, 
                                                 server_type=service.type,
@@ -662,7 +662,7 @@ class MediaCoverGenerator(_PluginBase):
             # 处理图像（如需要）
             if self._image_process_enabled:
                 # 这里应该是您已有的图像处理代码
-                image_data = create_emby_cover(image_data, zh_title, en_title, self._zh_path, self._en_path)
+                image_data = create_emby_cover(image_data, zh_title, en_title, self._zh_font_path, self._en_font_path)
             
             # 更新媒体库背景图
             result = self.__set_library_image(server, server_type, library_id, image_data)
@@ -686,10 +686,10 @@ class MediaCoverGenerator(_PluginBase):
             if iteminfo.get("BackdropImageTags") and len(iteminfo["BackdropImageTags"]) > 0:
                 item_id = iteminfo.get("Id")
                 tag = iteminfo["BackdropImageTags"][0]
-                if server_type == "emby":
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
-                else:  # jellyfin
-                    return f'[HOST]Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                # if server_type == "emby":
+                # else:  # jellyfin
+                #     return f'[HOST]Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
         # Plex
         elif server_type == "plex":
             if iteminfo.get("art"):
