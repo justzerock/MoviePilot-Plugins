@@ -326,8 +326,8 @@ class MediaCoverGenerator(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'zh_font_url',
-                                            'label': 'ttf 中字链接（可选）',
-                                            'placeholder': '留空使用预设字体'
+                                            'label': '中文字体链接（可选）',
+                                            'placeholder': '留空使用预设字体，尽量用 TTF 格式'
                                         }
                                     }
                                 ]
@@ -343,8 +343,8 @@ class MediaCoverGenerator(_PluginBase):
                                         'component': 'VTextField',
                                         'props': {
                                             'model': 'en_font_url',
-                                            'label': 'ttf 英字链接（可选）',
-                                            'placeholder': '留空使用预设字体'
+                                            'label': '英文字体链接（可选）',
+                                            'placeholder': '留空使用预设字体，尽量用 TTF 格式'
                                         }
                                     }
                                 ]
