@@ -31,7 +31,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件描述
     plugin_desc = "获取媒体库图片，生成封面，仅支持 Emby，Jellyfin"
     # 插件图标
-    plugin_icon = "Emby_A.png"
+    plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
     plugin_version = "0.4"
     # 插件作者

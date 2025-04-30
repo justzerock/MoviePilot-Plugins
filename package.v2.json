@@ -4,7 +4,7 @@
         "description": "获取豆瓣榜单信息，筛选添加订阅",
         "labels": "订阅",
         "version": "1.6",
-        "icon": "douban.png",
+        "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/douban.png",
         "author": "justzerock",
         "level": 2,
         "history": {
@@ -22,7 +22,7 @@
         "description": "按媒体码率限速，通知播放状态",
         "labels": "播放通知,智能限速",
         "version": "1.2",
-        "icon": "speed.png",
+        "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/speed.png",
         "author": "justzerock",
         "level": 1,
         "history": {
@@ -36,7 +36,7 @@
         "description": "获取媒体库的最新媒体，生成封面",
         "labels": "封面,媒体库",
         "version": "0.4",
-        "icon": "emby.png",
+        "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png",
         "author": "justzerock",
         "level": 1,
         "history": {

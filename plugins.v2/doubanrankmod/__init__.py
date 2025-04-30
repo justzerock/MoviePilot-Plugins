@@ -29,7 +29,7 @@ class DoubanRankMod(_PluginBase):
     # 插件描述
     plugin_desc = "获取豆瓣榜单信息，筛选添加订阅"
     # 插件图标
-    plugin_icon = "douban.png"
+    plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/douban.png"
     # 插件版本
     plugin_version = "1.6"
     # 插件作者
