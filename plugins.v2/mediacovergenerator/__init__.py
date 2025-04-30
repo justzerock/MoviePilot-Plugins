@@ -388,7 +388,7 @@ class MediaCoverGenerator(_PluginBase):
                                             'theme': 'monokai',
                                             'style': 'height: 30rem',
                                             'label': '中英标题配置',
-                                            'placeholder': '''库名:
+                                            'placeholder': '''媒体库名:
   - 中文标题
   - 英文标题'''
                                         }
@@ -431,7 +431,13 @@ class MediaCoverGenerator(_PluginBase):
             "output": "",
             "input": "",
             "image_process_enabled": True,
-            "title_config": '''华语剧集:
+            "title_config": '''#
+# 媒体库名:
+#   - 中文标题
+#   - 英文标题
+#
+
+华语剧集:
   - 华语剧集
   - Chinese Series
   
@@ -499,14 +505,13 @@ class MediaCoverGenerator(_PluginBase):
         # Query the item in media server
         existsinfo = self.mschain.media_exists(mediainfo=mediainfo)
         if not existsinfo or not existsinfo.itemid:
-            logger.warning(f"{mediainfo.title_year} does not exist in media library")
+            logger.warning(f"{mediainfo.title_year} 不存在媒体库中，可能服务器还未扫描完成，建议设置延迟")
             return
         
         # Get item details including backdrop
-        # logger.info(f"Getting backdrop for {mediainfo.title_year}...")
         iteminfo = self.mschain.iteminfo(server=existsinfo.server, item_id=existsinfo.itemid)
         if not iteminfo:
-            logger.warning(f"Failed to get item details for {mediainfo.title_year}")
+            logger.warning(f"获取 {mediainfo.title_year} 详情失败")
             return
             
         # Try to get library ID
@@ -522,14 +527,9 @@ class MediaCoverGenerator(_PluginBase):
                 None
             )
             library_id, library_name = library_info
-
-        logger.info(f"媒体库ID: {library_id}")
-        
-        if library_id:
-            logger.info(f"Found library by API method: {library_id}")
         
         if not library_id:
-            logger.warning(f"Could not find library for {mediainfo.title_year}")
+            logger.warning(f"找不到 {mediainfo.title_year} 所在媒体库")
             return
             
         # Set library backdrop
@@ -543,7 +543,6 @@ class MediaCoverGenerator(_PluginBase):
 
     def __get_fonts(self):
         data_path = self.get_data_path()
-        # logger.info(f"Data path: {data_path}")
         path = Path(data_path)
         if not path.exists():
             os.mkdir(path)
@@ -673,17 +672,14 @@ class MediaCoverGenerator(_PluginBase):
                 return False
             
             # 记录背景图URL
-            logger.info(f"为媒体库 {library_id} 获取到背景图 URL: {backdrop_url}")
+            # logger.info(f"为媒体库 {library_id} 获取到背景图 URL: {backdrop_url}")
             
             # 下载并处理背景图
             image_data = self.__download_image(backdrop_url, library_id)
-            logger.info("下载的图片")
             if not image_data:
                 logger.warning(f"下载背景图失败: {backdrop_url}")
                 return False
-            
-            logger.info(f"背景图下载成功，base64数据长度: {len(image_data)}")
-            
+                        
             title_config = yaml.safe_load(self._title_config)
             zh_title = en_title = None  # 初始化为空，避免未匹配时报错
 
@@ -833,7 +829,6 @@ class MediaCoverGenerator(_PluginBase):
             """设置Emby媒体库背景图"""
             try:
                 url = f'[HOST]emby/Items/{library_id}/Images/Primary?api_key=[APIKEY]'
-                logger.info(f"设置背景图 URL: {url}")
                 
                 # 在发送前保存一份图片到本地
                 try:
@@ -851,11 +846,6 @@ class MediaCoverGenerator(_PluginBase):
                         "Content-Type": "image/png"
                     }
                 )
-                
-                if res:
-                    logger.info(f"媒体库背景图更新响应状态码: {res.status_code}")
-                    if res.text:
-                        logger.info(f"媒体库背景图更新响应内容: {res.text[:200]}")
                 
                 if res and res.status_code in [200, 204]:
                     return True
