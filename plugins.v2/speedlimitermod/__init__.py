@@ -16,7 +16,7 @@ from app.utils.ip import IpUtils
 
 class SpeedLimiterMod(_PluginBase):
     # 插件名称
-    plugin_name = "播放限速·自用修改"
+    plugin_name = "播放限速与通知"
     # 插件描述
     plugin_desc = "按媒体码率限速，通知播放状态"
     # 插件图标

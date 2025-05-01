@@ -34,7 +34,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.5"
+    plugin_version = "0.6"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -239,40 +239,6 @@ class MediaCoverGenerator(_PluginBase):
                                 },
                                 'content': [
                                     {
-                                        'component': 'VCronField',
-                                        'props': {
-                                            'model': 'cron',
-                                            'label': '定时更新封面',
-                                            'placeholder': '5位cron表达式'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 3
-                                },
-                                'content': [
-                                    {
-                                        'component': 'VTextField',
-                                        'props': {
-                                            'model': 'delay',
-                                            'label': '入库延迟时间（秒）',
-                                            'placeholder': '如：30，等待入库再更新'
-                                        }
-                                    }
-                                ]
-                            },
-                            {
-                                'component': 'VCol',
-                                'props': {
-                                    'cols': 12,
-                                    'md': 3
-                                },
-                                'content': [
-                                    {
                                         'component': 'VSelect',
                                         'props': {
                                             'multiple': True,
@@ -309,6 +275,40 @@ class MediaCoverGenerator(_PluginBase):
                                     }
                                 ]
                             },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 3
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'delay',
+                                            'label': '入库延迟时间（秒）',
+                                            'placeholder': '如：30，等待入库再更新'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 3
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VCronField',
+                                        'props': {
+                                            'model': 'cron',
+                                            'label': '定时更新封面',
+                                            'placeholder': '5位cron表达式'
+                                        }
+                                    }
+                                ]
+                            }
                         ]
                     },
                     {

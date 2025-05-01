@@ -1,4 +1,5 @@
 import base64
+import random
 import colorsys
 from collections import Counter
 from io import BytesIO
@@ -237,11 +238,20 @@ def create_emby_cover(image_data, title_zh, title_en, zh_font_path, en_font_path
         # 获取前景图中最鲜明的颜色
         vibrant_colors = find_dominant_vibrant_colors(fg_img)
         
+        # 柔和的颜色备选（马卡龙风格）
+        soft_colors = [
+            (237, 159, 77),    # 原默认色
+            (255, 183, 197),   # 淡粉色
+            (186, 225, 255),   # 淡蓝色
+            (255, 223, 186),   # 浅橘色
+            (202, 231, 200),   # 淡绿色
+            (245, 203, 255),   # 淡紫色
+        ]
         # 如果有鲜明的颜色，则选择第一个（饱和度最高）作为背景色，否则使用默认颜色
         if vibrant_colors:
             bg_color = vibrant_colors[0]
         else:
-            bg_color = (237, 159, 77)  # 默认橙色
+            bg_color = random.choice(soft_colors) # 默认橙色
         shadow_color = darken_color(bg_color, 0.5)  # 加深阴影颜色到50%
         
         # 加载背景图片

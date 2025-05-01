@@ -1,13 +1,14 @@
 {
     "DoubanRankMod": {
-        "name": "豆瓣榜单订阅·自用修改",
+        "name": "豆瓣榜单多条件订阅版",
         "description": "获取豆瓣榜单信息，筛选添加订阅",
         "labels": "订阅",
-        "version": "1.6",
+        "version": "1.7",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/douban.png",
         "author": "justzerock",
         "level": 2,
         "history": {
+            "v1.7": "修改部分变量名",
             "v1.6": "修复bug",
             "v1.5": "修复bug",
             "v1.4": "增加本地缓存数据",
@@ -18,7 +19,7 @@
         }
     },
     "SpeedLimiterMod": {
-        "name": "播放限速·自用修改",
+        "name": "播放限速与通知",
         "description": "按媒体码率限速，通知播放状态",
         "labels": "播放通知,智能限速",
         "version": "1.2",
@@ -35,11 +36,12 @@
         "name": "媒体库封面生成",
         "description": "自动生成媒体库封面，支持 Emby，Jellyfin",
         "labels": "封面,媒体库",
-        "version": "0.5",
+        "version": "0.6",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png",
         "author": "justzerock",
         "level": 1,
         "history": {
+            "v0.6": "修复部分问题",
             "v0.5": "微调图片处理颜色",
             "v0.4": "自定义背景图目录",
             "v0.3": "修复bug",

@@ -25,13 +25,13 @@ from app.utils.http import RequestUtils
 
 class DoubanRankMod(_PluginBase):
     # 插件名称
-    plugin_name = "豆瓣榜单订阅·自用修改"
+    plugin_name = "豆瓣榜单多条件订阅版"
     # 插件描述
     plugin_desc = "获取豆瓣榜单信息，筛选添加订阅"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/douban.png"
     # 插件版本
-    plugin_version = "1.6"
+    plugin_version = "1.7"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -653,7 +653,7 @@ class DoubanRankMod(_PluginBase):
         拼装插件详情页面，需要返回页面配置，同时附带数据
         """
         # 查询历史记录
-        historys = self.get_data('history')
+        historys = self.get_data('history_mod')
         if not historys:
             return [
                 {
@@ -802,12 +802,12 @@ class DoubanRankMod(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         # 历史记录
-        historys = self.get_data('history')
+        historys = self.get_data('history_mod')
         if not historys:
             return schemas.Response(success=False, message="未找到历史记录")
         # 删除指定记录
         historys = [h for h in historys if h.get("unique") != key]
-        self.save_data('history', historys)
+        self.save_data('history_mod', historys)
         return schemas.Response(success=True, message="删除成功")
     
     def __update_config(self):
@@ -855,7 +855,7 @@ class DoubanRankMod(_PluginBase):
         if self._clearflag:
             history = []
         else:
-            history: List[dict] = self.get_data('history') or []
+            history: List[dict] = self.get_data('history_mod') or []
 
         for addr in addr_list:
             if not addr:
@@ -964,7 +964,7 @@ class DoubanRankMod(_PluginBase):
                 logger.error(str(e))
 
         # 保存历史记录
-        self.save_data('history', history)
+        self.save_data('history_mod', history)
         # 缓存只清理一次
         self._clearflag = False
         logger.info(f"所有榜单RSS刷新完成")
