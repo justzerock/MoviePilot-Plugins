@@ -1,7 +1,7 @@
 # MoviePilot-Plugins
 MoviePilot官方插件市场：https://github.com/jxxghp/MoviePilot-Plugins
 
-### 1. 豆瓣榜单多条件筛选订阅
+### 1. 豆瓣榜单多条件订阅版
   > 原作者：https://github.com/jxxghp/MoviePilot-Plugins/tree/main/plugins.v2/doubanrank
 
   根据个人需求修改，获取豆瓣信息，根据豆瓣评分等信息进行筛选
