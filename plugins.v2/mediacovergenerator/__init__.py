@@ -90,7 +90,6 @@ class MediaCoverGenerator(_PluginBase):
         # 停止现有任务
         self.stop_service()
 
-        self.__get_fonts()  
         # 启动服务
         if self._onlyonce:
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
@@ -532,9 +531,11 @@ class MediaCoverGenerator(_PluginBase):
         """
         When media is added to library, update the library backdrop
         """
+        if not self._enabled:
+            return
         if not self._transfer_update:
             return
-        
+        self.__get_fonts()     # Event data
         # Event data
         mediainfo: MediaInfo = event.event_data.get("mediainfo")
         if not mediainfo:
@@ -631,11 +632,14 @@ class MediaCoverGenerator(_PluginBase):
         """
         定时更新所有媒体库的背景图
         """
+        if not self._enabled:
+            return
         # 所有媒体服务器
         service_infos = self.service_infos()
         if not service_infos:
             return
-            
+        
+        self.__get_fonts()  
         for server, service in service_infos.items():
             # 扫描所有媒体库
             logger.info(f"开始更新服务器 {server} 的媒体库背景...")
