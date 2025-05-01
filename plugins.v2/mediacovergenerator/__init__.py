@@ -34,7 +34,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.6"
+    plugin_version = "0.7"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -82,7 +82,7 @@ class MediaCoverGenerator(_PluginBase):
             self._sort_by = config.get("sort_by") or 'Random'
             self._covers_output = config.get("covers_output") or ''
             self._covers_input = config.get("covers_input") or ''
-            self._image_process_enabled = config.get("image_process_enabled") or True
+            self._image_process_enabled = config.get("image_process_enabled", True)
             self._title_config = config.get("title_config") or ''
             self._zh_font_url = config.get("zh_font_url") or ""
             self._en_font_url = config.get("en_font_url") or ""
@@ -534,14 +534,6 @@ class MediaCoverGenerator(_PluginBase):
         """
         if not self._transfer_update:
             return
-        # 所有媒体服务器
-        service_infos = self.service_infos()
-        if not service_infos:
-            return
-        for server, service in service_infos.items():
-            if service.type == "plex":
-                logger.info("暂不支持Plex")
-                return
         
         # Event data
         mediainfo: MediaInfo = event.event_data.get("mediainfo")
@@ -645,12 +637,10 @@ class MediaCoverGenerator(_PluginBase):
             return
             
         for server, service in service_infos.items():
-            if service.type == "plex":
-                logger.info("暂不支持Plex")
-                continue
             # 扫描所有媒体库
             logger.info(f"开始更新服务器 {server} 的媒体库背景...")
             
+            image_paths = []
             if self._covers_input:
                 image_paths = sorted([os.path.join(self._covers_input, f) for f in os.listdir(self._covers_input)
                         if f.lower().endswith((".jpg", ".png", ".jpeg", ".webp"))])
@@ -714,6 +704,8 @@ class MediaCoverGenerator(_PluginBase):
                 return {}
             
             try:
+                if not self._sort_by:
+                    self._sort_by = 'Random'
                 include_item_types = {
                     "PremiereDate": "Movie,Series",
                     "DateCreated": "Movie,Episode",
@@ -794,27 +786,28 @@ class MediaCoverGenerator(_PluginBase):
                 if not image_data:
                     logger.warning(f"下载背景图失败: {backdrop_url}")
                     return False
-                        
-            title_config = self.load_and_validate_titles(self._title_config)
-            zh_title = en_title = None  # 初始化为空，避免未匹配时报错
-
-            for lib_name, (zh, en) in title_config.items():
-                if lib_name == library_name:
-                    zh_title = zh
-                    en_title = en
-                    break
-
-            # 处理图像（如需要）
-            if self._image_process_enabled:
-                # 这里应该是您已有的图像处理代码
-                image_data = create_emby_cover(image_data, zh_title, en_title, self._zh_font_path, self._en_font_path)
             
-            # 更新媒体库背景图
-            result = self.__set_library_image(server, server_type, library_id, library_name, image_data)
-            if result:
-                return True
-            else:
-                return False
+            if self._title_config:
+                title_config = self.load_and_validate_titles(self._title_config)
+                zh_title = en_title = None  # 初始化为空，避免未匹配时报错
+
+                for lib_name, (zh, en) in title_config.items():
+                    if lib_name == library_name:
+                        zh_title = zh
+                        en_title = en
+                        break
+
+                # 处理图像（如需要）
+                if self._image_process_enabled:
+                    # 这里应该是您已有的图像处理代码
+                    image_data = create_emby_cover(image_data, zh_title, en_title, self._zh_font_path, self._en_font_path)
+                
+                # 更新媒体库背景图
+                result = self.__set_library_image(server, server_type, library_id, library_name, image_data)
+                if result:
+                    return True
+                else:
+                    return False
                     
         except Exception as err:
             logger.error(f"更新媒体库背景图失败: {str(err)}")
