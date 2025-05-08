@@ -1,38 +1,4 @@
 {
-    "DoubanRankMod": {
-        "name": "豆瓣榜单多条件订阅版",
-        "description": "获取豆瓣榜单信息，筛选添加订阅",
-        "labels": "订阅",
-        "version": "1.7",
-        "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/douban.png",
-        "author": "justzerock",
-        "level": 2,
-        "history": {
-            "v1.7": "修改部分变量名",
-            "v1.6": "修复bug",
-            "v1.5": "修复bug",
-            "v1.4": "增加本地缓存数据",
-            "v1.3": "检查前后标题是否一致",
-            "v1.2": "单独筛选豆瓣TOP250年份",
-            "v1.1": "增加部分榜单",
-            "v1.0": "根据豆瓣评分筛选"
-        }
-    },
-    "SpeedLimiterMod": {
-        "name": "播放限速与通知",
-        "description": "当前播放通知，下载器限速",
-        "labels": "播放通知,智能限速",
-        "version": "1.3",
-        "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/speed.png",
-        "author": "justzerock",
-        "level": 1,
-        "history": {
-            "v1.3": "改名",
-            "v1.2": "解决不通知问题",
-            "v1.1": "修复部分问题",
-            "v1.0": "通知 & 限速"
-        }
-    },
     "MediaCoverGenerator": {
         "name": "媒体库封面生成",
         "description": "自动生成媒体库封面，支持 Emby，Jellyfin",
