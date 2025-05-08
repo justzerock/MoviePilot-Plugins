@@ -18,7 +18,7 @@ class SpeedLimiterMod(_PluginBase):
     # 插件名称
     plugin_name = "播放限速与通知"
     # 插件描述
-    plugin_desc = "按媒体码率限速，通知播放状态"
+    plugin_desc = "当前播放通知，下载器限速"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/speed.png"
     # 插件版本

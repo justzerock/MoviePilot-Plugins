@@ -20,7 +20,7 @@
     },
     "SpeedLimiterMod": {
         "name": "播放限速与通知",
-        "description": "按媒体码率限速，通知播放状态",
+        "description": "当前播放通知，下载器限速",
         "labels": "播放通知,智能限速",
         "version": "1.3",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/speed.png",
@@ -37,11 +37,12 @@
         "name": "媒体库封面生成",
         "description": "自动生成媒体库封面，支持 Emby，Jellyfin",
         "labels": "封面,媒体库",
-        "version": "0.7",
+        "version": "0.8",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png",
         "author": "justzerock",
         "level": 1,
         "history": {
+            "v0.8": "改界面，加风格，可能还有新 bug",
             "v0.7": "修复一个非常简单的小问题，我真是太菜了",
             "v0.6": "修复部分问题",
             "v0.5": "微调图片处理颜色",
