@@ -42,7 +42,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.8.1"
+    plugin_version = "0.8.2"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -74,6 +74,10 @@ class MediaCoverGenerator(_PluginBase):
     _en_font_url = ''
     _zh_font_path = ''
     _en_font_path = ''
+    _zh_font_path_local = ''
+    _en_font_path_local = ''
+    _zh_font_path_multi_1_local = ''
+    _en_font_path_multi_1_local = ''
     _zh_font_url_multi_1 = ''
     _en_font_url_multi_1 = ''
     _zh_font_path_multi_1 = ''
@@ -85,7 +89,7 @@ class MediaCoverGenerator(_PluginBase):
     _cover_path = ''
     _collection_name = '合集'
     _music_name = '音乐'
-    _tab = 'cover-tab'
+    _tab = 'style-tab'
     _multi_1_blur = False
 
     def __init__(self):
@@ -117,7 +121,7 @@ class MediaCoverGenerator(_PluginBase):
             self._zh_font_path = config.get("zh_font_path")
             self._en_font_path = config.get("en_font_path")
             self._cover_style = config.get("cover_style") or "single_1"
-            self._tab = config.get("tab") or 'cover-tab'
+            self._tab = config.get("tab") or 'style-tab'
             self._collection_name = config.get("collection_name") or '合集'
             self._music_name = config.get("music_name") or '音乐'
             self._multi_1_blur = config.get("multi_1_blur")
@@ -126,6 +130,10 @@ class MediaCoverGenerator(_PluginBase):
             self._zh_font_path_multi_1 = config.get("zh_font_path_multi_1")
             self._en_font_path_multi_1 = config.get("en_font_path_multi_1")
             self._multi_1_use_main_font = config.get("multi_1_use_main_font")
+            self._zh_font_path_local = config.get("zh_font_path_local")
+            self._en_font_path_local = config.get("en_font_path_local")
+            self._zh_font_path_multi_1_local = config.get("zh_font_path_multi_1_local")
+            self._en_font_path_multi_1_local = config.get("en_font_path_multi_1_local")
 
         # 停止现有任务
         self.stop_service()
@@ -175,7 +183,11 @@ class MediaCoverGenerator(_PluginBase):
             "en_font_url_multi_1": self._en_font_url_multi_1,
             "zh_font_path_multi_1": self._zh_font_path_multi_1,
             "en_font_path_multi_1": self._en_font_path_multi_1,
-            "multi_1_use_main_font": self._multi_1_use_main_font
+            "multi_1_use_main_font": self._multi_1_use_main_font,
+            "zh_font_path_local": self._zh_font_path_local,
+            "en_font_path_local": self._en_font_path_local,
+            "zh_font_path_multi_1_local": self._zh_font_path_multi_1_local,
+            "en_font_path_multi_1_local": self._en_font_path_multi_1_local
         })
 
     def get_state(self) -> bool:
@@ -245,11 +257,44 @@ class MediaCoverGenerator(_PluginBase):
         ]
 
         # 字体与封面目录标签
-        font_cover_tab = [
+        others_tab = [
             {
                 'component': 'VRow',
                 'content': [
-                    
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 6
+                        },
+                        'content': [
+                            {
+                                'component': 'VTextField',
+                                'props': {
+                                    'model': 'zh_font_path_local',
+                                    'label': '本地中文字体路径（优先）',
+                                    'placeholder': '留空使用预设字体'
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 6
+                        },
+                        'content': [
+                            {
+                                'component': 'VTextField',
+                                'props': {
+                                    'model': 'en_font_path_local',
+                                    'label': '本地英文字体链接（优先）',
+                                    'placeholder': '留空使用预设字体'
+                                }
+                            }
+                        ]
+                    },
                     {
                         'component': 'VCol',
                         'props': {
@@ -283,7 +328,8 @@ class MediaCoverGenerator(_PluginBase):
                                 }
                             }
                         ]
-                    }
+                    },
+                    
                 ]
             },
             {
@@ -407,7 +453,7 @@ class MediaCoverGenerator(_PluginBase):
             }
         ]
 
-        covers = [
+        styles = [
             {
                 "title": "单图 1",
                 "value": "single_1",
@@ -425,10 +471,10 @@ class MediaCoverGenerator(_PluginBase):
             }
         ]
 
-        cover_content = []
+        style_content = []
 
-        for cover in covers:
-            cover_content.append(
+        for style in styles:
+            style_content.append(
                 {
                     'component': 'VCol',
                     'props': {
@@ -444,14 +490,14 @@ class MediaCoverGenerator(_PluginBase):
                                 {
                                     "component": "VImg",
                                     "props": {
-                                        "src": cover.get("src"),
+                                        "src": style.get("src"),
                                         "aspect-ratio": "16/9",
                                         "cover": True,
                                     }
                                 },  
                                 {
                                     "component": "VCardTitle",
-                                    # "text": cover.get("title"),
+                                    # "text": style.get("title"),
                                     "props": {
                                         "class": "text-secondary text-h6 text-center bg-surface-light"
                                     },
@@ -460,8 +506,8 @@ class MediaCoverGenerator(_PluginBase):
                                             "component": "VRadio",
                                             "props": {
                                                 "color": "primary",
-                                                "value": cover.get("value"),
-                                                "label": cover.get("title"),
+                                                "value": style.get("value"),
+                                                "label": style.get("title"),
                                             },
                                         },
                                     ]
@@ -473,14 +519,14 @@ class MediaCoverGenerator(_PluginBase):
             )
 
         # 封面风格设置标签
-        cover_tab = [
+        style_tab = [
             {
                 'component': 'VRadioGroup',
                 'props': {
                     'model': 'cover_style',
                     'inline': True,
                 },
-                'content': cover_content
+                'content': style_content
             }
         ]
 
@@ -489,6 +535,40 @@ class MediaCoverGenerator(_PluginBase):
             {
                 'component': 'VRow',
                 'content': [
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 6
+                        },
+                        'content': [
+                            {
+                                'component': 'VTextField',
+                                'props': {
+                                    'model': 'zh_font_path_multi_1_local',
+                                    'label': '本地中文字体路径（优先）',
+                                    'placeholder': '留空使用预设字体'
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 6
+                        },
+                        'content': [
+                            {
+                                'component': 'VTextField',
+                                'props': {
+                                    'model': 'en_font_path_multi_1_local',
+                                    'label': '本地英文字体路径（优先）',
+                                    'placeholder': '留空使用预设字体'
+                                }
+                            }
+                        ]
+                    },
                     {
                         'component': 'VCol',
                         'props': {
@@ -522,7 +602,8 @@ class MediaCoverGenerator(_PluginBase):
                                 }
                             }
                         ]
-                    }
+                    },
+                    
                 ]
             },
             {
@@ -770,7 +851,7 @@ class MediaCoverGenerator(_PluginBase):
                         "content": [
                             {
                                 "component": "VTab",
-                                "props": {"value": "cover-tab"},
+                                "props": {"value": "style-tab"},
                                 "content": [
                                     {
                                         "component": "VIcon",
@@ -800,17 +881,17 @@ class MediaCoverGenerator(_PluginBase):
                             },
                             {
                                 "component": "VTab",
-                                "props": {"value": "font-cover-tab"},
+                                "props": {"value": "others-tab"},
                                 "content": [
                                     {
                                         "component": "VIcon",
                                         "props": {
-                                            "icon": "mdi-format-size",
+                                            "icon": "mdi-cogs",
                                             "start": True,
-                                            "color": "#4CAF50",
+                                            "color": "#8958f4",
                                         },
                                     },
-                                    {"component": "span", "text": "字体与图像"},
+                                    {"component": "span", "text": "其他设置"},
                                 ],
                             },
                             {
@@ -847,16 +928,16 @@ class MediaCoverGenerator(_PluginBase):
                             },
                             {
                                 "component": "VWindowItem",
-                                "props": {"value": "font-cover-tab"},
+                                "props": {"value": "others-tab"},
                                 "content": [
-                                    {"component": "VCardText", "content": font_cover_tab}
+                                    {"component": "VCardText", "content": others_tab}
                                 ],
                             },
                             {
                                 "component": "VWindowItem",
-                                "props": {"value": "cover-tab"},
+                                "props": {"value": "style-tab"},
                                 "content": [
-                                    {"component": "VCardText", "content": cover_tab}
+                                    {"component": "VCardText", "content": style_tab}
                                 ],
                             },
                             {
@@ -885,16 +966,8 @@ class MediaCoverGenerator(_PluginBase):
 #   - 中文标题
 #   - 英文标题
 #
-
-华语剧集:
-  - 华语剧集
-  - Chinese Series
- 
-华语电影:
-  - 华语电影
-  - Chinese Films
 ''',
-            "tab": "cover-tab",
+            "tab": "style-tab",
             "cover_style": "single_1",
             "multi_1_blur": False
         }
@@ -1115,46 +1188,6 @@ class MediaCoverGenerator(_PluginBase):
             logger.error(f"解析URL时出错 '{url}': {e}. 使用备用扩展名: {fallback_ext}")
             return fallback_ext
         
-    def download_font_safely(self, font_url: str, font_path: Path, retries: int = 3, delay: int = 2):
-        """
-        从链接下载字体文件到指定目录
-
-        """
-        logger.info(f"准备下载字体: {font_url} -> {font_path}")
-        attempt = 0
-        while attempt < retries:
-            attempt += 1
-            try:
-                font_path.parent.mkdir(parents=True, exist_ok=True)
-
-                logger.debug(f"下载尝试 {attempt}/{retries} for {font_url}")
-
-                font_content = RequestUtils().get_res(url=font_url).content
-
-                with open(font_path, "wb") as f:
-                    f.write(font_content)
-
-                logger.info(f"字体下载成功: {font_path}")
-                return True
-
-            except Exception as e:
-                logger.warning(f"下载尝试 {attempt}/{retries} 失败 for {font_url}. 错误: {e}")
-                if attempt < retries:
-                    logger.info(f"将在 {delay} 秒后重试...")
-                    time.sleep(delay)
-                else:
-                    logger.error(f"下载字体失败 (已达最大重试次数): {font_url}")
-                    if font_path.exists():
-                        try:
-                            font_path.unlink()
-                            logger.info(f"已删除部分下载的文件: {font_path}")
-                        except OSError as unlink_error:
-                            logger.error(f"无法删除部分下载的文件 {font_path}: {unlink_error}")
-                    return False
-
-        return False
-
-
     def __get_fonts(self):
         data_path = self.get_data_path()
         path = Path(data_path / "fonts")
@@ -1183,10 +1216,11 @@ class MediaCoverGenerator(_PluginBase):
         zh_extension_multi_1 = self.get_file_extension_from_url(zh_font_url_multi_1, fallback_ext=".ttf")
         en_extension_multi_1 = self.get_file_extension_from_url(en_font_url_multi_1, fallback_ext=".ttf")
 
-        self._zh_font_path = path / f"zh{zh_extension}"
-        self._en_font_path = path / f"en{en_extension}"
-        self._zh_font_path_multi_1 = path / f"zh_multi_1{zh_extension_multi_1}"
-        self._en_font_path_multi_1 = path / f"en_multi_1{en_extension_multi_1}"
+        # 创建下载的字体文件路径
+        downloaded_zh_font_path = path / f"zh{zh_extension}"
+        downloaded_en_font_path = path / f"en{en_extension}"
+        downloaded_zh_font_path_multi_1 = path / f"zh_multi_1{zh_extension_multi_1}"
+        downloaded_en_font_path_multi_1 = path / f"en_multi_1{en_extension_multi_1}"
 
         # 记录上次使用的 URL 哈希
         zh_hash_path = path / "zh_url.hash"
@@ -1197,37 +1231,193 @@ class MediaCoverGenerator(_PluginBase):
         def url_changed(url, hash_path):
             url_hash = hashlib.md5(url.encode()).hexdigest()
             if not hash_path.exists() or hash_path.read_text() != url_hash:
-                hash_path.write_text(url_hash)
-                return True
-            return False
+                return True, url_hash
+            return False, url_hash
+
+        def update_hash_file(hash_path, url_hash):
+            hash_path.write_text(url_hash)
 
         # 检查是否需要下载
-        zh_changed = url_changed(zh_font_url, zh_hash_path)
-        en_changed = url_changed(en_font_url, en_hash_path)
-        zh_changed_multi_1 = url_changed(zh_font_url_multi_1, zh_hash_path_multi_1)
-        en_changed_multi_1 = url_changed(en_font_url_multi_1, en_hash_path_multi_1)
+        zh_changed, zh_hash = url_changed(zh_font_url, zh_hash_path)
+        en_changed, en_hash = url_changed(en_font_url, en_hash_path)
+        zh_changed_multi_1, zh_hash_multi_1 = url_changed(zh_font_url_multi_1, zh_hash_path_multi_1)
+        en_changed_multi_1, en_hash_multi_1 = url_changed(en_font_url_multi_1, en_hash_path_multi_1)
 
-        if zh_changed or not self._zh_font_path.exists():
-            download_successful = self.download_font_safely(zh_font_url, self._zh_font_path)
-            if not download_successful:
-                logger.critical(f"无法获取必要的中文支持字体: {zh_font_url}")
+        # 验证文件的有效性
+        def validate_font_file(font_path):
+            if not font_path or not isinstance(font_path, Path) or not font_path.exists():
+                return False
+            
+            try:
+                # 简单验证字体文件是否可以打开
+                with open(font_path, "rb") as f:
+                    header = f.read(4)
+                    # 检查常见字体格式的魔数
+                    if header.startswith(b'\x00\x01\x00\x00') or \
+                        header.startswith(b'OTTO') or \
+                        header.startswith(b'true') or \
+                        header.startswith(b'wOFF') or \
+                        header.startswith(b'wOF2') or \
+                        header.startswith(b'\x80\x01') or \
+                        header.startswith(b'\x80\x02') or \
+                        header.startswith(b'STARTFONT') or \
+                        header.startswith(b'<svg'):
+                        return True
+                # 文件存在但无法识别为有效字体
+                logger.warning(f"字体文件存在但可能已损坏: {font_path}")
+                return False
+            except Exception as e:
+                logger.warning(f"验证字体文件时出错: {font_path}, {str(e)}")
+                return False
 
+        # 处理本地字体路径
+        def resolve_font_path(local_path, downloaded_path):
+            """根据优先级确定最终使用的字体路径"""
+            # 如果提供了本地路径且文件有效，使用本地路径
+            if local_path and isinstance(local_path, (str, Path)):
+                local_font_path = Path(local_path) if isinstance(local_path, str) else local_path
+                if validate_font_file(local_font_path):
+                    logger.info(f"使用本地字体文件: {local_font_path}")
+                    return local_font_path, True  # 第二个返回值表示是否使用本地文件
+            
+            # 否则使用下载的字体路径
+            return downloaded_path, False
 
-        if en_changed or not self._en_font_path.exists():
-            download_successful = self.download_font_safely(en_font_url, self._en_font_path)
-            if not download_successful:
-                logger.critical(f"无法获取必要的英文支持字体: {en_font_url}")
+        # 根据优先级确定最终使用的字体路径
+        self._zh_font_path, zh_using_local = resolve_font_path(
+            getattr(self, "_zh_font_path_local", None), 
+            downloaded_zh_font_path
+        )
+        
+        self._en_font_path, en_using_local = resolve_font_path(
+            getattr(self, "_en_font_path_local", None), 
+            downloaded_en_font_path
+        )
+        
+        self._zh_font_path_multi_1, zh_multi_1_using_local = resolve_font_path(
+            getattr(self, "_zh_font_path_multi_1_local", None), 
+            downloaded_zh_font_path_multi_1
+        )
+        
+        self._en_font_path_multi_1, en_multi_1_using_local = resolve_font_path(
+            getattr(self, "_en_font_path_multi_1_local", None), 
+            downloaded_en_font_path_multi_1
+        )
 
-        if zh_changed_multi_1 or not self._zh_font_path_multi_1.exists():
-            download_successful = self.download_font_safely(zh_font_url_multi_1, self._zh_font_path_multi_1)
-            if not download_successful:
-                logger.critical(f"无法获取必要的多图风格1中文支持字体: {zh_font_url_multi_1}")
+        # 仅当不使用本地文件时，处理下载逻辑
+        if not zh_using_local:
+            if zh_changed or not validate_font_file(self._zh_font_path):
+                download_successful = self.download_font_safely(zh_font_url, self._zh_font_path)
+                if download_successful:
+                    update_hash_file(zh_hash_path, zh_hash)
+                else:
+                    logger.critical(f"无法获取必要的中文支持字体: {zh_font_url}")
 
+        if not en_using_local:
+            if en_changed or not validate_font_file(self._en_font_path):
+                download_successful = self.download_font_safely(en_font_url, self._en_font_path)
+                if download_successful:
+                    update_hash_file(en_hash_path, en_hash)
+                else:
+                    logger.critical(f"无法获取必要的英文支持字体: {en_font_url}")
 
-        if en_changed_multi_1 or not self._en_font_path_multi_1.exists():
-            download_successful = self.download_font_safely(en_font_url_multi_1, self._en_font_path_multi_1)
-            if not download_successful:
-                logger.critical(f"无法获取必要的多图风格1英文支持字体: {en_font_url_multi_1}")
+        if not zh_multi_1_using_local:
+            if zh_changed_multi_1 or not validate_font_file(self._zh_font_path_multi_1):
+                download_successful = self.download_font_safely(zh_font_url_multi_1, self._zh_font_path_multi_1)
+                if download_successful:
+                    update_hash_file(zh_hash_path_multi_1, zh_hash_multi_1)
+                else:
+                    logger.critical(f"无法获取必要的多图风格1中文支持字体: {zh_font_url_multi_1}")
+
+        if not en_multi_1_using_local:
+            if en_changed_multi_1 or not validate_font_file(self._en_font_path_multi_1):
+                download_successful = self.download_font_safely(en_font_url_multi_1, self._en_font_path_multi_1)
+                if download_successful:
+                    update_hash_file(en_hash_path_multi_1, en_hash_multi_1)
+                else:
+                    logger.critical(f"无法获取必要的多图风格1英文支持字体: {en_font_url_multi_1}")
+
+        # 最后记录使用的字体路径
+        logger.info(f"中文字体路径: {self._zh_font_path} {'(本地)' if zh_using_local else '(下载)'}")
+        logger.info(f"英文字体路径: {self._en_font_path} {'(本地)' if en_using_local else '(下载)'}")
+        logger.info(f"多图风格1中文字体路径: {self._zh_font_path_multi_1} {'(本地)' if zh_multi_1_using_local else '(下载)'}")
+        logger.info(f"多图风格1英文字体路径: {self._en_font_path_multi_1} {'(本地)' if en_multi_1_using_local else '(下载)'}")
+
+    def download_font_safely(self, font_url: str, font_path: Path, retries: int = 5, delay: int = 2):
+        """
+        从链接下载字体文件到指定目录
+        """
+        logger.info(f"准备下载字体: {font_url} -> {font_path}")
+        attempt = 0
+        
+        # 确保在开始下载前删除任何可能存在的损坏文件
+        if font_path.exists():
+            try:
+                font_path.unlink()
+                logger.info(f"删除之前的字体文件以便重新下载: {font_path}")
+            except OSError as unlink_error:
+                logger.error(f"无法删除现有字体文件 {font_path}: {unlink_error}")
+                return False
+                
+        while attempt < retries:
+            attempt += 1
+            try:
+                font_path.parent.mkdir(parents=True, exist_ok=True)
+
+                logger.debug(f"下载尝试 {attempt}/{retries} for {font_url}")
+
+                font_content = RequestUtils().get_res(url=font_url).content
+                
+                # 创建临时文件用于验证下载内容
+                temp_path = font_path.with_suffix('.temp')
+                with open(temp_path, "wb") as f:
+                    f.write(font_content)
+                    
+                # 验证下载的字体文件
+                with open(temp_path, "rb") as f:
+                    header = f.read(4)
+                    if not (header.startswith(b'\x00\x01\x00\x00') or \
+                            header.startswith(b'OTTO') or \
+                            header.startswith(b'true') or \
+                            header.startswith(b'wOFF') or \
+                            header.startswith(b'wOF2') or \
+                            header.startswith(b'\x80\x01') or \
+                            header.startswith(b'\x80\x02') or \
+                            header.startswith(b'STARTFONT') or \
+                            header.startswith(b'<svg')):
+                        raise ValueError("下载的文件不是有效的字体文件")
+                
+                # 验证通过后，将临时文件移动到正确位置
+                temp_path.replace(font_path)
+                
+                logger.info(f"字体下载成功: {font_path}")
+                return True
+
+            except Exception as e:
+                logger.warning(f"下载尝试 {attempt}/{retries} 失败 for {font_url}. 错误: {e}")
+                # 清理可能的临时文件
+                temp_path = font_path.with_suffix('.temp')
+                if temp_path.exists():
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
+                        
+                if attempt < retries:
+                    logger.info(f"将在 {delay} 秒后重试...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"下载字体失败 (已达最大重试次数): {font_url}")
+                    # 确保目标路径也没有损坏的文件
+                    if font_path.exists():
+                        try:
+                            font_path.unlink()
+                            logger.info(f"已删除部分下载的文件: {font_path}")
+                        except OSError as unlink_error:
+                            logger.error(f"无法删除部分下载的文件 {font_path}: {unlink_error}")
+                    return False
+
+        return False
 
     def prepare_library_images(self, library_dir: str):
         os.makedirs(library_dir, exist_ok=True)
@@ -1518,29 +1708,36 @@ class MediaCoverGenerator(_PluginBase):
                 return validate_title_config(data)
             
             if self._title_config:
-                title_config = load_and_validate_titles(self._title_config)
-                zh_title = en_title = None  # 初始化为空，避免未匹配时报错
+                try:
+                    title_config = load_and_validate_titles(self._title_config)
+                    zh_title = en_title = None  # 初始化为空，避免未匹配时报错
 
-                for lib_name, (zh, en) in title_config.items():
-                    if lib_name == library_name:
-                        zh_title = zh
-                        en_title = en
-                        break
+                    for lib_name, (zh, en) in title_config.items():
+                        if lib_name == library_name:
+                            zh_title = zh
+                            en_title = en
+                            break
+                except ValueError as e:
+                    # 如果YAML解析出错，记录错误并继续
+                    print(f"标题配置解析错误: {e}")
+                    zh_title = en_title = None
+            else:
+                zh_title = en_title = None
 
-                # 这里应该是您已有的图像处理代码
-                if self._cover_style == 'single_1':
-                    image_data = create_style_single_1(image_path, library_name, zh_title, en_title, self._zh_font_path, self._en_font_path)
-                elif self._cover_style == 'single_2':
-                    image_data = create_style_single_2(image_path, library_name, zh_title, en_title, self._zh_font_path, self._en_font_path)
-                elif self._cover_style == 'multi_1':
-                    image_data = create_style_multi_1(image_path, library_name, zh_title, en_title, self._zh_font_path_multi_1, self._en_font_path_multi_1, is_blur=self._multi_1_blur)
-                    # 这里是还没写的新方法，需要多张图片
-                # 更新媒体库背景图
-                result = self.__set_library_image(server, server_type, library_id, library_name, image_data)
-                if result:
-                    return True
-                else:
-                    return False
+            # 这里应该是您已有的图像处理代码
+            if self._cover_style == 'single_1':
+                image_data = create_style_single_1(image_path, library_name, zh_title, en_title, self._zh_font_path, self._en_font_path)
+            elif self._cover_style == 'single_2':
+                image_data = create_style_single_2(image_path, library_name, zh_title, en_title, self._zh_font_path, self._en_font_path)
+            elif self._cover_style == 'multi_1':
+                image_data = create_style_multi_1(image_path, library_name, zh_title, en_title, self._zh_font_path_multi_1, self._en_font_path_multi_1, is_blur=self._multi_1_blur)
+            
+            # 更新媒体库背景图
+            result = self.__set_library_image(server, server_type, library_id, library_name, image_data)
+            if result:
+                return True
+            else:
+                return False
                     
         except Exception as err:
             logger.error(f"更新媒体库背景图失败: {str(err)}")
