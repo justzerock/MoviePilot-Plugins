@@ -37,11 +37,12 @@
         "name": "媒体库封面生成",
         "description": "自动生成媒体库封面，支持 Emby，Jellyfin",
         "labels": "封面,媒体库",
-        "version": "0.8",
+        "version": "0.8.1",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png",
         "author": "justzerock",
         "level": 1,
         "history": {
+            "v0.8.1": "修复 bug，也许还有漏网之鱼",
             "v0.8": "改界面，加风格，可能还有新 bug",
             "v0.7": "修复一个非常简单的小问题，我真是太菜了",
             "v0.6": "修复部分问题",

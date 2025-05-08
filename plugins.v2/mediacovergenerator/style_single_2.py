@@ -1,4 +1,5 @@
 import base64
+import os
 import random
 import colorsys
 from collections import Counter
@@ -8,6 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
+from app.log import logger
 
 # ========== 配置 ==========
 canvas_size = (1920, 1080)
@@ -238,7 +240,6 @@ def create_shadow_mask(size, split_top=0.5, split_bottom=0.33, feather_size=40):
 
 def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_path, en_font_path):
     try:
-        
         # 定义斜线分割位置
         split_top = 0.55    # 顶部分割点在画面五分之三的位置
         split_bottom = 0.4  # 底部分割点在画面二分之一的位置
@@ -271,10 +272,9 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
         bg_img_original = Image.open(image_path).convert("RGB")
         bg_img = ImageOps.fit(bg_img_original, canvas_size, method=Image.LANCZOS)
 
-        
         # 强烈模糊化背景图
         bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=35))
-        
+
         # 将背景图片与背景色混合
         bg_color = darken_color(bg_color, 0.85)
         bg_img_array = np.array(bg_img, dtype=float)
@@ -360,7 +360,6 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
             en_text_h = en_bbox[3] - en_bbox[1]
             en_x = left_area_center_x - en_text_w // 2
             en_y = zh_y + zh_text_h + en_font_size
-            
             # 恢复原始的英文标题阴影效果
             for offset in range(2, shadow_offset // 2 + 1):
                 # shadow_alpha = int(210 * (1 - offset / (shadow_offset // 2)))
@@ -369,7 +368,7 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
             
             # 80%透明度的英文主文字
             draw.text((en_x, en_y), title_en, font=en_font, fill=text_color)
-        
+
         # blurred_shadow = shadow_layer.filter(ImageFilter.GaussianBlur(radius=8))
 
         # combined = Image.alpha_composite(canvas_rgba, blurred_shadow)
@@ -377,13 +376,16 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
         combined = Image.alpha_composite(canvas_rgba, text_layer)
 
         # 转为 RGB
-        rgb_image = combined.convert("RGB")
+        # rgb_image = combined.convert("RGB")
 
-        # 保存到 BytesIO 而不是文件
+        # 先缩小图像
+        new_size = (1280, 720)
+        rgb_image = combined.resize(new_size, Image.LANCZOS)
+        # 然后转为RGB (如果原图是RGBA或其他模式)
+        rgb_image = rgb_image.convert("RGB")
+        # 使用JPEG格式，适中的质量
         buffer = BytesIO()
-        rgb_image.save(buffer, format="JPEG", quality=95)
-
-        # 获取 base64 字符串
+        rgb_image.save(buffer, format="JPEG", quality=85, optimize=True, progressive=True)
         base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
         return base64_str
     except Exception as e:

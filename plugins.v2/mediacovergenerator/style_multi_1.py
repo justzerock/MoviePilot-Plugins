@@ -258,7 +258,7 @@ def get_random_color(image_path):
             r, g, b, a = img.getpixel((random_x, random_y))
             return (r, g, b, a)
     except Exception as e:
-        logger.error(f"获取图片颜色时出错: {e}")
+        # logger.error(f"获取图片颜色时出错: {e}")
         # 返回随机颜色作为备选
         return (
             random.randint(50, 200),
@@ -467,15 +467,16 @@ def select_suitable_color(colors=None):
                     selected_color = colors[i][0]
                 else:
                     selected_color = colors[i]
-                logger.info(f"选择颜色:[{selected_color}]作为适合的颜色")
+                # logger.info(f"选择颜色:[{selected_color}]作为适合的颜色")
                 break
             else:
-                logger.info(f"颜色:[{colors[i]}]不适合，尝试下一个颜色")
+                pass
+                # logger.info(f"颜色:[{colors[i]}]不适合，尝试下一个颜色")
     
     # 如果没有找到合适的颜色，随机生成一个颜色
     if selected_color is None:
         selected_color = random_hsl_to_rgb()
-        logger.info(f"未找到适合的颜色，随机生成颜色:[{selected_color}]")
+        # logger.info(f"未找到适合的颜色，随机生成颜色:[{selected_color}]")
     
     # 确保selected_color包含alpha通道
     if len(selected_color) == 3:
@@ -611,7 +612,7 @@ def get_poster_primary_color(image_path):
      
         
     except Exception as e:
-        logger.error(f"获取图片主色调时出错: {e}")
+        # logger.error(f"获取图片主色调时出错: {e}")
         # 返回默认颜色作为备选
         return [(150, 100, 50, 255)]
 
@@ -655,9 +656,10 @@ def create_blur_background(image_path, template_width, template_height, backgrou
         bg_color = (0, 0, 0)
     
     try:
-        logger.info(f"背景色：{bg_color}")
+        pass
+        # logger.info(f"背景色：{bg_color}")
     except:
-        pass  # 如果logger未定义，忽略日志输出
+        pass  # 如果# logger未定义，忽略日志输出
 
     # 将背景图片与背景色混合
     bg_img_array = np.array(bg_img, dtype=float)
@@ -797,13 +799,11 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
     """
 
     try:
-        logger.info(
-            f"[3/4] 正在生成海报..."
-        )
-        logger.info("-" * 40)
+        # logger.info(f"[3/4] 正在生成海报...")
+        # logger.info("-" * 40)
         poster_folder = os.path.join(cover_path, library_name)
         first_image_path = os.path.join(poster_folder, "1.jpg")
-        output_path = os.path.join(cover_path, 'output', f"{library_name}.png")
+        # output_path = os.path.join(cover_path, 'output', f"{library_name}.png")
         rows = POSTER_GEN_CONFIG["ROWS"]
         cols = POSTER_GEN_CONFIG["COLS"]
         margin = POSTER_GEN_CONFIG["MARGIN"]
@@ -827,13 +827,12 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
           gradient_bg = create_gradient_background(template_width, template_height, selected_color)
 
         # 创建保存中间文件的文件夹
-        output_dir = os.path.dirname(output_path)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        columns_dir = os.path.join(output_dir, "columns")
-        if save_columns and not os.path.exists(columns_dir):
-            os.makedirs(columns_dir)
+        # output_dir = os.path.dirname(output_path)
+        # if not os.path.exists(output_dir):
+        #     os.makedirs(output_dir)
+        # columns_dir = os.path.join(output_dir, "columns")
+        # if save_columns and not os.path.exists(columns_dir):
+        #     os.makedirs(columns_dir)
 
         # 支持的图片格式
         supported_formats = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp")
@@ -857,9 +856,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
 
         # 确保至少有一张图片
         if not poster_files:
-            logger.error(
-                f"错误: 在 {poster_folder} 中没有找到支持的图片文件"
-            )
+            # logger.error(f"错误: 在 {poster_folder} 中没有找到支持的图片文件")
             return False
 
         # 限制最多处理 rows*cols 张图片
@@ -956,9 +953,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
                     )
 
                 except Exception as e:
-                    logger.error(
-                        f"处理图片 {os.path.basename(poster_path)} 时出错: {e}"
-                    )
+                    # logger.error(f"处理图片 {os.path.basename(poster_path)} 时出错: {e}")
                     continue
 
             # 保存原始列图像（旋转前）
@@ -967,7 +962,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
             #         columns_dir, f"{name}_column_{col_index+1}_original.png"
             #     )
             #     column_image.save(column_orig_path)
-            #     logger.debug(
+            #     # logger.debug(
             #         f"已保存原始列图像到: {column_orig_path}"
             #     )
 
@@ -1000,7 +995,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
             #         columns_dir, f"column_{col_index+1}_rotated.png"
             #     )
             #     rotated_column.save(column_rotated_path)
-            #     logger.debug(
+            #     # logger.debug(
             #         f"已保存旋转后的列图像到: {column_rotated_path}"
             #     )
 
@@ -1068,12 +1063,8 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
                 font_size = base_font_size
 
             # 打印调试信息
-            logger.debug(
-                f"英文名 '{library_eng_name}' 单词数量: {word_count}, 最长单词长度: {max_chars_per_line}"
-            )
-            logger.debug(
-                f"使用字体大小: {font_size:.2f}"
-            )
+            # logger.debug(f"英文名 '{library_eng_name}' 单词数量: {word_count}, 最长单词长度: {max_chars_per_line}")
+            # logger.debug(f"使用字体大小: {font_size:.2f}")
 
 
             # 使用多行文本绘制
@@ -1094,23 +1085,22 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
             color_block_height = 55 + (line_count - 1) * (int(font_size) + line_spacing)
             color_block_size = (21.51, color_block_height)
 
-            logger.debug(
-                f"色块高度调整为: {color_block_height} (行数: {line_count})"
-            )
+            # logger.debug(f"色块高度调整为: {color_block_height} (行数: {line_count})")
 
             result = draw_color_block(
                 result, color_block_position, color_block_size, random_color
             )
         # 保存结果
         # result.save(output_path)
+        new_size = (1280, 720)
+        result = result.resize(new_size, Image.LANCZOS)
+
         buffer = io.BytesIO() # 创建一个字节流对象
-        result.save(buffer, format="PNG") # 将图像保存到字节流中，格式为PNG
+        result.save(buffer, format="PNG", optimize=True, compress_level=9) # 将图像保存到字节流中，格式为PNG
         base64_output_str = base64.b64encode(buffer.getvalue()).decode('utf-8') # 编码并转为utf-8字符串
         
         return base64_output_str
 
     except Exception as e:
-        logger.error(
-            f"创建九宫格图片时出错: {e}"
-        )
+        # logger.error(f"创建九宫格图片时出错: {e}")
         return False

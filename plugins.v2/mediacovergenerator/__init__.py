@@ -42,7 +42,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.8"
+    plugin_version = "0.8.1"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -72,8 +72,8 @@ class MediaCoverGenerator(_PluginBase):
     _covers_input = ''
     _zh_font_url = ''
     _en_font_url = ''
-    _zh_font_path = None
-    _en_font_path = None
+    _zh_font_path = ''
+    _en_font_path = ''
     _zh_font_url_multi_1 = ''
     _en_font_url_multi_1 = ''
     _zh_font_path_multi_1 = ''
@@ -977,7 +977,7 @@ class MediaCoverGenerator(_PluginBase):
         if not library_id:
             logger.warning(f"找不到 {mediainfo.title_year} 所在媒体库")
             return
-        logger.info(f"服务器：{existsinfo.server} 服务器类型：{existsinfo.server_type} 库ID：{library_id} 库名称：{library_name} 媒体ID：{existsinfo.itemid}")
+        # logger.info(f"服务器：{existsinfo.server} 服务器类型：{existsinfo.server_type} 库ID：{library_id} 库名称：{library_name} 媒体ID：{existsinfo.itemid}")
         # self.clean_cover_history(save=True)
         old_history = self.get_data('cover_history') or []
         # 新增去重判断逻辑
@@ -987,7 +987,7 @@ class MediaCoverGenerator(_PluginBase):
             default=None
         )
         if latest_item and str(latest_item.get("item_id")) == str(existsinfo.itemid):
-            logger.info(f"item_id {existsinfo.itemid} 是最新记录，跳过重复处理")
+            logger.info(f"媒体 {mediainfo.title_year} 在库中是最新记录，跳过此次更新")
             return
         new_history = self.update_cover_history(
             server=existsinfo.server, 
@@ -999,7 +999,6 @@ class MediaCoverGenerator(_PluginBase):
         # logger.info(f"最新数据： {new_history}")
         count = sum(1 for item in new_history if str(item.get("library_id")) == str(library_id))
         if self._cover_style.startswith('single'):
-            logger.info(f"执行 single")
             self.__update_library_backdrop(
                 server=existsinfo.server, 
                 server_type=existsinfo.server_type,
@@ -1008,7 +1007,6 @@ class MediaCoverGenerator(_PluginBase):
                 item_id=existsinfo.itemid
             )
         elif self._cover_style.startswith('multi') and count >= 9:
-            logger.info(f"执行 multi")
             items = sorted(new_history, key=lambda x: x["timestamp"], reverse=True)
             item_ids = [item["item_id"] for item in items]
             self.__update_library_backdrop(
@@ -1019,16 +1017,7 @@ class MediaCoverGenerator(_PluginBase):
                 item_ids=item_ids
             )
         else:
-            logger.info(f"执行 更新全部")
             self.update_all_libraries()
-        # Set library backdrop
-        # self.__update_library_backdrop(
-        #     server=existsinfo.server, 
-        #     server_type=existsinfo.server_type,
-        #     library_id=library_id, 
-        #     library_name=library_name,
-        #     item_id=existsinfo.itemid
-        # )
     
     def clean_cover_history(self, save=True):
         history = self.get_data('cover_history') or []
@@ -1106,7 +1095,6 @@ class MediaCoverGenerator(_PluginBase):
             item for item in new_history
             if str(item.get("library_id")) == str(library_id)
         ]
-
 
 
     def get_file_extension_from_url(self, url: str, fallback_ext: str = ".ttf") -> str:
@@ -1255,7 +1243,6 @@ class MediaCoverGenerator(_PluginBase):
 
         if all_target_files_exist:
             # if logger:
-            #     logger.info(f"{library_dir} 中已存在 1-9.jpg，跳过生成和重命名步骤。")
             logger.info(f"信息: {library_dir} 中已存在 1-9.jpg，跳过生成和重命名步骤。")
             return True # 表示操作成功或无需操作
         # --- 检查结束 ---
@@ -1271,8 +1258,6 @@ class MediaCoverGenerator(_PluginBase):
                     source_image_filenames.append(f)
 
         if not source_image_filenames:
-            # if logger:
-            #     logger.warning(f"{library_dir} 中没有可用的原始图片（已排除 1-9.jpg）来生成新的 1-9.jpg。")
             logger.info(f"警告: {library_dir} 中没有可用的原始图片（已排除 1-9.jpg）来生成新的 1-9.jpg。")
             return False
 
@@ -1288,14 +1273,10 @@ class MediaCoverGenerator(_PluginBase):
                 needed = 9 - len(selected_final_sources)
                 selected_final_sources.extend(random.choices(source_image_paths, k=needed))
             else:
-                # if logger:
-                #     logger.warning(f"{library_dir} 没有原始图片可用于复制填充。")
                 logger.info(f"警告: {library_dir} 没有原始图片可用于复制填充。")
                 return False
 
         if len(selected_final_sources) < 9:
-            # if logger:
-            #     logger.error(f"{library_dir} 无法准备足够的图片凑成9张，实际只有 {len(selected_final_sources)} 张。")
             logger.info(f"错误: {library_dir} 无法准备足够的图片凑成9张，实际只有 {len(selected_final_sources)} 张。")
             return False
 
@@ -1307,8 +1288,6 @@ class MediaCoverGenerator(_PluginBase):
                 try:
                     os.remove(fpath)
                 except OSError as e:
-                    # if logger:
-                    #     logger.error(f"无法删除文件 {fpath}: {e}")
                     logger.info(f"错误: 无法删除文件 {fpath}: {e}")
                     return False
 
@@ -1317,24 +1296,16 @@ class MediaCoverGenerator(_PluginBase):
             target_path = os.path.join(library_dir, f"{idx}.jpg")
             try:
                 if not os.path.exists(original_img_path):
-                    # if logger:
-                    #     logger.error(f"源文件 {original_img_path} 在尝试复制前找不到了！")
                     logger.info(f"错误: 源文件 {original_img_path} 在尝试复制前找不到了！")
                     return False
                 shutil.copy(original_img_path, target_path)
             except FileNotFoundError:
-                # if logger:
-                #     logger.error(f"复制文件失败: 源文件 {original_img_path} 未找到。")
                 logger.info(f"错误: 复制文件失败: 源文件 {original_img_path} 未找到。")
                 return False
             except Exception as e:
-                # if logger:
-                #     logger.error(f"复制文件 {original_img_path} 到 {target_path} 时发生错误: {e}")
                 logger.info(f"错误: 复制文件 {original_img_path} 到 {target_path} 时发生错误: {e}")
                 return False
 
-        # if logger:
-        #     logger.info(f"{library_dir} 已准备好 1~9.jpg")
         logger.info(f"信息: {library_dir} 已准备好 1~9.jpg")
         return True
     
@@ -1433,7 +1404,6 @@ class MediaCoverGenerator(_PluginBase):
                             item_id=item_id
                         )
 
-                        # logger.info(f"最新数据： {new_history}")
                         # 使用第一个项目的背景图
                         if self.__update_library_backdrop(
                             server=server, 
@@ -1447,7 +1417,6 @@ class MediaCoverGenerator(_PluginBase):
                     elif self._cover_style.startswith('multi'):
                         if len(items) < 9:
                             items += random.choices(items, k=9 - len(items))
-                        logger.info(f"{len(items)}个项目")
                         item_ids = [item.get('Id') for item in items]
                         for item_id in item_ids:
                             self.update_cover_history(

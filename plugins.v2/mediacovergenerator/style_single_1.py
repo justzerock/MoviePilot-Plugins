@@ -449,14 +449,17 @@ def create_style_single_1(image_path, library_name, title_zh, title_en, zh_font_
         combined = Image.alpha_composite(canvas, text_layer)
         
         # 转为 RGB
-        rgb_image = combined.convert("RGB")
+        # rgb_image = combined.convert("RGB")
         
-        # 保存到 BytesIO 而不是文件
+        # 先缩小图像
+        new_size = (1280, 720)
+        rgb_image = combined.resize(new_size, Image.LANCZOS)
+        # 然后转为RGB (如果原图是RGBA或其他模式)
+        rgb_image = rgb_image.convert("RGB")
+        # 使用JPEG格式，适中的质量
         buffer = BytesIO()
-        rgb_image.save(buffer, format="JPEG", quality=95)
-        
-        # 获取 base64 字符串
-        base64_str = base64.b64encode(buffer.getvalue()).decode()
+        rgb_image.save(buffer, format="JPEG", quality=85, optimize=True, progressive=True)
+        base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
         return base64_str
         
     except Exception as e:
