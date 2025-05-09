@@ -289,7 +289,7 @@ class MediaCoverGenerator(_PluginBase):
                                 'component': 'VTextField',
                                 'props': {
                                     'model': 'en_font_path_local',
-                                    'label': '本地英文字体链接（优先）',
+                                    'label': '本地英文字体路径（优先）',
                                     'placeholder': '留空使用预设字体'
                                 }
                             }
