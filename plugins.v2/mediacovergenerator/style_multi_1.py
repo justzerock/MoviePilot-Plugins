@@ -1,5 +1,7 @@
 import base64
+from collections import Counter
 import io
+from pathlib import Path
 from PIL import Image, ImageFilter, ImageDraw, ImageFont, ImageOps
 import numpy as np
 import os
@@ -72,7 +74,7 @@ def add_shadow(img, offset=(5, 5), shadow_color=(0, 0, 0, 100), blur_radius=3):
 # 单行文字
 def draw_text_on_image(
     image, text, position, font_path, default_font_path, font_size, fill_color=(255, 255, 255, 255),
-    shadow=False, shadow_color=None, shadow_offset=12, shadow_alpha=210
+    shadow=False, shadow_color=None, shadow_offset=10, shadow_alpha=75
 ):
     """
     在图像上绘制文字，可选择添加阴影效果
@@ -95,11 +97,15 @@ def draw_text_on_image(
     """
     # 创建一个可绘制的图像副本
     img_copy = image.copy()
-    draw = ImageDraw.Draw(img_copy)
+    text_layer = Image.new('RGBA', img_copy.size, (255, 255, 255, 0))
+    shadow_layer = Image.new('RGBA', img_copy.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(text_layer)
+    shadow_draw = ImageDraw.Draw(shadow_layer)
     font = ImageFont.truetype(font_path, font_size)
     
     # 如果需要添加阴影
     if shadow:
+        fill_color = (fill_color[0], fill_color[1], fill_color[2], 229)
         if shadow_color is None:
             if len(fill_color) >= 3:
                 r = max(0, int(fill_color[0] * 0.7))
@@ -118,15 +124,17 @@ def draw_text_on_image(
                 raise ValueError("shadow_color 格式不正确")  # 抛出异常，明确错误
 
         for offset in range(3, shadow_offset + 1, 2):
-            draw.text(
+            shadow_draw.text(
                 (position[0] + offset, position[1] + offset),
                 text,
                 font=font,
                 fill=shadow_color_with_alpha
             )
-    
     # 绘制主文字
     draw.text(position, text, font=font, fill=fill_color)
+    blurred_shadow = shadow_layer.filter(ImageFilter.GaussianBlur(radius=shadow_offset))
+    combined = Image.alpha_composite(img_copy, blurred_shadow)
+    img_copy = Image.alpha_composite(combined, text_layer)
 
     return img_copy
 
@@ -142,8 +150,8 @@ def draw_multiline_text_on_image(
     fill_color=(255, 255, 255, 255),
     shadow=False,
     shadow_color=None,
-    shadow_offset=8,
-    shadow_alpha=210
+    shadow_offset=4,
+    shadow_alpha=100
 ):
     """
     在图像上绘制多行文字，根据空格自动换行，可选择添加阴影效果
@@ -167,7 +175,8 @@ def draw_multiline_text_on_image(
     """
     # 创建一个可绘制的图像副本
     img_copy = image.copy()
-    draw = ImageDraw.Draw(img_copy)
+    text_layer = Image.new('RGBA', img_copy.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(text_layer)
     font = ImageFont.truetype(font_path, font_size)
 
     # 按空格分割文本
@@ -175,6 +184,7 @@ def draw_multiline_text_on_image(
 
     # 如果未指定阴影颜色，则根据填充颜色生成
     if shadow:
+        fill_color = (fill_color[0], fill_color[1], fill_color[2], 229)
         if shadow_color is None:
             # 使用文字颜色的暗化版本作为阴影
             if len(fill_color) >= 3:
@@ -206,6 +216,7 @@ def draw_multiline_text_on_image(
                     fill=shadow_color_with_alpha
                 )
         draw.text(position, text, font=font, fill=fill_color)
+        img_copy = Image.alpha_composite(img_copy, text_layer)
         return img_copy, 1
 
     # 绘制多行文本
@@ -222,7 +233,7 @@ def draw_multiline_text_on_image(
                     fill=shadow_color_with_alpha
                 )
         draw.text((x, current_y), line, font=font, fill=fill_color)
-
+    img_copy = Image.alpha_composite(img_copy, text_layer)
     return img_copy, len(lines)
 
 
@@ -292,199 +303,8 @@ def draw_color_block(image, position, size, color):
 
     return img_copy
 
-def normalize_rgb(input_rgb):
-    """
-    将各种可能的输入格式，统一提取成 (r, g, b) 三元组。
-    支持：
-    - (r, g, b)
-    - (r, g, b, a)
-    - ((r, g, b), idx) or ((r, g, b, a), idx)
-    
-    参数:
-        input_rgb: 输入的颜色格式
-        
-    返回:
-        标准化的(r, g, b)三元组
-    """
-    if isinstance(input_rgb, tuple):
-        # 情况 3: ((r,g,b,a), idx) 或 ((r,g,b), idx)
-        if len(input_rgb) == 2 and isinstance(input_rgb[0], tuple):
-            return normalize_rgb(input_rgb[0])
-        # 情况 2: RGBA
-        if len(input_rgb) == 4 and all(isinstance(v, (int, float)) for v in input_rgb):
-            return input_rgb[:3]
-        # 情况 1: RGB
-        if len(input_rgb) == 3 and all(isinstance(v, (int, float)) for v in input_rgb):
-            return input_rgb
-    raise ValueError(f"无法识别的颜色格式: {input_rgb!r}")
 
-def is_mid_bright(input_rgb, min_lum=80, max_lum=200):
-    """
-    基于相对亮度判断：不过暗（>=min_lum）也不过白（<=max_lum）。
-    使用亮度公式: L = 0.299*R + 0.587*G + 0.114*B
-    
-    参数:
-        input_rgb: 输入的颜色
-        min_lum: 最小亮度，默认为80
-        max_lum: 最大亮度，默认为200
-        
-    返回:
-        布尔值，颜色亮度是否在适中范围
-    """
-    r, g, b = normalize_rgb(input_rgb)
-    lum = 0.299*r + 0.587*g + 0.114*b
-    return min_lum <= lum <= max_lum
-
-def is_mid_bright_hsl(input_rgb, min_l=0.3, max_l=0.7):
-    """
-    基于 HSL Lightness 判断颜色是否适中。
-    Lightness 在 [0,1] 范围内。
-    
-    参数:
-        input_rgb: 输入的颜色
-        min_l: 最小亮度，默认为0.3
-        max_l: 最大亮度，默认为0.7
-        
-    返回:
-        布尔值，颜色亮度是否在适中范围
-    """
-    r, g, b = normalize_rgb(input_rgb)
-    # 归一到 [0,1]
-    r1, g1, b1 = r/255.0, g/255.0, b/255.0
-    h, l, s = colorsys.rgb_to_hls(r1, g1, b1)
-    return min_l <= l <= max_l
-
-def random_hsl_to_rgb(
-    hue_range=(0, 360),
-    sat_range=(0.5, 1.0),
-    light_range=(0.5, 0.8)
-):
-    """
-    根据指定的HSL范围生成随机RGB颜色。
-    
-    参数:
-        hue_range: 色相范围，取值 0~360
-        sat_range: 饱和度范围，取值 0~1
-        light_range: 明度范围，取值 0~1
-        
-    返回:
-        RGB 三元组，每个通道 0~255
-    """
-    h = random.uniform(hue_range[0]/360.0, hue_range[1]/360.0)
-    s = random.uniform(sat_range[0], sat_range[1])
-    l = random.uniform(light_range[0], light_range[1])
-    # colorsys.hls_to_rgb 接受 H, L, S (注意顺序) 都是 0~1
-    r, g, b = colorsys.hls_to_rgb(h, l, s)
-    # 转回 0~255
-    return (int(r*255), int(g*255), int(b*255))
-
-def darken_color(color, factor=0.65):
-    """
-    将颜色加深一定比例
-    
-    参数:
-        color: 输入的颜色，RGB或RGBA格式
-        factor: 加深系数，默认为0.65（降低35%亮度）
-        
-    返回:
-        加深后的颜色，与输入格式相同
-    """
-    # 确保是RGB或RGBA格式
-    if len(color) < 3:
-        raise ValueError("颜色格式必须是RGB或RGBA")
-    
-    # 降低各通道的亮度
-    r = int(color[0] * factor)
-    g = int(color[1] * factor)
-    b = int(color[2] * factor)
-    
-    # 确保RGB值不会小于0
-    r = max(0, r)
-    g = max(0, g)
-    b = max(0, b)
-    
-    # 返回与输入相同格式的颜色
-    if len(color) > 3:
-        return (r, g, b, color[3])
-    return (r, g, b)
-
-def lighten_color(color, factor=1.9, min_increase=80, max_value=230):
-    """
-    将颜色变亮，但不会过白
-    
-    参数:
-        color: 输入的颜色，RGB或RGBA格式
-        factor: 变亮系数，默认为1.9
-        min_increase: 最小增加量，默认为80
-        max_value: 最大允许值，默认为230
-        
-    返回:
-        变亮后的颜色，与输入格式相同
-    """
-    # 确保是RGB或RGBA格式
-    if len(color) < 3:
-        raise ValueError("颜色格式必须是RGB或RGBA")
-    
-    # 增加各通道的亮度
-    r = min(255, int(color[0] * factor))
-    g = min(255, int(color[1] * factor))
-    b = min(255, int(color[2] * factor))
-    
-    # 确保至少有一定的亮度增加
-    r = max(r, color[0] + min_increase)
-    g = max(g, color[1] + min_increase)
-    b = max(b, color[2] + min_increase)
-    
-    # 确保不会太亮
-    r = min(r, max_value)
-    g = min(g, max_value)
-    b = min(b, max_value)
-    
-    # 返回与输入相同格式的颜色
-    if len(color) > 3:
-        return (r, g, b, color[3])
-    return (r, g, b)
-
-def select_suitable_color(colors=None):
-    """
-    从颜色列表中选择一个适合做背景的颜色，或生成一个随机颜色
-    
-    参数:
-        colors: 颜色列表，如果为None则随机生成
-        
-    返回:
-        选择的颜色，RGBA格式
-    """
-    selected_color = None
-    
-    # 如果传入的是颜色数组
-    if isinstance(colors, list) and len(colors) > 0:
-        # 尝试找到合适的颜色，最多尝试10个
-        for i in range(min(10, len(colors))):
-            if is_mid_bright_hsl(colors[i]):
-                # 如果是(color_tuple, count)格式，提取颜色元组
-                if isinstance(colors[i], tuple) and len(colors[i]) == 2 and isinstance(colors[i][0], tuple):
-                    selected_color = colors[i][0]
-                else:
-                    selected_color = colors[i]
-                # logger.info(f"选择颜色:[{selected_color}]作为适合的颜色")
-                break
-            else:
-                pass
-                # logger.info(f"颜色:[{colors[i]}]不适合，尝试下一个颜色")
-    
-    # 如果没有找到合适的颜色，随机生成一个颜色
-    if selected_color is None:
-        selected_color = random_hsl_to_rgb()
-        # logger.info(f"未找到适合的颜色，随机生成颜色:[{selected_color}]")
-    
-    # 确保selected_color包含alpha通道
-    if len(selected_color) == 3:
-        selected_color = (selected_color[0], selected_color[1], selected_color[2], 255)
-    
-    return selected_color
-
-def create_gradient_background(width, height, background_color):
+def create_gradient_background(width, height, color=None):
     """
     创建一个从左到右的渐变背景，使用遮罩技术实现渐变效果
     左侧颜色更深，右侧颜色适中，提供更明显的渐变效果
@@ -498,13 +318,126 @@ def create_gradient_background(width, height, background_color):
     返回:
         渐变背景图像
     """
+    def _normalize_rgb(input_rgb):
+        """
+        将各种可能的输入格式，统一提取成 (r, g, b) 三元组。
+        支持：
+        - (r, g, b)
+        - (r, g, b, a)
+        - ((r, g, b), idx) or ((r, g, b, a), idx)
+        """
+        if isinstance(input_rgb, tuple):
+            # 情况 3: ((r,g,b,a), idx) 或 ((r,g,b), idx)
+            if len(input_rgb) == 2 and isinstance(input_rgb[0], tuple):
+                return _normalize_rgb(input_rgb[0])
+            # 情况 2: RGBA
+            if len(input_rgb) == 4 and all(isinstance(v, (int, float)) for v in input_rgb):
+                return input_rgb[:3]
+            # 情况 1: RGB
+            if len(input_rgb) == 3 and all(isinstance(v, (int, float)) for v in input_rgb):
+                return input_rgb
+        raise ValueError(f"无法识别的颜色格式: {input_rgb!r}")
+
+    def _is_mid_bright(input_rgb, min_lum=80, max_lum=200):
+        """
+        基于相对亮度判断：不过暗（>=min_lum）也不过白（<=max_lum）。
+        input_rgb 可为多种格式，函数内部会 normalize。
+        """
+        r, g, b = _normalize_rgb(input_rgb)
+        lum = 0.299*r + 0.587*g + 0.114*b
+        return min_lum <= lum <= max_lum
+    # 定义用于判断颜色是否合适的函数
+    def _is_mid_bright_hsl(input_rgb, min_l=0.3, max_l=0.7):
+        """
+        基于 HSL Lightness 判断。Lightness 在 [0,1]。
+        """
+        r, g, b = _normalize_rgb(input_rgb)
+        # 归一到 [0,1]
+        r1, g1, b1 = r/255.0, g/255.0, b/255.0
+        h, l, s = colorsys.rgb_to_hls(r1, g1, b1)
+        return min_l <= l <= max_l
+    
+    selected_color = None
+    
+    # 如果传入的是颜色数组
+    if isinstance(color, list) and len(color) > 0:
+        # 尝试找到合适的颜色，最多尝试5个
+        for i in range(min(10, len(color))):
+            if _is_mid_bright_hsl(color[i]):
+                # 如果是(color_tuple, count)格式，提取颜色元组
+                if isinstance(color[i], tuple) and len(color[i]) == 2 and isinstance(color[i][0], tuple):
+                    selected_color = color[i][0]
+                else:
+                    selected_color = color[i]
+                # logger.info(f" 海报主题色:[{selected_color}]适合做背景")
+                break
+            else:
+                pass
+                # logger.info(f" 海报主题色:[{color[i]}]不适合做背景,尝试做下一个颜色")
+    
+    # 如果没有找到合适的颜色，随机生成一个颜色
+    if selected_color is None:
+
+        def random_hsl_to_rgb(
+            hue_range=(0, 360),
+            sat_range=(0.5, 1.0),
+            light_range=(0.5, 0.8)
+        ):
+            """
+            hue_range: 色相范围，取值 0~360
+            sat_range: 饱和度范围，取值 0~1
+            light_range: 明度范围，取值 0~1
+            返回值：RGB 三元组，每个通道 0~255
+            """
+            h = random.uniform(hue_range[0]/360.0, hue_range[1]/360.0)
+            s = random.uniform(sat_range[0], sat_range[1])
+            l = random.uniform(light_range[0], light_range[1])
+            # colorsys.hls_to_rgb 接受 H, L, S (注意顺序) 都是 0~1
+            r, g, b = colorsys.hls_to_rgb(h, l, s)
+            # 转回 0~255
+            return (int(r*255), int(g*255), int(b*255))
+
+        # 生成颜色示例
+        selected_color = random_hsl_to_rgb()
+        # logger.info(f"海报所有主题色不适合做背景，随机生成一个颜色[{selected_color}]。")
 
     # 如果是已经提供的颜色，将其加深
     # 降低各通道的亮度，使颜色更深
-    selected_color = darken_color(background_color, factor=0.65)
-  
+    r = int(selected_color[0] * 0.65)  # 降低35%
+    g = int(selected_color[1] * 0.65)  # 降低35%
+    b = int(selected_color[2] * 0.65)  # 降低35%
+    
+    # 确保RGB值不会小于0
+    r = max(0, r)
+    g = max(0, g)
+    b = max(0, b)
+    
+    # 更新颜色
+    selected_color = (r, g, b, selected_color[3] if len(selected_color) > 3 else 255)
+
+    # 确保selected_color包含alpha通道
+    if len(selected_color) == 3:
+        selected_color = (selected_color[0], selected_color[1], selected_color[2], 255)
+    
+    # 基于selected_color自动生成浅色版本作为右侧颜色
+    # 将selected_color的RGB值增加更合适的比例，使右侧颜色适中
+    # 限制最大值为255
+    r = min(255, int(selected_color[0] * 1.9))  # 从2.2降到1.9
+    g = min(255, int(selected_color[1] * 1.9))  # 从2.2降到1.9
+    b = min(255, int(selected_color[2] * 1.9))  # 从2.2降到1.9
+    
+    # 确保至少有一定的亮度增加，但比之前小
+    r = max(r, selected_color[0] + 80)  # 从100降到80
+    g = max(g, selected_color[1] + 80)  # 从100降到80
+    b = max(b, selected_color[2] + 80)  # 从100降到80
+    
+    # 确保右侧颜色不会太亮
+    r = min(r, 230)  # 限制最大亮度
+    g = min(g, 230)  # 限制最大亮度
+    b = min(b, 230)  # 限制最大亮度
+    
     # 创建右侧浅色
-    color2 = lighten_color(selected_color, factor=1.9, min_increase=80, max_value=230)
+    color2 = (r, g, b, selected_color[3])
     
     # 创建左右两个纯色图像
     left_image = Image.new("RGBA", (width, height), selected_color)
@@ -616,7 +549,7 @@ def get_poster_primary_color(image_path):
         # 返回默认颜色作为备选
         return [(150, 100, 50, 255)]
 
-def create_blur_background(image_path, template_width, template_height, background_color, lighten_gradient_strength=0.7):
+def create_blur_background(image_path, template_width, template_height, background_color, blur_size, color_ratio, lighten_gradient_strength=0.6):
     """
     创建模糊背景图像，将原始图像模糊化并与指定颜色混合，添加胶片颗粒效果
     
@@ -642,7 +575,7 @@ def create_blur_background(image_path, template_width, template_height, backgrou
     # 背景处理
     bg_img = original_img.copy()
     bg_img = ImageOps.fit(bg_img, canvas_size, method=Image.LANCZOS)
-    bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=50))
+    bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=int(blur_size)))
 
     # 2. 与指定颜色混合
     # 假设 select_suitable_color 和 darken_color 函数存在且正常工作
@@ -654,12 +587,6 @@ def create_blur_background(image_path, template_width, template_height, backgrou
     else:
         # 默认颜色，以防颜色格式不正确
         bg_color = (0, 0, 0)
-    
-    try:
-        pass
-        # logger.info(f"背景色：{bg_color}")
-    except:
-        pass  # 如果# logger未定义，忽略日志输出
 
     # 将背景图片与背景色混合
     bg_img_array = np.array(bg_img, dtype=float)
@@ -677,7 +604,7 @@ def create_blur_background(image_path, template_width, template_height, backgrou
         bg_color_array[:, :, 3] = 255.0
     
     # 混合背景图和颜色
-    blended_bg_array = bg_img_array * 0.2 + bg_color_array * 0.8
+    blended_bg_array = bg_img_array * (1 - float(color_ratio)) + bg_color_array * float(color_ratio)
     blended_bg_array = np.clip(blended_bg_array, 0, 255).astype(np.uint8)
 
     # 转回PIL图像
@@ -744,44 +671,90 @@ def add_film_grain(image, intensity=0.05):
     
     return grainy_image
 
-def overlay_images(base_image, overlay_image, alpha=0.5):
+def is_not_black_white_gray_near(color, threshold=20):
+    """判断颜色既不是黑、白、灰，也不是接近黑、白。"""
+    r, g, b = color
+    if (r < threshold and g < threshold and b < threshold) or \
+       (r > 255 - threshold and g > 255 - threshold and b > 255 - threshold):
+        return False
+    gray_diff_threshold = 10
+    if abs(r - g) < gray_diff_threshold and abs(g - b) < gray_diff_threshold and abs(r - b) < gray_diff_threshold:
+        return False
+    return True
+
+def rgb_to_hsv(color):
+    """将 RGB 颜色转换为 HSV 颜色。"""
+    r, g, b = [x / 255.0 for x in color]
+    return colorsys.rgb_to_hsv(r, g, b)
+
+def hsv_to_rgb(h, s, v):
+    """将 HSV 颜色转换为 RGB 颜色。"""
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+def adjust_to_macaron(h, s, v, target_saturation_range=(0.2, 0.7), target_value_range=(0.55, 0.85)):
+    """将颜色的饱和度和亮度调整到接近马卡龙色系的范围，同时避免颜色过亮。"""
+    adjusted_s = min(max(s, target_saturation_range[0]), target_saturation_range[1])
+    adjusted_v = min(max(v, target_value_range[0]), target_value_range[1])
+    return adjusted_s, adjusted_v
+
+def find_dominant_vibrant_colors(image, num_colors=5):
     """
-    将一个图像叠加到另一个图像上，并可以调整叠加图像的透明度。
-
-    参数:
-        base_image: PIL.Image对象，底层图像。
-        overlay_image: PIL.Image对象，要叠加的图像，应与 base_image 尺寸相同且为 RGBA 模式。
-        alpha: float, 叠加图像的透明度 (0.0 完全透明, 1.0 完全不透明)。
-
-    返回:
-        PIL.Image对象，叠加后的图像。
+    从图像中提取出现次数较多的前 N 种非黑非白非灰的颜色，
+    并将其调整到接近马卡龙色系。
     """
-    if base_image.size != overlay_image.size:
-        raise ValueError("基础图像和叠加图像的尺寸必须相同。")
-    if overlay_image.mode != 'RGBA':
-        overlay_image = overlay_image.convert('RGBA')
+    img = image.copy()  
+    img.thumbnail((100, 100))
+    img = img.convert('RGB')
+    pixels = list(img.getdata())
+    filtered_pixels = [p for p in pixels if is_not_black_white_gray_near(p)]
+    if not filtered_pixels:
+        return []
+    color_counter = Counter(filtered_pixels)
+    dominant_colors = color_counter.most_common(num_colors * 3) # 提取更多候选
 
-    # 创建一个副本以避免修改原始图像
-    base_image_copy = base_image.copy()
-    overlay_image_copy = overlay_image.copy()
+    macaron_colors = []
+    seen_hues = set() # 避免提取过于相似的颜色
 
-    # 调整叠加图像的透明度
-    if alpha < 1.0:
-        overlay_alpha = overlay_image_copy.split()[3] # 获取原始 alpha 通道
-        new_alpha_data = [int(a * alpha) for a in overlay_alpha.getdata()]
-        new_alpha_channel = Image.new('L', overlay_image_copy.size)
-        new_alpha_channel.putdata(new_alpha_data)
-        overlay_image_copy.putalpha(new_alpha_channel)
+    for color, count in dominant_colors:
+        h, s, v = rgb_to_hsv(color)
+        adjusted_s, adjusted_v = adjust_to_macaron(h, s, v)
+        adjusted_rgb = hsv_to_rgb(h, adjusted_s, adjusted_v)
 
-    # 使用 alpha_composite 进行叠加
-    # alpha_composite 要求两个图像都是 RGBA
-    if base_image_copy.mode != 'RGBA':
-        base_image_copy = base_image_copy.convert('RGBA')
+        # 可以加入一些色调的判断，例如避免过于接近的色调
+        hue_degree = int(h * 360)
+        is_similar_hue = any(abs(hue_degree - seen) < 15 for seen in seen_hues) # 15度范围内的色调认为是相似的
 
-    combined_image = Image.alpha_composite(base_image_copy, overlay_image_copy)
-    return combined_image
+        if not is_similar_hue and adjusted_rgb not in macaron_colors:
+            macaron_colors.append(adjusted_rgb)
+            seen_hues.add(hue_degree)
+            if len(macaron_colors) >= num_colors:
+                break
 
-def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_path, en_font_path, is_blur=False):
+    return macaron_colors
+
+def darken_color(color, factor=0.7):
+    """
+    将颜色加深。
+    """
+    r, g, b = color
+    return (int(r * factor), int(g * factor), int(b * factor))
+
+
+def add_film_grain(image, intensity=0.05):
+    """添加胶片颗粒效果"""
+    img_array = np.array(image)
+    
+    # 创建随机噪点
+    noise = np.random.normal(0, intensity * 255, img_array.shape)
+    
+    # 应用噪点
+    img_array = img_array + noise
+    img_array = np.clip(img_array, 0, 255).astype(np.uint8)
+    
+    return Image.fromarray(img_array)
+
+def create_style_multi_1(library_dir, title, font_path, font_size=(1,1), is_blur=False, blur_size=50, color_ratio=0.8):
     """
     生成海报：多张图片以旋转列的形式排列在渐变背景上。
     输入:
@@ -799,10 +772,25 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
     """
 
     try:
+        zh_font_size_ratio, en_font_size_ratio = font_size
+
+        if int(blur_size) < 0:
+            blur_size = 50
+
+        if float(color_ratio) < 0 or float(color_ratio) > 1:
+            color_ratio = 0.8
+
+        if not float(zh_font_size_ratio) > 0:
+            zh_font_size_ratio = 1
+        if not float(en_font_size_ratio) > 0:
+            en_font_size_ratio = 1
+        
+        zh_font_path, en_font_path = font_path
+        title_zh, title_en = title
         # logger.info(f"[3/4] 正在生成海报...")
         # logger.info("-" * 40)
-        poster_folder = os.path.join(cover_path, library_name)
-        first_image_path = os.path.join(poster_folder, "1.jpg")
+        poster_folder = Path(library_dir)
+        first_image_path = poster_folder / "1.jpg"
         # output_path = os.path.join(cover_path, 'output', f"{library_name}.png")
         rows = POSTER_GEN_CONFIG["ROWS"]
         cols = POSTER_GEN_CONFIG["COLS"]
@@ -814,17 +802,37 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
         column_spacing = POSTER_GEN_CONFIG["COLUMN_SPACING"]
         save_columns = POSTER_GEN_CONFIG["SAVE_COLUMNS"]
 
-
         # 定义模板尺寸（可以根据需要调整）
         template_width = POSTER_GEN_CONFIG["CANVAS_WIDTH"]
         template_height = POSTER_GEN_CONFIG["CANVAS_HEIGHT"]
-        primary_color = get_poster_primary_color(first_image_path)
-        selected_color = select_suitable_color(primary_color)
+
+        # 加载首图并处理
+        color_img = Image.open(first_image_path).convert("RGB")        
+        # 获取前景图中最鲜明的颜色
+        vibrant_colors = find_dominant_vibrant_colors(color_img)
+        
+        # 柔和的颜色备选（马卡龙风格）
+        soft_colors = [
+            (237, 159, 77),    # 原默认色
+            (255, 183, 197),   # 淡粉色
+            (186, 225, 255),   # 淡蓝色
+            (255, 223, 186),   # 浅橘色
+            (202, 231, 200),   # 淡绿色
+            (245, 203, 255),   # 淡紫色
+        ]
+        # 如果有鲜明的颜色，则选择第一个（饱和度最高）作为背景色，否则使用默认颜色
+        if vibrant_colors:
+            blur_color = vibrant_colors[0]
+        else:
+            blur_color = random.choice(soft_colors) # 默认橙色
+
+        gradient_color = get_poster_primary_color(first_image_path)
+
         # 创建渐变背景作为模板
         if is_blur:
-          gradient_bg = create_blur_background(first_image_path, template_width, template_height, selected_color)
+          colored_bg_img = create_blur_background(first_image_path, template_width, template_height, blur_color, blur_size, color_ratio)
         else:
-          gradient_bg = create_gradient_background(template_width, template_height, selected_color)
+          colored_bg_img = create_gradient_background(template_width, template_height, gradient_color)
 
         # 创建保存中间文件的文件夹
         # output_dir = os.path.dirname(output_path)
@@ -873,7 +881,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
         ]
 
         # 以渐变背景作为起点
-        result = gradient_bg.copy()
+        result = colored_bg_img.copy()
         # 处理每一组（每一列）图片
         for col_index, column_posters in enumerate(grouped_posters):
             if col_index >= cols:
@@ -936,7 +944,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
                             0,
                             0,
                             0,
-                            200,
+                            216,
                         ),  # 更深的黑色，但不要超过255的透明度
                         blur_radius=20,  # 保持模糊半径
                     )
@@ -1031,20 +1039,20 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
             )
 
         # 根据name匹配template_mapping中的配置
-        library_ch_name = title_zh or library_name  # 默认使用输入的name作为中文名
+        library_ch_name = title_zh  # 默认使用输入的name作为中文名
         library_eng_name = title_en  # 默认英文名为空
 
-        text_shadow_color = darken_color(selected_color, 0.65)
+        text_shadow_color = darken_color(blur_color, 0.8)
         result = draw_text_on_image(
-            result, library_ch_name, (73.32, 427.34), zh_font_path, "ch.ttf", 163,
+            result, library_ch_name, (73.32, 427.34), zh_font_path, "ch.ttf", 163 * float(zh_font_size_ratio),
             shadow=is_blur, shadow_color=text_shadow_color
         )
 
         # 如果有英文名，才添加英文名文字
         if library_eng_name:
             # 动态调整字体大小，但统一使用一个字体大小
-            base_font_size = 50  # 默认字体大小
-            line_spacing = 5  # 行间距
+            base_font_size = 50 * float(en_font_size_ratio)  # 默认字体大小
+            line_spacing = base_font_size * 0.1  # 行间距
 
             # 计算行数和调整字体大小
             word_count = len(library_eng_name.split())
@@ -1082,7 +1090,7 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
             # 根据行数调整色块高度
             color_block_position = (84.38, 620.06)
             # 基础高度为55，每增加一行增加(font_size + line_spacing)的高度
-            color_block_height = 55 + (line_count - 1) * (int(font_size) + line_spacing)
+            color_block_height = base_font_size + line_spacing + (line_count - 1) * (int(font_size) + line_spacing)
             color_block_size = (21.51, color_block_height)
 
             # logger.debug(f"色块高度调整为: {color_block_height} (行数: {line_count})")
@@ -1091,16 +1099,32 @@ def create_style_multi_1(cover_path, library_name, title_zh, title_en, zh_font_p
                 result, color_block_position, color_block_size, random_color
             )
         # 保存结果
-        # result.save(output_path)
-        new_size = (1280, 720)
-        result = result.resize(new_size, Image.LANCZOS)
-
-        buffer = io.BytesIO() # 创建一个字节流对象
-        result.save(buffer, format="PNG", optimize=True, compress_level=9) # 将图像保存到字节流中，格式为PNG
-        base64_output_str = base64.b64encode(buffer.getvalue()).decode('utf-8') # 编码并转为utf-8字符串
-        
-        return base64_output_str
+        def image_to_base64(image, format="auto", quality=85):
+            buffer = io.BytesIO()
+            if format.lower() == "auto":
+                if image.mode == "RGBA" or (image.info.get('transparency') is not None):
+                    format = "PNG"
+                else:
+                    try:
+                        image.save(buffer, format="WEBP", quality=quality, optimize=True)
+                        base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                        return base64_str
+                    except Exception:
+                        format = "JPEG" # Fallback to JPEG if WebP fails
+            if format.lower() == "png":
+                image.save(buffer, format="PNG", optimize=True)
+                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return base64_str
+            elif format.lower() == "jpeg":
+                image = image.convert("RGB") # Ensure RGB for JPEG
+                image.save(buffer, format="JPEG", quality=quality, optimize=True, progressive=True)
+                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return base64_str
+            else:
+                raise ValueError(f"Unsupported format: {format}")
+            
+        return image_to_base64(result)
 
     except Exception as e:
-        # logger.error(f"创建九宫格图片时出错: {e}")
+        logger.error(f"创建多图封面时出错: {e}")
         return False

@@ -238,8 +238,24 @@ def create_shadow_mask(size, split_top=0.5, split_bottom=0.33, feather_size=40):
     
     return mask
 
-def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_path, en_font_path):
+def create_style_single_2(image_path, title, font_path, font_size=(1,1), blur_size=50, color_ratio=0.8):
     try:
+        zh_font_path, en_font_path = font_path
+        title_zh, title_en = title
+
+        zh_font_size_ratio, en_font_size_ratio = font_size
+
+        if int(blur_size) < 0:
+            blur_size = 50
+
+        if float(color_ratio) < 0 or float(color_ratio) > 1:
+            color_ratio = 0.8
+
+        if not float(zh_font_size_ratio) > 0:
+            zh_font_size_ratio = 1
+        if not float(en_font_size_ratio) > 0:
+            en_font_size_ratio = 1
+
         # 定义斜线分割位置
         split_top = 0.55    # 顶部分割点在画面五分之三的位置
         split_bottom = 0.4  # 底部分割点在画面二分之一的位置
@@ -273,7 +289,7 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
         bg_img = ImageOps.fit(bg_img_original, canvas_size, method=Image.LANCZOS)
 
         # 强烈模糊化背景图
-        bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=35))
+        bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=int(blur_size)))
 
         # 将背景图片与背景色混合
         bg_color = darken_color(bg_color, 0.85)
@@ -281,7 +297,7 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
         bg_color_array = np.array([[bg_color]], dtype=float)
         
         # 混合背景图和颜色 (10% 背景图 + 90% 颜色) - 使原图几乎不可见，只保留极少纹理
-        blended_bg = bg_img_array * 0.2 + bg_color_array * 0.8
+        blended_bg = bg_img_array * (1 - float(color_ratio)) + bg_color_array * float(color_ratio)
         blended_bg = np.clip(blended_bg, 0, 255).astype(np.uint8)
         blended_bg_img = Image.fromarray(blended_bg)
         
@@ -315,29 +331,27 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
 
         canvas_rgba = canvas.convert('RGBA')
         text_layer = Image.new('RGBA', canvas_size, (255, 255, 255, 0))
-        # shadow_layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+        shadow_layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
 
-        # shadow_draw = ImageDraw.Draw(shadow_layer)
+        shadow_draw = ImageDraw.Draw(shadow_layer)
         draw = ImageDraw.Draw(text_layer)   
         
         # 计算左侧区域的中心 X 位置 (画布宽度的四分之一处)
         left_area_center_x = int(canvas_size[0] * 0.25)
         left_area_center_y = canvas_size[1] // 2
         
-        zh_font_size = int(canvas_size[1] * 0.17)
-        en_font_size = int(canvas_size[1] * 0.07)
+        zh_font_size = int(canvas_size[1] * 0.17 * float(zh_font_size_ratio))
+        en_font_size = int(canvas_size[1] * 0.07 * float(en_font_size_ratio))
         
-        zh_font = ImageFont.truetype(zh_font_path, zh_font_size)
-        en_font = ImageFont.truetype(en_font_path, en_font_size)
+        zh_font = ImageFont.truetype(str(zh_font_path), zh_font_size)
+        en_font = ImageFont.truetype(str(en_font_path), en_font_size)
         
         # 设置80%透明度的文字颜色 (255, 255, 255, 204) - 204是80%不透明度
-        text_color = (255, 255, 255, 216)
-        shadow_color = darken_color(bg_color, 0.7) + (210,)  # 原始阴影透明度
+        text_color = (255, 255, 255, 229)
+        shadow_color = darken_color(bg_color, 0.8) + (75,)  # 原始阴影透明度
         shadow_offset = 12
-        shadow_alpha = 210
+        shadow_alpha = 75
         # 计算中文标题的位置
-        if not title_zh:
-            title_zh = library_name
         zh_bbox = draw.textbbox((0, 0), title_zh, font=zh_font)
         zh_text_w = zh_bbox[2] - zh_bbox[0]
         zh_text_h = zh_bbox[3] - zh_bbox[1]
@@ -348,7 +362,7 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
         for offset in range(3, shadow_offset + 1, 2):
             # shadow_alpha = int(210 * (1 - offset / shadow_offset))
             current_shadow_color = shadow_color[:3] + (shadow_alpha,)
-            draw.text((zh_x + offset, zh_y + offset), title_zh, font=zh_font, fill=current_shadow_color)
+            shadow_draw.text((zh_x + offset, zh_y + offset), title_zh, font=zh_font, fill=current_shadow_color)
         
         # 80%透明度的主文字
         draw.text((zh_x, zh_y), title_zh, font=zh_font, fill=text_color)
@@ -364,29 +378,42 @@ def create_style_single_2(image_path, library_name, title_zh, title_en, zh_font_
             for offset in range(2, shadow_offset // 2 + 1):
                 # shadow_alpha = int(210 * (1 - offset / (shadow_offset // 2)))
                 current_shadow_color = shadow_color[:3] + (shadow_alpha,)
-                draw.text((en_x + offset, en_y + offset), title_en, font=en_font, fill=current_shadow_color)
+                shadow_draw.text((en_x + offset, en_y + offset), title_en, font=en_font, fill=current_shadow_color)
             
             # 80%透明度的英文主文字
             draw.text((en_x, en_y), title_en, font=en_font, fill=text_color)
 
-        # blurred_shadow = shadow_layer.filter(ImageFilter.GaussianBlur(radius=8))
+        blurred_shadow = shadow_layer.filter(ImageFilter.GaussianBlur(radius=shadow_offset))
 
-        # combined = Image.alpha_composite(canvas_rgba, blurred_shadow)
+        combined = Image.alpha_composite(canvas_rgba, blurred_shadow)
         # 把 text_layer 合并到 canvas_rgba 上
-        combined = Image.alpha_composite(canvas_rgba, text_layer)
+        combined = Image.alpha_composite(combined, text_layer)
 
-        # 转为 RGB
-        # rgb_image = combined.convert("RGB")
-
-        # 先缩小图像
-        new_size = (1280, 720)
-        rgb_image = combined.resize(new_size, Image.LANCZOS)
-        # 然后转为RGB (如果原图是RGBA或其他模式)
-        rgb_image = rgb_image.convert("RGB")
-        # 使用JPEG格式，适中的质量
-        buffer = BytesIO()
-        rgb_image.save(buffer, format="JPEG", quality=85, optimize=True, progressive=True)
-        base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
-        return base64_str
+        def image_to_base64(image, format="auto", quality=85):
+            buffer = BytesIO()
+            if format.lower() == "auto":
+                if image.mode == "RGBA" or (image.info.get('transparency') is not None):
+                    format = "PNG"
+                else:
+                    try:
+                        image.save(buffer, format="WEBP", quality=quality, optimize=True)
+                        base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                        return base64_str
+                    except Exception:
+                        format = "JPEG" # Fallback to JPEG if WebP fails
+            if format.lower() == "png":
+                image.save(buffer, format="PNG", optimize=True)
+                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return base64_str
+            elif format.lower() == "jpeg":
+                image = image.convert("RGB") # Ensure RGB for JPEG
+                image.save(buffer, format="JPEG", quality=quality, optimize=True, progressive=True)
+                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return base64_str
+            else:
+                raise ValueError(f"Unsupported format: {format}")
+            
+        return image_to_base64(combined)
     except Exception as e:
-        return None
+        logger.error(f"创建单图封面时出错: {e}")
+        return False

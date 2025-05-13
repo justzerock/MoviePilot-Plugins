@@ -9,6 +9,8 @@ import math
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
+from app.log import logger
+
 
 # ========== 配置 ==========
 canvas_size = (1920, 1080)
@@ -231,14 +233,102 @@ def add_card_shadow(img, offset=(10, 10), radius=10, opacity=0.5):
     
     return result
 
+def add_shadow_and_rotate(canvas, img, angle, offset=(10, 10), radius=10, opacity=0.5, center_pos=None):
+    """
+    先创建阴影并旋转放置，然后旋转图像并放置
+    
+    Args:
+        canvas: 目标画布
+        img: 需要处理的图像
+        angle: 旋转角度
+        offset: 阴影偏移
+        radius: 阴影模糊半径
+        opacity: 阴影透明度
+        center_pos: 放置中心位置 (x, y)
+        
+    Returns:
+        更新后的画布
+    """
+    # 获取原图尺寸
+    width, height = img.size
+    
+    # 如果没有指定中心位置，默认使用画布中心
+    if center_pos is None:
+        center_pos = (canvas.width // 2, canvas.height // 2)
+    
+    # 1. 创建阴影
+    # 创建一个更大的阴影画布，给阴影留足空间，避免截断
+    padding = max(radius * 4, 100)  # 为阴影提供足够的空间
+    shadow_size = (width + padding * 2, height + padding * 2)
+    shadow = Image.new("RGBA", shadow_size, (0, 0, 0, 0))
+    
+    # 准备阴影蒙版
+    mask_size = (width, height)
+    shadow_mask = Image.new("L", mask_size, 255)  # 白色蒙版
+    
+    # 如果原图是RGBA模式，使用其透明通道作为蒙版
+    if img.mode == "RGBA":
+        shadow_mask = img.split()[3]  # 获取Alpha通道作为蒙版
+    
+    # 在阴影中心位置创建阴影形状
+    shadow_center = (padding, padding)
+    shadow.paste((0, 0, 0, int(255 * opacity)), 
+                (shadow_center[0], shadow_center[1], 
+                 shadow_center[0] + width, shadow_center[1] + height), 
+                shadow_mask)
+    
+    # 模糊阴影，使用较大的半径确保柔和效果
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius))
+    
+    # 2. 旋转阴影和图像
+    # 旋转阴影
+    rotated_shadow = rotate_image(shadow, angle)
+    shadow_width, shadow_height = rotated_shadow.size
+    
+    # 计算旋转后的阴影位置（考虑偏移）
+    shadow_x = center_pos[0] - shadow_width // 2 + offset[0]
+    shadow_y = center_pos[1] - shadow_height // 2 + offset[1]
+    
+    # 将阴影粘贴到画布上
+    canvas.paste(rotated_shadow, (shadow_x, shadow_y), rotated_shadow)
+    
+    # 旋转原图
+    rotated_img = rotate_image(img, angle)
+    img_width, img_height = rotated_img.size
+    
+    # 计算旋转后的图片位置
+    img_x = center_pos[0] - img_width // 2
+    img_y = center_pos[1] - img_height // 2
+    
+    # 将图片粘贴到画布上
+    canvas.paste(rotated_img, (img_x, img_y), rotated_img)
+    
+    return canvas
+
+
 def rotate_image(img, angle, bg_color=(0, 0, 0, 0)):
     """旋转图片并确保不会截断图片内容"""
     # expand=True 确保旋转后的图片不会被截断
     return img.rotate(angle, Image.BICUBIC, expand=True, fillcolor=bg_color)
 
 
-def create_style_single_1(image_path, library_name, title_zh, title_en, zh_font_path, en_font_path):
+def create_style_single_1(image_path, title, font_path, font_size=(1,1), blur_size=50, color_ratio=0.8):
     try:
+        zh_font_path, en_font_path = font_path
+        title_zh, title_en = title
+        zh_font_size_ratio, en_font_size_ratio = font_size
+
+        if int(blur_size) < 0:
+            blur_size = 50
+
+        if float(color_ratio) < 0 or float(color_ratio) > 1:
+            color_ratio = 0.8
+
+        if not float(zh_font_size_ratio) > 0:
+            zh_font_size_ratio = 1
+        if not float(en_font_size_ratio) > 0:
+            en_font_size_ratio = 1
+
         
         num_colors = 6
         # 加载原始图片
@@ -280,14 +370,14 @@ def create_style_single_1(image_path, library_name, title_zh, title_en, zh_font_
         # 2. 背景处理
         bg_img = original_img.copy()
         bg_img = ImageOps.fit(bg_img, canvas_size, method=Image.LANCZOS)
-        bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=50))  # 强烈模糊化
+        bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=int(blur_size)))  # 强烈模糊化
         
         # 将背景图片与背景色混合
         bg_img_array = np.array(bg_img, dtype=float)
         bg_color_array = np.array([[bg_color]], dtype=float)
         
         # 混合背景图和颜色 (15% 背景图 + 85% 颜色)
-        blended_bg = bg_img_array * 0.2 + bg_color_array * 0.8
+        blended_bg = bg_img_array * (1 - float(color_ratio)) + bg_color_array * float(color_ratio)
         blended_bg = np.clip(blended_bg, 0, 255).astype(np.uint8)
         blended_bg_img = Image.fromarray(blended_bg)
         
@@ -335,86 +425,67 @@ def create_style_single_1(image_path, library_name, title_zh, title_en, zh_font_
         aux_card2 = add_rounded_corners(aux_card2, radius=card_size//8)
         aux_card2 = aux_card2.convert("RGBA")
         
-        # 添加更明显的阴影效果
-        cards = [
-            add_card_shadow(aux_card2, offset=(10, 16), radius=18, opacity=0.7),  # 底层卡片阴影更大更明显
-            add_card_shadow(aux_card1, offset=(12, 18), radius=20, opacity=0.8), # 中间层卡片
-            add_card_shadow(main_card, offset=(15, 20), radius=25, opacity=0.9)   # 顶层卡片
-        ]
-        
-        # 4. 旋转和摆放卡片
-        # 计算卡片放置位置 (画布右侧)
+        # 4. 分别添加阴影和旋转
+        # 计算卡片放置中心位置 (画布右侧)
         center_x = int(canvas_size[0] - canvas_size[1] * 0.5)  # 稍微左移，给旋转后的卡片留出空间
         center_y = int(canvas_size[1] * 0.5)
+        center_pos = (center_x, center_y)
         
         # 按照需求指定旋转角度
-        # 底层逆时针25度，中间层逆时针10度，顶层顺时针5度
-        rotation_angles = [36, 18, 0]
+        rotation_angles = [36, 18, 0]  # 底层、中间层、顶层的旋转角度
         
-        # 创建一个临时画布来保存卡片堆叠效果，提供足够的尺寸避免裁剪
-        # 创建一个更大的画布以容纳旋转后的卡片
-        stack_size = (canvas_size[0] * 2, canvas_size[1] * 2)
-        stack_canvas = Image.new("RGBA", stack_size, (0, 0, 0, 0))
-        stack_center_x = stack_size[0] // 2
-        stack_center_y = stack_size[1] // 2
+        # 阴影配置
+        shadow_configs = [
+            {'offset': (10, 16), 'radius': 12, 'opacity': 0.4},  # 底层卡片阴影配置
+            {'offset': (15, 22), 'radius': 15, 'opacity': 0.5},  # 中间层卡片阴影配置
+            {'offset': (20, 26), 'radius': 18, 'opacity': 0.6},  # 顶层卡片阴影配置
+        ]
         
-        # 计算左下角位置作为旋转中心点
-        base_card = cards[0]  # 使用底层卡片作为参考
-        base_width, base_height = base_card.size
-        rotate_center_x = base_width // 2  # 旋转中心X坐标 (相对于卡片)
-        rotate_center_y = base_height // 2  # 旋转中心Y坐标 (相对于卡片)
+        # 创建一个临时画布，用于叠加卡片和阴影效果
+        cards_canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
         
-        # 放置三张卡片，从底层到顶层
-        for i, (card, angle) in enumerate(zip(cards, rotation_angles)):
-            # 旋转卡片，使用左下角为旋转中心
-            # PIL中，旋转是围绕图片中心进行的，所以我们需要通过平移来模拟围绕左下角旋转
-            
-            # 旋转卡片
-            rotated_card = rotate_image(card, angle)
-            rotated_width, rotated_height = rotated_card.size
-            
-            # 计算放置位置，使三张卡片的左下角重合
-            # 这里要考虑到旋转后图片尺寸的变化
-            paste_x = stack_center_x - rotated_width // 2
-            paste_y = stack_center_y - rotated_height // 2
-            
-            # 放置卡片
-            stack_canvas.paste(rotated_card, (paste_x, paste_y), rotated_card)
+        # 从底层到顶层依次添加阴影和卡片
+        cards = [aux_card2, aux_card1, main_card]
         
-        # 调整堆叠画布的大小以适合原始画布，并正确定位
-        # 裁剪出需要的部分
-        crop_left = stack_size[0] // 2 - center_x
-        crop_top = stack_size[1] // 2 - center_y
-        crop_right = crop_left + canvas_size[0]
-        crop_bottom = crop_top + canvas_size[1]
-        cropped_stack = stack_canvas.crop((crop_left, crop_top, crop_right, crop_bottom))
+        for i, (card, angle, shadow_config) in enumerate(zip(cards, rotation_angles, shadow_configs)):
+            # 使用优化后的函数添加阴影和旋转图片
+            cards_canvas = add_shadow_and_rotate(
+                cards_canvas, 
+                card, 
+                angle, 
+                offset=shadow_config['offset'], 
+                radius=shadow_config['radius'], 
+                opacity=shadow_config['opacity'],
+                center_pos=center_pos
+            )
         
         # 将裁剪后的卡片画布与背景合并
-        canvas = Image.alpha_composite(canvas.convert("RGBA"), cropped_stack)
+        canvas = Image.alpha_composite(canvas.convert("RGBA"), cards_canvas)
         
         # 5. 文字处理
         text_layer = Image.new('RGBA', canvas_size, (255, 255, 255, 0))
+        shadow_layer = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+
+        shadow_draw = ImageDraw.Draw(shadow_layer)
         draw = ImageDraw.Draw(text_layer)
         
         # 计算左侧区域的中心 X 位置 (画布宽度的四分之一处)
         left_area_center_x = int(canvas_size[0] * 0.25)
         left_area_center_y = canvas_size[1] // 2
         
-        zh_font_size = int(canvas_size[1] * 0.17)
-        en_font_size = int(canvas_size[1] * 0.07)
+        zh_font_size = int(canvas_size[1] * 0.17 * float(zh_font_size_ratio))
+        en_font_size = int(canvas_size[1] * 0.07 * float(en_font_size_ratio))
         
         zh_font = ImageFont.truetype(zh_font_path, zh_font_size)
         en_font = ImageFont.truetype(en_font_path, en_font_size)
         
         # 文字颜色和阴影颜色
-        text_color = (255, 255, 255, 216)  # 85% 不透明度
-        shadow_color = darken_color(bg_color, 0.7) + (210,)  # 阴影颜色加透明度
+        text_color = (255, 255, 255, 229)  # 85% 不透明度
+        shadow_color = darken_color(bg_color, 0.8) + (75,)  # 阴影颜色加透明度
         shadow_offset = 12
-        shadow_alpha = 210
+        shadow_alpha = 75
         
         # 计算中文标题的位置
-        if not title_zh:
-            title_zh = library_name
         zh_bbox = draw.textbbox((0, 0), title_zh, font=zh_font)
         zh_text_w = zh_bbox[2] - zh_bbox[0]
         zh_text_h = zh_bbox[3] - zh_bbox[1]
@@ -424,7 +495,7 @@ def create_style_single_1(image_path, library_name, title_zh, title_en, zh_font_
         # 中文标题阴影效果
         for offset in range(3, shadow_offset + 1, 2):
             current_shadow_color = shadow_color[:3] + (shadow_alpha,)
-            draw.text((zh_x + offset, zh_y + offset), title_zh, font=zh_font, fill=current_shadow_color)
+            shadow_draw.text((zh_x + offset, zh_y + offset), title_zh, font=zh_font, fill=current_shadow_color)
         
         # 中文标题
         draw.text((zh_x, zh_y), title_zh, font=zh_font, fill=text_color)
@@ -440,28 +511,45 @@ def create_style_single_1(image_path, library_name, title_zh, title_en, zh_font_
             # 英文标题阴影效果
             for offset in range(2, shadow_offset // 2 + 1):
                 current_shadow_color = shadow_color[:3] + (shadow_alpha,)
-                draw.text((en_x + offset, en_y + offset), title_en, font=en_font, fill=current_shadow_color)
+                shadow_draw.text((en_x + offset, en_y + offset), title_en, font=en_font, fill=current_shadow_color)
             
             # 英文标题
             draw.text((en_x, en_y), title_en, font=en_font, fill=text_color)
         
+        blurred_shadow = shadow_layer.filter(ImageFilter.GaussianBlur(radius=shadow_offset))
+        combined = Image.alpha_composite(canvas, blurred_shadow)
         # 合并所有图层
-        combined = Image.alpha_composite(canvas, text_layer)
+        combined = Image.alpha_composite(combined, text_layer)
         
         # 转为 RGB
         # rgb_image = combined.convert("RGB")
         
-        # 先缩小图像
-        new_size = (1280, 720)
-        rgb_image = combined.resize(new_size, Image.LANCZOS)
-        # 然后转为RGB (如果原图是RGBA或其他模式)
-        rgb_image = rgb_image.convert("RGB")
-        # 使用JPEG格式，适中的质量
-        buffer = BytesIO()
-        rgb_image.save(buffer, format="JPEG", quality=85, optimize=True, progressive=True)
-        base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
-        return base64_str
+        def image_to_base64(image, format="auto", quality=85):
+            buffer = BytesIO()
+            if format.lower() == "auto":
+                if image.mode == "RGBA" or (image.info.get('transparency') is not None):
+                    format = "PNG"
+                else:
+                    try:
+                        image.save(buffer, format="WEBP", quality=quality, optimize=True)
+                        base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                        return base64_str
+                    except Exception:
+                        format = "JPEG" # Fallback to JPEG if WebP fails
+            if format.lower() == "png":
+                image.save(buffer, format="PNG", optimize=True)
+                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return base64_str
+            elif format.lower() == "jpeg":
+                image = image.convert("RGB") # Ensure RGB for JPEG
+                image.save(buffer, format="JPEG", quality=quality, optimize=True, progressive=True)
+                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+                return base64_str
+            else:
+                raise ValueError(f"Unsupported format: {format}")
+            
+        return image_to_base64(combined)
         
     except Exception as e:
-        print(f"Error creating stack style: {e}")
-        return None
+        logger.error(f"创建单图封面时出错: {e}")
+        return False
