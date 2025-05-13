@@ -46,7 +46,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.8.4"
+    plugin_version = "0.8.5"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -105,6 +105,8 @@ class MediaCoverGenerator(_PluginBase):
     _blur_size_multi_1 = 50
     _color_ratio = 0.8
     _color_ratio_multi_1 = 0.8
+    _single_use_primary = False
+    _multi_1_use_primary = True
 
     def __init__(self):
         super().__init__()
@@ -115,45 +117,46 @@ class MediaCoverGenerator(_PluginBase):
         data_path = self.get_data_path()
         (data_path / 'fonts').mkdir(parents=True, exist_ok=True)
         (data_path / 'covers').mkdir(parents=True, exist_ok=True)
+        self._covers_path = data_path / 'covers'
+        self._font_path = data_path / 'fonts'
         if config:
             self._enabled = config.get("enabled")
             self._onlyonce = config.get("onlyonce")
             self._transfer_monitor = config.get("transfer_monitor")
             self._cron = config.get("cron")
-            self._delay = config.get("delay") or 60
-            self._selected_servers = config.get("selected_servers") or []
-            self._exclude_libraries = config.get("exclude_libraries") or []
-            # self._all_libraries = config.get("all_libraries") or []
-            self._sort_by = config.get("sort_by") or 'Random'
-            self._covers_output = config.get("covers_output") or ''
-            self._covers_input = config.get("covers_input") or ''
-            self._title_config = config.get("title_config") or ''
-            self._zh_font_url = config.get("zh_font_url") or ""
-            self._en_font_url = config.get("en_font_url") or ""
+            self._delay = config.get("delay")
+            self._selected_servers = config.get("selected_servers")
+            self._exclude_libraries = config.get("exclude_libraries")
+            self._sort_by = config.get("sort_by")
+            self._covers_output = config.get("covers_output")
+            self._covers_input = config.get("covers_input")
+            self._title_config = config.get("title_config")
+            self._zh_font_url = config.get("zh_font_url")
+            self._en_font_url = config.get("en_font_url")
             self._zh_font_path = config.get("zh_font_path")
             self._en_font_path = config.get("en_font_path")
-            self._cover_style = config.get("cover_style") or "single_1"
-            self._tab = config.get("tab") or 'style-tab'
-            self._multi_1_blur = config.get("multi_1_blur")
+            self._cover_style = config.get("cover_style")
+            self._tab = config.get("tab")
             self._zh_font_url_multi_1 = config.get("zh_font_url_multi_1")
             self._en_font_url_multi_1 = config.get("en_font_url_multi_1")
             self._zh_font_path_multi_1 = config.get("zh_font_path_multi_1")
             self._en_font_path_multi_1 = config.get("en_font_path_multi_1")
+            self._multi_1_blur = config.get("multi_1_blur")
             self._multi_1_use_main_font = config.get("multi_1_use_main_font")
             self._zh_font_path_local = config.get("zh_font_path_local")
             self._en_font_path_local = config.get("en_font_path_local")
             self._zh_font_path_multi_1_local = config.get("zh_font_path_multi_1_local")
             self._en_font_path_multi_1_local = config.get("en_font_path_multi_1_local")
-            self._font_path = config.get("font_path") or data_path / 'fonts'
-            self._covers_path = config.get("covers_path") or data_path / 'covers'
-            self._zh_font_size = config.get("zh_font_size") or 1
-            self._en_font_size = config.get("en_font_size") or 1
-            self._zh_font_size_multi_1 = config.get("zh_font_size_multi_1") or 1
-            self._en_font_size_multi_1 = config.get("en_font_size_multi_1") or 1
-            self._blur_size = config.get("blur_size") or 50
-            self._blur_size_multi_1 = config.get("blur_size_multi_1") or 50
-            self._color_ratio = config.get("color_ratio") or 0.8
-            self._color_ratio_multi_1 = config.get("color_ratio_multi_1") or 0.8
+            self._zh_font_size = config.get("zh_font_size")
+            self._en_font_size = config.get("en_font_size")
+            self._zh_font_size_multi_1 = config.get("zh_font_size_multi_1")
+            self._en_font_size_multi_1 = config.get("en_font_size_multi_1")
+            self._blur_size = config.get("blur_size")
+            self._blur_size_multi_1 = config.get("blur_size_multi_1")
+            self._color_ratio = config.get("color_ratio")
+            self._color_ratio_multi_1 = config.get("color_ratio_multi_1")
+            self._single_use_primary = config.get("single_use_primary")
+            self._multi_1_use_primary = config.get("multi_1_use_primary")
 
         if self._selected_servers:
             self._servers = self.mediaserver_helper.get_services(
@@ -222,8 +225,6 @@ class MediaCoverGenerator(_PluginBase):
             "en_font_path_local": self._en_font_path_local,
             "zh_font_path_multi_1_local": self._zh_font_path_multi_1_local,
             "en_font_path_multi_1_local": self._en_font_path_multi_1_local,
-            "font_path": self._font_path,
-            "covers_path": self._covers_path,
             "zh_font_size": self._zh_font_size,
             "en_font_size": self._en_font_size,
             "zh_font_size_multi_1": self._zh_font_size_multi_1,
@@ -231,7 +232,9 @@ class MediaCoverGenerator(_PluginBase):
             "blur_size": self._blur_size,
             "blur_size_multi_1": self._blur_size_multi_1,
             "color_ratio": self._color_ratio,
-            "color_ratio_multi_1": self._color_ratio_multi_1
+            "color_ratio_multi_1": self._color_ratio_multi_1,
+            "single_use_primary": self._single_use_primary,
+            "multi_1_use_primary": self._multi_1_use_primary
         })
 
     def get_state(self) -> bool:
@@ -561,6 +564,24 @@ class MediaCoverGenerator(_PluginBase):
                             }
                         ]
                     },
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 3
+                        },
+                        'content': [
+                            {
+                                'component': 'VSwitch',
+                                'props': {
+                                    'model': 'single_use_primary',
+                                    'label': '优先使用海报图',
+                                    'hint': '不启用则优先使用背景图，没有背景图也会使用海报图',
+                                    "persistent-hint": True,
+                                }
+                            }
+                        ]
+                    },
                     
                 ]
             },
@@ -862,6 +883,24 @@ class MediaCoverGenerator(_PluginBase):
                                     'model': 'multi_1_use_main_font',
                                     'label': '使用单图风格字体',
                                     'hint': '勾选则忽略本页字体设置，字体大小除外',
+                                    "persistent-hint": True,
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VCol',
+                        'props': {
+                            'cols': 12,
+                            'md': 3
+                        },
+                        'content': [
+                            {
+                                'component': 'VSwitch',
+                                'props': {
+                                    'model': 'multi_1_use_primary',
+                                    'label': '优先使用海报图',
+                                    'hint': '不启用则优先使用背景图，没有背景图也会使用海报图',
                                     "persistent-hint": True,
                                 }
                             }
@@ -1232,6 +1271,7 @@ class MediaCoverGenerator(_PluginBase):
             "tab": "style-tab",
             "cover_style": "single_1",
             "multi_1_blur": False,
+            "multi_1_use_main_font": False,
             "zh_font_size": 1,
             "en_font_size": 1,
             "zh_font_size_multi_1": 1,
@@ -1240,15 +1280,17 @@ class MediaCoverGenerator(_PluginBase):
             "blur_size_multi_1": 50,
             "color_ratio": 0.8,
             "color_ratio_multi_1": 0.8,
+            "single_use_primary": False,
+            "multi_1_use_primary": True
         }
 
     def get_page(self) -> List[dict]:
         pass
 
     @eventmanager.register(EventType.TransferComplete)
-    def update_library_backdrop_rt(self, event: Event):
+    def update_library_cover(self, event: Event):
         """
-        When media is added to library, update the library backdrop
+        媒体整理完成后，更新所在库封面
         """
         if not self._enabled:
             return
@@ -1339,7 +1381,6 @@ class MediaCoverGenerator(_PluginBase):
         # 所有媒体服务器
         if not self._servers:
             return
-        
         self.__get_fonts()  
         for server, service in self._servers.items():
             # 扫描所有媒体库
@@ -1576,14 +1617,18 @@ class MediaCoverGenerator(_PluginBase):
                     or item.get("AlbumPrimaryImageTag") \
                     or item.get("PrimaryImageTag"):
                     valid_items.append(item)
+            elif self._cover_style.startswith('multi'):
+                # 多图模式需要主图
+                if (item.get("ImageTags") and item.get("ImageTags").get("Primary")) \
+                    or (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0) \
+                    or (item.get("ParentBackdropImageTags") and len(item.get("ParentBackdropImageTags")) > 0):
+                    valid_items.append(item)
+
             elif self._cover_style.startswith('single'):
                 # 单图模式需要背景图
                 if (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0) \
-                    or (item.get("ParentBackdropImageTags") and len(item.get("ParentBackdropImageTags")) > 0):
-                    valid_items.append(item)
-            else:
-                # 多图模式需要主图
-                if item.get("ImageTags") and item.get("ImageTags").get("Primary"):
+                    or (item.get("ParentBackdropImageTags") and len(item.get("ParentBackdropImageTags")) > 0) \
+                    or (item.get("ImageTags") and item.get("ImageTags").get("Primary")):
                     valid_items.append(item)
         
         return valid_items
@@ -1696,7 +1741,7 @@ class MediaCoverGenerator(_PluginBase):
                         break
             except ValueError as e:
                 # 如果YAML解析出错，记录错误并继续
-                logger.info(f"标题配置解析错误，将使用库名: {e}")
+                logger.info(f"标题未正确配置，将使用库名: {library_name}")
         return (zh_title, en_title)
     
     def __get_server_libraries(self, service):
@@ -1762,20 +1807,61 @@ class MediaCoverGenerator(_PluginBase):
                 return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
 
         elif self._cover_style.startswith('multi'):
-            if item.get("ImageTags") and item.get("ImageTags").get("Primary"):
-                item_id = item.get("Id")
-                tag = item.get("ImageTags").get("Primary")
-                return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+            if self._multi_1_use_primary:
+                if item.get("ImageTags") and item.get("ImageTags").get("Primary"):
+                    item_id = item.get("Id")
+                    tag = item.get("ImageTags").get("Primary")
+                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+                    tag = item["ParentBackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
+                    item_id = item.get("Id")
+                    tag = item["BackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+            else:
+                if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+                    tag = item["ParentBackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
+                    item_id = item.get("Id")
+                    tag = item["BackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                elif item.get("ImageTags") and item.get("ImageTags").get("Primary"):
+                    item_id = item.get("Id")
+                    tag = item.get("ImageTags").get("Primary")
+                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
 
         elif self._cover_style.startswith('single'):
-            if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
-                item_id = item.get("ParentBackdropItemId")
-                tag = item["ParentBackdropImageTags"][0]
-            elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
-                item_id = item.get("Id")
-                tag = item["BackdropImageTags"][0]
-            return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
-        
+            if self._single_use_primary:
+                if item.get("ImageTags") and item.get("ImageTags").get("Primary"):
+                    item_id = item.get("Id")
+                    tag = item.get("ImageTags").get("Primary")
+                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+                    tag = item["ParentBackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
+                    item_id = item.get("Id")
+                    tag = item["BackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+            else:
+                if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+                    tag = item["ParentBackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
+                    item_id = item.get("Id")
+                    tag = item["BackdropImageTags"][0]
+                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                elif item.get("ImageTags") and item.get("ImageTags").get("Primary"):
+                    item_id = item.get("Id")
+                    tag = item.get("ImageTags").get("Primary")
+                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+            
     def __get_item_id(self, item):
         """
         从媒体项信息中获取项目ID
@@ -1790,14 +1876,32 @@ class MediaCoverGenerator(_PluginBase):
                 item_id = item.get("AlbumId")
 
         elif self._cover_style.startswith('multi'):
-            if item.get("ImageTags") and item.get("ImageTags").get("Primary"):
-                item_id = item.get("Id")
+            if self._multi_1_use_primary:
+                if (item.get("ImageTags") and item.get("ImageTags").get("Primary")) \
+                    or (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0):
+                    item_id = item.get("Id")
+                elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+            else:
+                if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+                elif (item.get("ImageTags") and item.get("ImageTags").get("Primary")) \
+                    or (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0):
+                    item_id = item.get("Id")
 
         elif self._cover_style.startswith('single'):
-            if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
-                item_id = item.get("ParentBackdropItemId")
-            elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
-                item_id = item.get("Id")
+            if self._single_use_primary:
+                if (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0) \
+                    or (item.get("ImageTags") and item.get("ImageTags").get("Primary")):
+                    item_id = item.get("Id")
+                elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+            else:
+                if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
+                    item_id = item.get("ParentBackdropItemId")
+                elif (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0) \
+                    or (item.get("ImageTags") and item.get("ImageTags").get("Primary")):
+                    item_id = item.get("Id")
 
         return item_id
 
