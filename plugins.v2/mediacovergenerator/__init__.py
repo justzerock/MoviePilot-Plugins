@@ -46,7 +46,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.8.3"
+    plugin_version = "0.8.4"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -1231,7 +1231,15 @@ class MediaCoverGenerator(_PluginBase):
 ''',
             "tab": "style-tab",
             "cover_style": "single_1",
-            "multi_1_blur": False
+            "multi_1_blur": False,
+            "zh_font_size": 1,
+            "en_font_size": 1,
+            "zh_font_size_multi_1": 1,
+            "en_font_size_multi_1": 1,
+            "blur_size": 50,
+            "blur_size_multi_1": 50,
+            "color_ratio": 0.8,
+            "color_ratio_multi_1": 0.8,
         }
 
     def get_page(self) -> List[dict]:
