@@ -780,9 +780,9 @@ def create_style_multi_1(library_dir, title, font_path, font_size=(1,1), is_blur
         if float(color_ratio) < 0 or float(color_ratio) > 1:
             color_ratio = 0.8
 
-        if not float(zh_font_size_ratio) > 0:
+        if float(zh_font_size_ratio) <= 0:
             zh_font_size_ratio = 1
-        if not float(en_font_size_ratio) > 0:
+        if float(en_font_size_ratio) <= 0:
             en_font_size_ratio = 1
         
         zh_font_path, en_font_path = font_path

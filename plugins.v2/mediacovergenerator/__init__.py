@@ -46,7 +46,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.8.5"
+    plugin_version = "0.8.6"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -576,7 +576,7 @@ class MediaCoverGenerator(_PluginBase):
                                 'props': {
                                     'model': 'single_use_primary',
                                     'label': '优先使用海报图',
-                                    'hint': '不启用则优先使用背景图，没有背景图也会使用海报图',
+                                    'hint': '单图不建议开启，不启用则优先使用背景图，没有背景图也会使用海报图',
                                     "persistent-hint": True,
                                 }
                             }
@@ -900,7 +900,7 @@ class MediaCoverGenerator(_PluginBase):
                                 'props': {
                                     'model': 'multi_1_use_primary',
                                     'label': '优先使用海报图',
-                                    'hint': '不启用则优先使用背景图，没有背景图也会使用海报图',
+                                    'hint': '多图建议开启，不启用则优先使用背景图，没有背景图也会使用海报图',
                                     "persistent-hint": True,
                                 }
                             }
@@ -1448,26 +1448,42 @@ class MediaCoverGenerator(_PluginBase):
     def __generate_image_from_path(self, library_name, title, image_path=None):
         logger.info(f"请耐心等待，正在生成封面图...")
         font_path = (str(self._zh_font_path), str(self._en_font_path))
-        font_size = (float(self._zh_font_size), float(self._en_font_size))
+
+        zh_font_size = self._zh_font_size or 1
+        en_font_size = self._en_font_size or 1
+        blur_size = self._blur_size or 50
+        color_ratio = self._color_ratio or 0.8
+        zh_font_size_multi_1 = self._zh_font_size_multi_1 or 1
+        en_font_size_multi_1 = self._en_font_size_multi_1 or 1
+        blur_size_multi_1 = self._blur_size_multi_1 or 50
+        color_ratio_multi_1 = self._color_ratio_multi_1 or 0.8
+        font_size = (float(zh_font_size), float(en_font_size))
+
         if self._cover_style == 'single_1':
-            image_data = create_style_single_1(image_path, title, font_path, font_size, 
-                                               self._blur_size, self._color_ratio)
+            image_data = create_style_single_1(image_path, title, font_path, 
+                                               font_size=font_size, 
+                                               blur_size=blur_size, 
+                                               color_ratio=color_ratio)
         elif self._cover_style == 'single_2':
-            image_data = create_style_single_2(image_path, title, font_path, font_size, 
-                                               self._blur_size, self._color_ratio)
+            image_data = create_style_single_2(image_path, title, font_path, 
+                                               font_size=font_size, 
+                                               blur_size=blur_size, 
+                                               color_ratio=color_ratio)
         elif self._cover_style == 'multi_1':
             zh_font_path = self._zh_font_path if self._multi_1_use_main_font else self._zh_font_path_multi_1
             en_font_path = self._en_font_path if self._multi_1_use_main_font else self._en_font_path_multi_1
             font_path = (zh_font_path, en_font_path)
-            font_size = (float(self._zh_font_size_multi_1), float(self._en_font_size_multi_1))
+            font_size = (float(zh_font_size_multi_1), float(en_font_size_multi_1))
             if image_path:
                 library_dir = Path(self._covers_input) / library_name
             else:
                 library_dir = Path(self._covers_path) / library_name
             if self.prepare_library_images(library_dir):
-                image_data = create_style_multi_1(library_dir, title, font_path, font_size, 
-                                                  self._multi_1_blur, self._blur_size_multi_1, 
-                                                  self._color_ratio_multi_1)
+                image_data = create_style_multi_1(library_dir, title, font_path, 
+                                                  font_size=font_size, 
+                                                  is_blur=self._multi_1_blur, 
+                                                  blur_size=blur_size_multi_1, 
+                                                  color_ratio=color_ratio_multi_1)
         return image_data
     
     def __generate_from_server(self, service, library, title):
