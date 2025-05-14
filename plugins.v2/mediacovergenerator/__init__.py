@@ -46,7 +46,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.8.6"
+    plugin_version = "0.8.7"
     # 插件作者
     plugin_author = "justzerock"
     # 作者主页
@@ -1343,7 +1343,7 @@ class MediaCoverGenerator(_PluginBase):
         else:
             library_id = library.get("ItemId")
         if f"{existsinfo.server}-{library_id}" in self._exclude_libraries:
-            logger.info(f"服务器 {existsinfo.server} 的媒体库 {library['Name']} 已忽略，跳过更新封面")
+            logger.info(f"{existsinfo.server}：{library['Name']} 已忽略，跳过更新封面")
             return
         # self.clean_cover_history(save=True)
         old_history = self.get_data('cover_history') or []
@@ -1366,11 +1366,11 @@ class MediaCoverGenerator(_PluginBase):
         if self._cover_style.startswith('single'):
             if self.__update_library(service, library):
                 self._monitor_sort = ''
-                logger.info(f"服务器 {existsinfo.server} 的媒体库 {library['Name']} 封面更新成功")
+                logger.info(f"媒体库 {existsinfo.server}：{library['Name']} 封面更新成功")
         elif self._cover_style.startswith('multi'):
             if self.__update_library(service, library):
                 self._monitor_sort = ''
-                logger.info(f"服务器 {existsinfo.server} 的媒体库 {library['Name']} 封面更新成功")
+                logger.info(f"媒体库 {existsinfo.server}：{library['Name']} 封面更新成功")
     
     def __update_all_libraries(self):
         """
@@ -1384,13 +1384,13 @@ class MediaCoverGenerator(_PluginBase):
         self.__get_fonts()  
         for server, service in self._servers.items():
             # 扫描所有媒体库
-            logger.info(f"准备更新服务器 {server} 的媒体库封面...")
+            logger.info(f"当前服务器 {server}")
             cover_style = {
                 "single_1": "单图 1",
                 "single_2": "单图 2",
                 "multi_1": "多图 1"
             }[self._cover_style]
-            logger.info(f"当前选择的风格: {cover_style}")
+            logger.info(f"当前风格 {cover_style}")
             # 获取媒体库列表
             libraries = self.__get_server_libraries(service)
             if not libraries:
@@ -1405,24 +1405,25 @@ class MediaCoverGenerator(_PluginBase):
                 else:
                     library_id = library.get("ItemId")
                 if f"{server}-{library_id}" in self._exclude_libraries:
-                    logger.info(f"服务器 {server} 的媒体库 {library['Name']} 已忽略，跳过更新封面")
+                    logger.info(f"媒体库 {server}：{library['Name']} 已忽略，跳过更新封面")
                     continue
                 if self.__update_library(service, library):
-                    logger.info(f"服务器 {server} 的媒体库 {library['Name']} 封面更新成功")
+                    logger.info(f"媒体库 {server}：{library['Name']} 封面更新成功")
                 else:
-                    logger.warning(f"服务器 {server} 的媒体库 {library['Name']} 封面更新失败")
+                    logger.warning(f"媒体库 {server}：{library['Name']} 封面更新失败")
         logger.info("所有媒体库封面更新完成")
                  
 
     def __update_library(self, service, library):
         library_name = library['Name']
-        logger.info(f"开始更新服务器 {service.name} 的媒体库 {library_name} 的封面")
+        logger.info(f"媒体库 {service.name}：{library_name} 开始准备更新封面")
         # 自定义图像路径
         image_path = self.__check_custom_image(library_name)
         # 从配置获取标题
         title = self.__get_library_title_from_yaml(library_name)
         if image_path:
-            image_data = self.__generate_image_from_path(library_name, title, image_path[0])
+            logger.info(f"媒体库 {service.name}：{library_name} 从自定义路径获取封面")
+            image_data = self.__generate_image_from_path(service.name, library_name, title, image_path[0])
         else:
             image_data = self.__generate_from_server(service, library, title)
 
@@ -1445,8 +1446,8 @@ class MediaCoverGenerator(_PluginBase):
         
         return images if images else None  # 或改为 return images if images else False
 
-    def __generate_image_from_path(self, library_name, title, image_path=None):
-        logger.info(f"请耐心等待，正在生成封面图...")
+    def __generate_image_from_path(self, server, library_name, title, image_path=None):
+        logger.info(f"媒体库 {server}：{library_name} 正在生成封面图...")
         font_path = (str(self._zh_font_path), str(self._en_font_path))
 
         zh_font_size = self._zh_font_size or 1
@@ -1488,7 +1489,7 @@ class MediaCoverGenerator(_PluginBase):
     
     def __generate_from_server(self, service, library, title):
 
-        logger.info(f"开始从服务器 {service.name} 的媒体库 {library['Name']} 获取图片")
+        logger.info(f"媒体库 {service.name}：{library['Name']} 开始筛选媒体项")
         required_items = 1 if self._cover_style.startswith('single') else 9
         
         # 获取项目集合
@@ -1507,6 +1508,8 @@ class MediaCoverGenerator(_PluginBase):
         # 处理合集类型的特殊情况
         if library_type == "boxsets":
             return self.__handle_boxset_library(service, library, title)
+        elif library_type == "playlists":
+            return self.__handle_playlist_library(service, library, title)
         elif library_type == "music":
             include_types = 'MusicAlbum,Audio'
         else:
@@ -1541,7 +1544,7 @@ class MediaCoverGenerator(_PluginBase):
             else:
                 return self.__update_grid_image(service, library, title, items[:9])
         else:
-            print(f"警告: 无法为媒体库 {library['Name']} 找到有效的图片项目")
+            print(f"媒体库 {service.name}：{library['Name']} 无法找到有效的图片项目")
             return False
         
     def __handle_boxset_library(self, service, library, title):
@@ -1581,13 +1584,59 @@ class MediaCoverGenerator(_PluginBase):
         
         # 使用获取到的有效项目更新封面
         if len(valid_items) > 0:
-            logger.info(f"已获取足够的图片")
             if self._cover_style.startswith('single'):
                 return self.__update_single_image(service, library, title, valid_items[0])
             else:
                 return self.__update_grid_image(service, library, title, valid_items[:9])
         else:
-            print(f"警告: 无法为合集媒体库 {library['Name']} 找到有效的图片项目")
+            print(f"媒体库 {service.name}：{library['Name']} 无法找到有效的图片项目")
+            return False
+        
+    def __handle_playlist_library(self, service, library, title):
+        """ 
+        播放列表图片获取 
+        """
+        include_types = 'Playlist,Movie,Series,Episode,Audio'
+        if service.type == 'emby':
+            library_id = library.get("Id")
+        else:
+            library_id = library.get("ItemId")
+        parent_id = library_id
+        playlists = self.__get_items_batch(service, parent_id,
+                                      include_types=include_types)
+        
+        required_items = 1 if self._cover_style.startswith('single') else 9
+        valid_items = []
+        
+        # 首先检查 playlist 本身是否有合适的图片
+        valid_playlists = self.__filter_valid_items(playlists)
+        valid_items.extend(valid_playlists)
+        
+        # 如果 playlist 本身没有足够的图片，则获取其中的电影
+        if len(valid_items) < required_items:
+            for playlist in playlists:
+                if len(valid_items) >= required_items:
+                    break
+                    
+                # 获取此 playlist 中的电影
+                movies = self.__get_items_batch(service,
+                                             parent_id=playlist['Id'], 
+                                             include_types=include_types)
+                
+                valid_movies = self.__filter_valid_items(movies)
+                valid_items.extend(valid_movies)
+                
+                if len(valid_items) >= required_items:
+                    break
+        
+        # 使用获取到的有效项目更新封面
+        if len(valid_items) > 0:
+            if self._cover_style.startswith('single'):
+                return self.__update_single_image(service, library, title, valid_items[0])
+            else:
+                return self.__update_grid_image(service, library, title, valid_items[:9])
+        else:
+            print(f"警告: 无法为播放列表 {service.name}：{library['Name']} 找到有效的图片项目")
             return False
         
     def __get_items_batch(self, service, parent_id, offset=0, limit=20, include_types=None):
@@ -1616,7 +1665,7 @@ class MediaCoverGenerator(_PluginBase):
                     data = res.json()
                     return data.get("Items", [])
             except Exception as err:
-                logger.error(f"获取Emby媒体项详情失败：{str(err)}")
+                logger.error(f"获取媒体项失败：{str(err)}")
             return []
                 
         except Exception as err:
@@ -1624,34 +1673,53 @@ class MediaCoverGenerator(_PluginBase):
             return []
         
     def __filter_valid_items(self, items):
-        """筛选有效的项目（包含所需图片的项目）"""
+        """筛选有效的项目（包含所需图片的项目），并按图片标签去重"""
         valid_items = []
-        
-        for item in items:
-            if item['Type'] in 'MusicAlbum,Audio' :
-                if (item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0) \
-                    or item.get("AlbumPrimaryImageTag") \
-                    or item.get("PrimaryImageTag"):
-                    valid_items.append(item)
-            elif self._cover_style.startswith('multi'):
-                # 多图模式需要主图
-                if (item.get("ImageTags") and item.get("ImageTags").get("Primary")) \
-                    or (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0) \
-                    or (item.get("ParentBackdropImageTags") and len(item.get("ParentBackdropImageTags")) > 0):
-                    valid_items.append(item)
+        seen_tags = set()
 
-            elif self._cover_style.startswith('single'):
-                # 单图模式需要背景图
-                if (item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0) \
-                    or (item.get("ParentBackdropImageTags") and len(item.get("ParentBackdropImageTags")) > 0) \
-                    or (item.get("ImageTags") and item.get("ImageTags").get("Primary")):
+        for item in items:
+            tags = []
+
+            # 统一收集所有可能的图片 tag 字符串作为唯一标识
+            if item.get("PrimaryImageTag"):
+                tags.append(f"Primary:{item['PrimaryImageTag']}")
+            if item.get("AlbumPrimaryImageTag"):
+                tags.append(f"AlbumPrimary:{item['AlbumPrimaryImageTag']}")
+            if item.get("BackdropImageTags"):
+                tags.extend([f"Backdrop:{t}" for t in item["BackdropImageTags"]])
+            if item.get("ParentBackdropImageTags"):
+                tags.extend([f"ParentBackdrop:{t}" for t in item["ParentBackdropImageTags"]])
+            if item.get("ImageTags") and item["ImageTags"].get("Primary"):
+                tags.append(f"ImagePrimary:{item['ImageTags']['Primary']}")
+
+            # 判断是否重复（所有 tag 都未见过才添加）
+            if any(tag in seen_tags for tag in tags):
+                continue  # 跳过已有标签的 item
+
+            # 决定是否为有效项目
+            if item['Type'] in 'MusicAlbum,Audio':
+                if item.get("ParentBackdropImageTags") or item.get("AlbumPrimaryImageTag") or item.get("PrimaryImageTag"):
                     valid_items.append(item)
-        
+                    seen_tags.update(tags)
+            elif self._cover_style.startswith('multi'):
+                if (item.get("ImageTags") and item["ImageTags"].get("Primary")) \
+                    or item.get("BackdropImageTags") \
+                    or item.get("ParentBackdropImageTags"):
+                    valid_items.append(item)
+                    seen_tags.update(tags)
+            elif self._cover_style.startswith('single'):
+                if item.get("BackdropImageTags") \
+                    or item.get("ParentBackdropImageTags") \
+                    or (item.get("ImageTags") and item["ImageTags"].get("Primary")):
+                    valid_items.append(item)
+                    seen_tags.update(tags)
+
         return valid_items
+
     
     def __update_single_image(self, service, library, title, item):
         """更新单图封面"""
-        logger.info(f"开始为服务器 {service.name} 的媒体库 {library['Name']} 更新单图封面")
+        logger.info(f"媒体库 {service.name}：{library['Name']} 从媒体项获取图片")
         updated_item_id = ''
         image_url = self.__get_image_url(item)
         if not image_url:
@@ -1661,7 +1729,7 @@ class MediaCoverGenerator(_PluginBase):
         if not image_path:
             return False
         updated_item_id = self.__get_item_id(item)
-        image_data = self.__generate_image_from_path(library['Name'], title, image_path)
+        image_data = self.__generate_image_from_path(service.name, library['Name'], title, image_path)
             
         if not image_data:
             return False
@@ -1680,7 +1748,7 @@ class MediaCoverGenerator(_PluginBase):
     
     def __update_grid_image(self, service, library, title, items):
         """更新九宫格封面"""
-        logger.info(f"开始为服务器 {service.name} 的媒体库 {library['Name']} 更新多图封面")
+        logger.info(f"媒体库 {service.name}：{library['Name']} 从媒体项获取图片")
 
         image_paths = []
         
@@ -1697,7 +1765,7 @@ class MediaCoverGenerator(_PluginBase):
             return False
             
         # 生成九宫格图片
-        image_data = self.__generate_image_from_path(library['Name'], title)
+        image_data = self.__generate_image_from_path(service.name, library['Name'], title)
         if not image_data:
             return False
         if service.type == 'emby':
@@ -1777,10 +1845,10 @@ class MediaCoverGenerator(_PluginBase):
                     else:
                         return data
             except Exception as err:
-                logger.error(f"获取Emby媒体库列表失败：{str(err)}")
+                logger.error(f"获取媒体库列表失败：{str(err)}")
             return []
         except Exception as err:
-            logger.error(f"获取Emby媒体库列表失败：{str(err)}")
+            logger.error(f"获取媒体库列表失败：{str(err)}")
             return []
     
     def __get_all_libraries(self, server, service):
