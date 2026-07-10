@@ -10,6 +10,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from app.log import logger
+from app.plugins.mediacovergenerator.utils.animation_utils import (
+    _clamp, _ease_in_out_sine, _ease_out_back, _lerp, _blend_rgba, _image_signature
+)
 from app.plugins.mediacovergenerator.style.style_static_2 import (
     add_film_grain,
     align_image_right,
@@ -17,34 +20,6 @@ from app.plugins.mediacovergenerator.style.style_static_2 import (
     find_dominant_vibrant_colors,
 )
 from app.plugins.mediacovergenerator.utils.color_helper import ColorHelper
-
-
-def _clamp(v, lo, hi):
-    return max(lo, min(hi, v))
-
-
-def _ease_in_out_sine(t):
-    t = _clamp(t, 0.0, 1.0)
-    return 0.5 * (1.0 - math.cos(math.pi * t))
-
-
-def _ease_out_back(t, overshoot=0.35):
-    t = _clamp(t, 0.0, 1.0)
-    u = t - 1.0
-    return 1.0 + (overshoot + 1.0) * (u ** 3) + overshoot * (u ** 2)
-
-
-def _lerp(a, b, t):
-    return a + (b - a) * t
-
-
-def _blend_rgba(a, b, t):
-    t = _clamp(t, 0.0, 1.0)
-    if t <= 0.0:
-        return a
-    if t >= 1.0:
-        return b
-    return Image.blend(a, b, t)
 
 
 def _create_dynamic_diagonal_mask(size, top_x, bottom_x):
@@ -78,15 +53,6 @@ def _create_dynamic_shadow_mask(size, top_x, bottom_x, feather_size=12):
         fill=255,
     )
     return mask.filter(ImageFilter.GaussianBlur(radius=max(2, feather_size // 2)))
-
-
-def _image_signature(image_path):
-    try:
-        with Image.open(image_path) as im:
-            sig_img = ImageOps.fit(im.convert("L"), (24, 24), method=Image.Resampling.BILINEAR)
-            return hashlib.md5(sig_img.tobytes()).hexdigest()
-    except Exception:
-        return f"path:{Path(image_path).name.lower()}"
 
 
 def _animate_zoom(base_img, phase, duration_seconds, amp=0.018):

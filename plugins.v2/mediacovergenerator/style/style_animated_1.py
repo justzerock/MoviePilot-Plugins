@@ -12,18 +12,9 @@ import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from app.log import logger
+from app.plugins.mediacovergenerator.utils.color_utils import darken_color, add_film_grain
+from app.plugins.mediacovergenerator.utils.animation_utils import _clamp
 from app.plugins.mediacovergenerator.utils.color_helper import ColorHelper
-
-
-def darken_color(color, factor=0.7):
-    return (int(color[0] * factor), int(color[1] * factor), int(color[2] * factor))
-
-
-def add_film_grain(image, intensity=0.03):
-    img_array = np.array(image, dtype=np.float32)
-    noise = np.random.normal(0, intensity * 255, img_array.shape)
-    img_array = np.clip(img_array + noise, 0, 255).astype(np.uint8)
-    return Image.fromarray(img_array)
 
 
 def crop_to_square(img):
@@ -152,10 +143,6 @@ def _ease_out_back(t, overshoot=0.55):
     t = max(0.0, min(1.0, t))
     u = t - 1.0
     return 1.0 + (overshoot + 1.0) * (u ** 3) + overshoot * (u ** 2)
-
-
-def _clamp(value, minimum, maximum):
-    return max(minimum, min(maximum, value))
 
 
 def _ease_in_out_sine(t):

@@ -3,11 +3,12 @@
         "name": "Emby媒体库封面生成",
         "description": "生成媒体库动态/静态封面，支持 Emby/Jellyfin",
         "labels": "Emby,动态封面,媒体库",
-        "version": "0.9.5",
+        "version": "0.9.6",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png",
         "author": "justzerock",
         "level": 1,
         "history": {
+            "v0.9.6": "修复生成封面没有文字的问题",
             "v0.9.5": "优化历史封面加载速度，修复入库监控停止运行的问题",
             "v0.9.3": "修复「最新入库」排序没有新入库海报的问题",
             "v0.9.2": "修复部分错误，建议重置",
