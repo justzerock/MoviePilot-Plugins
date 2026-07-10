@@ -2,7 +2,7 @@
 
 Yahaha Cover Studio 是新版媒体库封面生成工具，用于为 Emby / Jellyfin 媒体库生成静态或动态封面。新版在原「媒体库封面生成 / Media Cover Generator」基础上重做了 Vue 前端、可编辑画布、方案管理、历史封面和入库 Webhook 监控。
 
-Designed by Yahaha Design.
+Designed by Yahaha.
 
 ## 版本说明
 

@@ -115,7 +115,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件版本
     plugin_version = "2.0.0"
     # 插件作者
-    plugin_author = "Yahaha Design"
+    plugin_author = "Yahaha"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀
