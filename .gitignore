@@ -192,10 +192,21 @@ docker-app/data/tmp/**
 !docker-app/data/backups/.gitkeep
 !docker-app/data/tmp/.gitkeep
 
-# Local agent/session files
+# Local AI assistant / agent session files
 .codex/
 .codex
 CODEX_CONTEXT.md
+AGENTS.md
+.claude/
+.claude
+CLAUDE.md
+.cursor/
+.windsurf/
+.continue/
+.aider*
+.gemini/
+GEMINI.md
+.openhands/
 
 # Local backup files from iterative frontend edits
 *.bak
