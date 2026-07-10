@@ -11,61 +11,14 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from app.log import logger
+from app.plugins.mediacovergenerator.utils.animation_utils import (
+    _clamp, _ease_in_out_sine, _blend_rgba, _image_signature, _wrap_english
+)
 from app.plugins.mediacovergenerator.style.style_static_2 import (
     darken_color,
     find_dominant_vibrant_colors,
 )
 from app.plugins.mediacovergenerator.utils.color_helper import ColorHelper
-
-
-def _clamp(v, lo, hi):
-    return max(lo, min(hi, v))
-
-
-def _ease_in_out_sine(t):
-    t = _clamp(t, 0.0, 1.0)
-    return 0.5 * (1.0 - math.cos(math.pi * t))
-
-
-def _blend_rgba(a, b, t):
-    t = _clamp(t, 0.0, 1.0)
-    if t <= 0.0:
-        return a
-    if t >= 1.0:
-        return b
-    return Image.blend(a, b, t)
-
-
-def _image_signature(image_path):
-    try:
-        with Image.open(image_path) as im:
-            sig_img = ImageOps.fit(im.convert("L"), (24, 24), method=Image.Resampling.BILINEAR)
-            return hashlib.md5(sig_img.tobytes()).hexdigest()
-    except Exception:
-        return f"path:{Path(image_path).name.lower()}"
-
-
-def _wrap_english(draw, text, font, max_width):
-    if not text:
-        return []
-    bbox = draw.textbbox((0, 0), text, font=font)
-    if (bbox[2] - bbox[0]) <= max_width or " " not in text:
-        return [text]
-
-    words = text.split(" ")
-    lines = []
-    line = words[0]
-    for word in words[1:]:
-        test = f"{line} {word}"
-        tb = draw.textbbox((0, 0), test, font=font)
-        if (tb[2] - tb[0]) > max_width:
-            lines.append(line)
-            line = word
-        else:
-            line = test
-    if line:
-        lines.append(line)
-    return lines
 
 
 def _prepare_bg(image_path, canvas_size, blur_size, color_ratio, bg_color_config=None):

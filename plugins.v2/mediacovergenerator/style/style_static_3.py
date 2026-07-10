@@ -6,10 +6,14 @@ from PIL import Image, ImageFilter, ImageDraw, ImageFont, ImageOps
 import numpy as np
 import os
 import math
-import random  # 添加随机模块
+import random
 import colorsys
 import traceback
 from app.log import logger
+from app.plugins.mediacovergenerator.utils.color_utils import (
+    darken_color, add_film_grain, find_dominant_vibrant_colors,
+    is_not_black_white_gray_near, rgb_to_hsv, hsv_to_rgb, adjust_to_macaron
+)
 from app.plugins.mediacovergenerator.utils.color_helper import ColorHelper
 
 """ 
@@ -75,7 +79,7 @@ def add_shadow(img, offset=(5, 5), shadow_color=(0, 0, 0, 100), blur_radius=3):
 
 # 单行文字
 def draw_text_on_image(
-    image, text, position, font_path, default_font_path, font_size, fill_color=(255, 255, 255, 255),
+    image, text, position, font_path, font_size, fill_color=(255, 255, 255, 255),
     shadow=False, shadow_color=None, shadow_offset=10, shadow_alpha=75
 ):
     """
@@ -86,7 +90,6 @@ def draw_text_on_image(
         text: 要绘制的文字
         position: 文字位置 (x, y)
         font_path: 字体文件路径
-        default_font_path: 默认字体路径
         font_size: 字体大小
         fill_color: 文字颜色，RGBA格式
         shadow: 是否添加阴影效果
@@ -150,7 +153,6 @@ def draw_multiline_text_on_image(
     text,
     position,
     font_path,
-    default_font_path,
     font_size,
     line_spacing=10,
     fill_color=(255, 255, 255, 255),
@@ -168,7 +170,6 @@ def draw_multiline_text_on_image(
         text: 要绘制的文字
         position: 第一行文字位置 (x, y)
         font_path: 字体文件路径
-        default_font_path: 默认字体路径
         font_size: 字体大小
         line_spacing: 行间距
         fill_color: 文字颜色，RGBA格式
@@ -656,123 +657,6 @@ def create_blur_background(image_path, template_width, template_height, backgrou
 
     return final_bg_img
 
-def add_film_grain(image, intensity=0.05):
-    """
-    为图像添加胶片颗粒效果
-    
-    参数:
-        image (PIL.Image): 输入图像
-        intensity (float): 颗粒强度，范围从0到1
-    
-    返回:
-        PIL.Image: 添加颗粒效果后的图像
-    """
-    # 获取图像模式
-    mode = image.mode
-    
-    # 转换为numpy数组
-    img_array = np.array(image, dtype=np.float32)
-    
-    # 确定通道数
-    if mode == 'RGBA':
-        # 只对RGB通道添加噪声
-        channels = img_array.shape[2]
-        for i in range(min(3, channels)):  # 只处理RGB通道
-            channel = img_array[:, :, i]
-            noise = np.random.normal(0, 255 * intensity, channel.shape)
-            img_array[:, :, i] = np.clip(channel + noise, 0, 255)
-    else:
-        # RGB或其他模式
-        noise = np.random.normal(0, 255 * intensity, img_array.shape)
-        img_array = np.clip(img_array + noise, 0, 255)
-    
-    # 转换回PIL图像
-    grainy_image = Image.fromarray(img_array.astype(np.uint8), mode)
-    
-    return grainy_image
-
-def is_not_black_white_gray_near(color, threshold=20):
-    """判断颜色既不是黑、白、灰，也不是接近黑、白。"""
-    r, g, b = color
-    if (r < threshold and g < threshold and b < threshold) or \
-       (r > 255 - threshold and g > 255 - threshold and b > 255 - threshold):
-        return False
-    gray_diff_threshold = 10
-    if abs(r - g) < gray_diff_threshold and abs(g - b) < gray_diff_threshold and abs(r - b) < gray_diff_threshold:
-        return False
-    return True
-
-def rgb_to_hsv(color):
-    """将 RGB 颜色转换为 HSV 颜色。"""
-    r, g, b = [x / 255.0 for x in color]
-    return colorsys.rgb_to_hsv(r, g, b)
-
-def hsv_to_rgb(h, s, v):
-    """将 HSV 颜色转换为 RGB 颜色。"""
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    return (int(r * 255), int(g * 255), int(b * 255))
-
-def adjust_to_macaron(h, s, v, target_saturation_range=(0.2, 0.7), target_value_range=(0.55, 0.85)):
-    """将颜色的饱和度和亮度调整到接近马卡龙色系的范围，同时避免颜色过亮。"""
-    adjusted_s = min(max(s, target_saturation_range[0]), target_saturation_range[1])
-    adjusted_v = min(max(v, target_value_range[0]), target_value_range[1])
-    return adjusted_s, adjusted_v
-
-def find_dominant_vibrant_colors(image, num_colors=5):
-    """
-    从图像中提取出现次数较多的前 N 种非黑非白非灰的颜色，
-    并将其调整到接近马卡龙色系。
-    """
-    img = image.copy()  
-    img.thumbnail((100, 100))
-    img = img.convert('RGB')
-    pixels = list(img.getdata())
-    filtered_pixels = [p for p in pixels if is_not_black_white_gray_near(p)]
-    if not filtered_pixels:
-        return []
-    color_counter = Counter(filtered_pixels)
-    dominant_colors = color_counter.most_common(num_colors * 3) # 提取更多候选
-
-    macaron_colors = []
-    seen_hues = set() # 避免提取过于相似的颜色
-
-    for color, count in dominant_colors:
-        h, s, v = rgb_to_hsv(color)
-        adjusted_s, adjusted_v = adjust_to_macaron(h, s, v)
-        adjusted_rgb = hsv_to_rgb(h, adjusted_s, adjusted_v)
-
-        # 可以加入一些色调的判断，例如避免过于接近的色调
-        hue_degree = int(h * 360)
-        is_similar_hue = any(abs(hue_degree - seen) < 15 for seen in seen_hues) # 15度范围内的色调认为是相似的
-
-        if not is_similar_hue and adjusted_rgb not in macaron_colors:
-            macaron_colors.append(adjusted_rgb)
-            seen_hues.add(hue_degree)
-            if len(macaron_colors) >= num_colors:
-                break
-
-    return macaron_colors
-
-def darken_color(color, factor=0.7):
-    """
-    将颜色加深。
-    """
-    r, g, b = color
-    return (int(r * factor), int(g * factor), int(b * factor))
-
-
-def add_film_grain(image, intensity=0.05):
-    """添加胶片颗粒效果"""
-    img_array = np.array(image)
-    
-    # 创建随机噪点
-    noise = np.random.normal(0, intensity * 255, img_array.shape)
-    
-    # 应用噪点
-    img_array = img_array + noise
-    img_array = np.clip(img_array, 0, 255).astype(np.uint8)
-    
-    return Image.fromarray(img_array)
 
 def create_style_static_3(library_dir, title, font_path, font_size=(170,75), font_offset=(0,40,40), is_blur=False, blur_size=50, color_ratio=0.8, resolution_config=None, bg_color_config=None):
     """
@@ -1104,7 +988,7 @@ def create_style_static_3(library_dir, title, font_path, font_size=(170,75), fon
         text_shadow_color = darken_color(blur_color, 0.8)
         zh_font_size = float(zh_font_size) * scale
         result = draw_text_on_image(
-            result, library_ch_name, (s(73.32), s(427.34) + zh_font_size * zh_font_offset), zh_font_path, "ch.ttf", int(max(1, round(zh_font_size))),
+            result, library_ch_name, (s(73.32), s(427.34) + zh_font_size * zh_font_offset), zh_font_path, int(max(1, round(zh_font_size))),
             shadow=is_blur, shadow_color=text_shadow_color
         )
 
@@ -1156,10 +1040,10 @@ def create_style_static_3(library_dir, title, font_path, font_size=(170,75), fon
                 result,
                 library_eng_name,
                 (s(124.68), s(624.55) + s(title_spacing)),
-                en_font_path, "en.otf",
+                en_font_path,
                 int(font_size),
                 line_spacing,
-                shadow=is_blur, 
+                shadow=is_blur,
                 shadow_color=text_shadow_color,
                 is_multiline=is_multiline,
             )

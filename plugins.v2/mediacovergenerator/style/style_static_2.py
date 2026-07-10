@@ -10,93 +10,14 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from app.log import logger
+from app.plugins.mediacovergenerator.utils.color_utils import (
+    darken_color, add_film_grain, find_dominant_vibrant_colors,
+    is_not_black_white_gray_near, rgb_to_hsv, hsv_to_rgb, adjust_to_macaron
+)
 from app.plugins.mediacovergenerator.utils.color_helper import ColorHelper
 
 # ========== 配置 ==========
 canvas_size = (1920, 1080)
-
-def is_not_black_white_gray_near(color, threshold=20):
-    """判断颜色既不是黑、白、灰，也不是接近黑、白。"""
-    r, g, b = color
-    if (r < threshold and g < threshold and b < threshold) or \
-       (r > 255 - threshold and g > 255 - threshold and b > 255 - threshold):
-        return False
-    gray_diff_threshold = 10
-    if abs(r - g) < gray_diff_threshold and abs(g - b) < gray_diff_threshold and abs(r - b) < gray_diff_threshold:
-        return False
-    return True
-
-def rgb_to_hsv(color):
-    """将 RGB 颜色转换为 HSV 颜色。"""
-    r, g, b = [x / 255.0 for x in color]
-    return colorsys.rgb_to_hsv(r, g, b)
-
-def hsv_to_rgb(h, s, v):
-    """将 HSV 颜色转换为 RGB 颜色。"""
-    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-    return (int(r * 255), int(g * 255), int(b * 255))
-
-def adjust_to_macaron(h, s, v, target_saturation_range=(0.2, 0.7), target_value_range=(0.55, 0.85)):
-    """将颜色的饱和度和亮度调整到接近马卡龙色系的范围，同时避免颜色过亮。"""
-    adjusted_s = min(max(s, target_saturation_range[0]), target_saturation_range[1])
-    adjusted_v = min(max(v, target_value_range[0]), target_value_range[1])
-    return adjusted_s, adjusted_v
-
-def find_dominant_vibrant_colors(image, num_colors=5):
-    """
-    从图像中提取出现次数较多的前 N 种非黑非白非灰的颜色，
-    并将其调整到接近马卡龙色系。
-    """
-    img = image.copy()  
-    img.thumbnail((100, 100))
-    img = img.convert('RGB')
-    pixels = list(img.getdata())
-    filtered_pixels = [p for p in pixels if is_not_black_white_gray_near(p)]
-    if not filtered_pixels:
-        return []
-    color_counter = Counter(filtered_pixels)
-    dominant_colors = color_counter.most_common(num_colors * 3) # 提取更多候选
-
-    macaron_colors = []
-    seen_hues = set() # 避免提取过于相似的颜色
-
-    for color, count in dominant_colors:
-        h, s, v = rgb_to_hsv(color)
-        adjusted_s, adjusted_v = adjust_to_macaron(h, s, v)
-        adjusted_rgb = hsv_to_rgb(h, adjusted_s, adjusted_v)
-
-        # 可以加入一些色调的判断，例如避免过于接近的色调
-        hue_degree = int(h * 360)
-        is_similar_hue = any(abs(hue_degree - seen) < 15 for seen in seen_hues) # 15度范围内的色调认为是相似的
-
-        if not is_similar_hue and adjusted_rgb not in macaron_colors:
-            macaron_colors.append(adjusted_rgb)
-            seen_hues.add(hue_degree)
-            if len(macaron_colors) >= num_colors:
-                break
-
-    return macaron_colors
-
-def darken_color(color, factor=0.7):
-    """
-    将颜色加深。
-    """
-    r, g, b = color
-    return (int(r * factor), int(g * factor), int(b * factor))
-
-
-def add_film_grain(image, intensity=0.05):
-    """添加胶片颗粒效果"""
-    img_array = np.array(image)
-    
-    # 创建随机噪点
-    noise = np.random.normal(0, intensity * 255, img_array.shape)
-    
-    # 应用噪点
-    img_array = img_array + noise
-    img_array = np.clip(img_array, 0, 255).astype(np.uint8)
-    
-    return Image.fromarray(img_array)
 
 
 def crop_to_16_9(img):
