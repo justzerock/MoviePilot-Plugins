@@ -1,7 +1,7 @@
 services:
   yahaha-cover-studio:
     build: .
-    image: docker-app-yahaha-cover-studio:latest
+    image: ghcr.io/justzerock/yahaha-cover-studio:latest
     container_name: yahaha-cover-studio
     platform: linux/arm64
     ports:

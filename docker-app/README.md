@@ -11,6 +11,21 @@
 
 ## 快速部署
 
+使用已发布镜像：
+
+```bash
+docker run -d \
+  --name yahaha-cover-studio \
+  -p 8899:8080 \
+  -v "$PWD/data/config.yaml:/app/data/config.yaml" \
+  -v "$PWD/data/fonts:/app/data/fonts" \
+  -v "$PWD/data/input:/app/data/input" \
+  -v "$PWD/data/output:/app/data/output" \
+  ghcr.io/justzerock/yahaha-cover-studio:latest
+```
+
+本地构建：
+
 ```bash
 cd /Users/liu/MoviePilot-Plugins/docker-app
 cd frontend && npm ci && npm run build && cd ..
@@ -34,6 +49,43 @@ http://localhost:8899
 ```bash
 docker compose down
 ```
+
+## 自动构建镜像
+
+仓库已包含 GitHub Actions 工作流：
+
+```text
+.github/workflows/docker-image.yml
+```
+
+触发条件：
+
+- 推送到 `main`
+- 推送到 `yahaha-cover-studio`
+- 推送 `v*` tag
+- 手动执行 `workflow_dispatch`
+
+发布目标：
+
+- GitHub Container Registry：`ghcr.io/justzerock/yahaha-cover-studio`
+- Docker Hub：`docker.io/DOCKERHUB_USERNAME/yahaha-cover-studio`
+
+GHCR 使用 GitHub 自带 `GITHUB_TOKEN`，无需额外配置。Docker Hub 需要在 GitHub 仓库中添加 Secrets：
+
+```text
+DOCKERHUB_USERNAME
+DOCKERHUB_TOKEN
+```
+
+`DOCKERHUB_TOKEN` 建议使用 Docker Hub Access Token，不要直接使用账号密码。未配置 Docker Hub Secrets 时，工作流仍会构建并推送到 GHCR。
+
+镜像标签规则：
+
+- `latest`：默认分支构建
+- 分支名：例如 `main`、`yahaha-cover-studio`
+- tag：例如 `v2.0.0`
+- 语义化版本：例如 `2.0.0`、`2.0`
+- commit 短 SHA：例如 `sha-xxxxxxx`
 
 ## 持久化目录
 

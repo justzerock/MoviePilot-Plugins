@@ -1,0 +1,96 @@
+name: Build Docker Image
+
+on:
+  push:
+    branches:
+      - main
+      - yahaha-cover-studio
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: yahaha-cover-studio
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+jobs:
+  docker:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare image names
+        id: image
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          {
+            echo "images<<EOF"
+            echo "ghcr.io/${owner}/${IMAGE_NAME}"
+            if [ -n "${DOCKERHUB_USERNAME}" ]; then
+              echo "docker.io/${DOCKERHUB_USERNAME}/${IMAGE_NAME}"
+            fi
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.images }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=Yahaha Cover Studio
+            org.opencontainers.image.description=Yahaha Cover Studio / 呀哈哈封面工坊 Docker app
+            org.opencontainers.image.vendor=Yahaha Design
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker-app
+          file: ./docker-app/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
