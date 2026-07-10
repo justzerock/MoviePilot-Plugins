@@ -11,7 +11,17 @@
 
 ## 快速部署
 
-使用已发布镜像：
+### Docker Run
+
+创建数据目录：
+
+```bash
+mkdir -p yahaha-cover-studio/data/{fonts,input,output}
+touch yahaha-cover-studio/data/config.yaml
+cd yahaha-cover-studio
+```
+
+使用 Docker Hub 镜像启动：
 
 ```bash
 docker run -d \
@@ -21,21 +31,22 @@ docker run -d \
   -v "$PWD/data/fonts:/app/data/fonts" \
   -v "$PWD/data/input:/app/data/input" \
   -v "$PWD/data/output:/app/data/output" \
+  --restart unless-stopped \
+  justzerock/yahaha-cover-studio:latest
+```
+
+如果更偏好 GHCR：
+
+```bash
+docker run -d \
+  --name yahaha-cover-studio \
+  -p 8899:8080 \
+  -v "$PWD/data/config.yaml:/app/data/config.yaml" \
+  -v "$PWD/data/fonts:/app/data/fonts" \
+  -v "$PWD/data/input:/app/data/input" \
+  -v "$PWD/data/output:/app/data/output" \
+  --restart unless-stopped \
   ghcr.io/justzerock/yahaha-cover-studio:latest
-```
-
-本地构建：
-
-```bash
-cd /Users/liu/MoviePilot-Plugins/docker-app
-cd frontend && npm ci && npm run build && cd ..
-docker compose up -d --build
-```
-
-如果只是重启已构建镜像：
-
-```bash
-docker compose up -d --no-build
 ```
 
 访问：
@@ -47,7 +58,91 @@ http://localhost:8899
 停止：
 
 ```bash
+docker stop yahaha-cover-studio
+docker rm yahaha-cover-studio
+```
+
+升级：
+
+```bash
+docker pull justzerock/yahaha-cover-studio:latest
+docker stop yahaha-cover-studio
+docker rm yahaha-cover-studio
+docker run -d \
+  --name yahaha-cover-studio \
+  -p 8899:8080 \
+  -v "$PWD/data/config.yaml:/app/data/config.yaml" \
+  -v "$PWD/data/fonts:/app/data/fonts" \
+  -v "$PWD/data/input:/app/data/input" \
+  -v "$PWD/data/output:/app/data/output" \
+  --restart unless-stopped \
+  justzerock/yahaha-cover-studio:latest
+```
+
+### Docker Compose
+
+创建目录：
+
+```bash
+mkdir -p yahaha-cover-studio/data/{fonts,input,output}
+touch yahaha-cover-studio/data/config.yaml
+cd yahaha-cover-studio
+```
+
+保存为 `docker-compose.yml`：
+
+```yaml
+services:
+  yahaha-cover-studio:
+    image: justzerock/yahaha-cover-studio:latest
+    container_name: yahaha-cover-studio
+    ports:
+      - "8899:8080"
+    volumes:
+      - ./data/config.yaml:/app/data/config.yaml
+      - ./data/fonts:/app/data/fonts
+      - ./data/input:/app/data/input
+      - ./data/output:/app/data/output
+    restart: unless-stopped
+```
+
+启动：
+
+```bash
+docker compose up -d
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
+
+停止：
+
+```bash
 docker compose down
+```
+
+升级：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### 本地源码构建
+
+```bash
+cd /Users/liu/MoviePilot-Plugins/docker-app
+cd frontend && npm ci && npm run build && cd ..
+docker compose up -d --build
+```
+
+如果只是重启已构建镜像：
+
+```bash
+docker compose up -d --no-build
 ```
 
 ## 自动构建镜像
@@ -68,7 +163,7 @@ docker compose down
 发布目标：
 
 - GitHub Container Registry：`ghcr.io/justzerock/yahaha-cover-studio`
-- Docker Hub：`docker.io/DOCKERHUB_USERNAME/yahaha-cover-studio`
+- Docker Hub：`docker.io/justzerock/yahaha-cover-studio`
 
 GHCR 使用 GitHub 自带 `GITHUB_TOKEN`，无需额外配置。Docker Hub 需要在 GitHub 仓库中添加 Secrets：
 
