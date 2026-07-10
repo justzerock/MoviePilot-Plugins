@@ -75,23 +75,3 @@ docker-app/data/
 ```
 
 MoviePilot 插件版可在设置页配置 Webhook token 和媒体服务器来源。Emby 需要在通知中勾选「媒体库 -> 新媒体已添加」。不同媒体服务器可能发送 JSON、form-data 或表单字段，Yahaha Cover Studio 会尽量兼容常见格式。
-
-## 发布分支策略
-
-推荐结构：
-
-- `main`：新版「呀哈哈封面工坊 / Yahaha Cover Studio」
-- `legacy-media-cover-generator`：旧版「媒体库封面生成 / Media Cover Generator」
-- `v1-legacy-media-cover-generator`：旧版留档 tag
-- `v2.0.0`：新版首次发布 tag
-
-本地整理完成后再推送：
-
-```bash
-git push origin legacy-media-cover-generator
-git push origin yahaha-cover-studio
-git push origin v1-legacy-media-cover-generator
-git push origin v2.0.0
-```
-
-如需让新版成为默认分支，请先在 GitHub 上确认分支和 tag 均已备份，再合并或更新 `main`。
