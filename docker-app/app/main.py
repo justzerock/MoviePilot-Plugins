@@ -345,6 +345,7 @@ async def health():
         "has_emby": "emby" in kinds,
         "has_jellyfin": "jellyfin" in kinds,
         "media_servers": [client.server_name for client in clients],
+        "local_mode": bool(config.get("local_mode", False)),
     }
 
 
@@ -1814,7 +1815,9 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "jellyfin_url": str(config.get("jellyfin_url") or ""),
         "jellyfin_api_key": str(config.get("jellyfin_api_key") or ""),
         "media_servers": normalize_media_servers(config),
+        "local_mode": bool(config.get("local_mode", False)),
         "mock_enabled": bool(config.get("mock_enabled", True)),
+        "upload_after_generate": bool(config.get("upload_after_generate", True)),
         "selected_servers": config.get("selected_servers") or [],
         "include_libraries": config.get("include_libraries") or [],
         "sort_by": str(config.get("sort_by") or "Random"),
@@ -1883,7 +1886,9 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         "jellyfin_url",
         "jellyfin_api_key",
         "media_servers",
+        "local_mode",
         "mock_enabled",
+        "upload_after_generate",
         "api_token",
         "selected_servers",
         "all_servers",
@@ -1975,13 +1980,15 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
 def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
     style_config = config.get("style_config") or {}
     base, variant = STYLE_TO_PLUGIN.get(str(style_config.get("style") or "single_1"), ("static_1", "static"))
-    mock = bool(config.get("mock_enabled", True))
+    local_mode = bool(config.get("local_mode", False))
+    mock = bool(config.get("mock_enabled", True)) and not local_mode
+    local_libraries = service.local_libraries() if local_mode else []
     libraries = (
         [{"name": item["name"], "value": item["name"]} for item in MOCK_LIBRARIES]
         if mock
-        else (config.get("all_libraries") or [])
+        else ([{"name": item["name"], "value": item["name"]} for item in local_libraries] if local_mode else (config.get("all_libraries") or []))
     )
-    all_servers = ["mock"] if mock else [client.server_name for client in configured_clients(config)]
+    all_servers = ["local"] if local_mode else (["mock"] if mock else [client.server_name for client in configured_clients(config)])
     allowed_servers = set(all_servers)
     selected_servers = [
         str(item)
@@ -2004,6 +2011,7 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
         "include_libraries": config.get("include_libraries") or [],
         "all_libraries": libraries,
         "monitor_source": str(config.get("monitor_source") or "webhook") if str(config.get("monitor_source") or "webhook") in {"webhook", "emby", "jellyfin"} else "webhook",
+        "local_mode": local_mode,
         "cover_style_base": base,
         "cover_style_variant": variant,
         "poster_source": style_config.get("image_source") or "backdrop",
@@ -2040,6 +2048,11 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
 
 
 async def first_library_name(config: dict[str, Any]) -> str:
+    if config.get("local_mode", False):
+        local_libraries = service.local_libraries()
+        if local_libraries:
+            return str(local_libraries[0].get("name") or "本地封面")
+        return "本地封面"
     if config.get("mock_enabled", True):
         return MOCK_LIBRARIES[0]["name"]
     include_libraries = [str(item) for item in (config.get("include_libraries") or []) if str(item)]
@@ -2079,7 +2092,13 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     except Exception:
         input_is_default = False
     limit = max(1, min(60, required_items or int(style_config.get("image_limit") or 9)))
-    if config.get("mock_enabled", True):
+    if config.get("local_mode", False):
+        images = service.local_images(library, limit, include_mock=False)
+        server = "local"
+        source_mode = ("cache" if input_is_default else "custom") if images else "custom"
+        if not images:
+            images = service.local_images("", limit, include_mock=False)
+    elif config.get("mock_enabled", True):
         images = ensure_mock_images(input_dir, slugify(library), title_for_library(config, library)[0], limit)
         server = "mock"
         source_mode = "custom"
@@ -2128,7 +2147,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         "cover_style_base": base,
         "cover_style_variant": variant,
         "source_mode": source_mode,
-        "titles": {"zh": title, "en": subtitle or ("Mock Library" if config.get("mock_enabled", True) else "")},
+        "titles": {"zh": title, "en": subtitle or ("Local Library" if config.get("local_mode", False) else ("Mock Library" if config.get("mock_enabled", True) else ""))},
         "custom_texts": custom_texts,
         "images": [
             {

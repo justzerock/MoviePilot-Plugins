@@ -203,7 +203,10 @@ class CoverService:
         return configured_clients(self.config)
 
     def mock_enabled(self) -> bool:
-        return bool(self.config.get("mock_enabled", True))
+        return bool(self.config.get("mock_enabled", True)) and not bool(self.config.get("local_mode", False))
+
+    def local_mode(self) -> bool:
+        return bool(self.config.get("local_mode", False))
 
     def renderer(self) -> CoverRenderer:
         return CoverRenderer(DATA_DIR / "fonts")
@@ -349,6 +352,8 @@ class CoverService:
         return max(1, min(60, int(style_config.get("image_limit") or 9)))
 
     async def libraries(self) -> list[dict[str, Any]]:
+        if self.local_mode():
+            return self.local_libraries()
         if self.mock_enabled():
             return [dict(item) for item in MOCK_LIBRARIES]
         result: list[dict[str, Any]] = []
@@ -365,6 +370,14 @@ class CoverService:
         raise ValueError(f"Library not found: {library_name}")
 
     async def generate(self, library_name: str | None = None, style: str | None = None) -> list[dict[str, Any]]:
+        if self.local_mode():
+            if library_name:
+                return [await self.generate_local_library(library_name, style)]
+            libraries = self.local_libraries()
+            if libraries:
+                return [await self.generate_local_library(str(library["name"]), style) for library in libraries]
+            return [await self.generate_from_local(style)]
+
         if self.mock_enabled():
             if library_name:
                 library = mock_library_by_name(library_name)
@@ -464,7 +477,7 @@ class CoverService:
         output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
         image_paths = self.local_images("", self.image_limit_for_style(style_config, style_name))
         if not image_paths:
-            raise ValueError("No media server configured and /app/data/input has no images")
+            raise ValueError("本地图片模式未找到素材，请将图片放入 /app/data/input 或 /app/data/input/媒体库名")
         render_config = self.render_config(style_config, "本地封面", style_name)
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
@@ -490,9 +503,49 @@ class CoverService:
             "uploaded": False,
         }
 
+    async def generate_local_library(self, library_name: str, style: str | None = None) -> dict[str, Any]:
+        style_config = dict(self.config.get("style_config") or {})
+        style_name = style or style_config.get("style") or "single_1"
+        output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
+        image_limit = self.image_limit_for_style(style_config, style_name)
+        image_paths = self.local_images(library_name, image_limit, include_mock=False)
+        if not image_paths:
+            raise ValueError(f"本地媒体库没有可用图片: {library_name}")
+        title, subtitle = title_for_library(self.config, library_name)
+        render_config = self.render_config(style_config, library_name, style_name)
+        output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
+        self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
+        record_history_item({
+            "path": str(output_path),
+            "library": library_name,
+            "library_id": slugify(library_name),
+            "server": "local",
+            "style": style_name,
+            "uploaded": False,
+            "source_count": len(image_paths),
+            "created_at": output_path.stat().st_mtime,
+            "size": output_path.stat().st_size,
+        })
+        return {
+            "library": library_name,
+            "library_id": slugify(library_name),
+            "server": "local",
+            "style": style_name,
+            "output": str(output_path),
+            "url": f"/data/output/{output_path.name}",
+            "source_count": len(image_paths),
+            "uploaded": False,
+        }
+
     def local_images(self, library_name: str = "", limit: int = 9, include_mock: bool = True) -> list[Path]:
         input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
-        roots = [input_dir / slugify(library_name)] if library_name else []
+        roots: list[Path] = []
+        if library_name:
+            exact_root = input_dir / str(library_name)
+            slug_root = input_dir / slugify(library_name)
+            roots.extend([exact_root])
+            if slug_root != exact_root:
+                roots.append(slug_root)
         roots.append(input_dir)
         paths: list[Path] = []
         for root in roots:
@@ -507,7 +560,56 @@ class CoverService:
                     return paths
         return paths
 
+    def local_libraries(self) -> list[dict[str, Any]]:
+        input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
+        libraries: list[dict[str, Any]] = []
+        if not input_dir.exists():
+            return libraries
+        for child in sorted(input_dir.iterdir(), key=lambda item: item.name):
+            if not child.is_dir():
+                continue
+            images = [
+                path
+                for path in child.iterdir()
+                if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS and not path.name.lower().startswith("mock_")
+            ]
+            if images:
+                libraries.append({
+                    "id": slugify(child.name),
+                    "name": child.name,
+                    "server": "local",
+                    "type": "local",
+                    "image_count": len(images),
+                })
+        root_images = [
+            path
+            for path in input_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS and not path.name.lower().startswith("mock_")
+        ]
+        if root_images:
+            libraries.insert(0, {
+                "id": "local",
+                "name": "本地封面",
+                "server": "local",
+                "type": "local",
+                "image_count": len(root_images),
+            })
+        return libraries
+
     async def upload(self, library_name: str) -> dict[str, Any]:
+        if self.local_mode():
+            output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
+            lookup_name = "本地封面" if library_name in {"local", "本地封面", ""} else library_name
+            image_path = self.latest_output_for_library(output_dir, lookup_name)
+            if image_path is None:
+                generated = await self.generate(lookup_name if lookup_name != "本地封面" else None)
+                image_path = Path(generated[0]["output"])
+            return {
+                "library": lookup_name,
+                "local_mode": True,
+                "uploaded": False,
+                "image": str(image_path),
+            }
         if self.mock_enabled():
             output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
             image_path = self.latest_output_for_library(output_dir, library_name)

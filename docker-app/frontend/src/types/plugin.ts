@@ -12,7 +12,9 @@ export interface MediaCoverGeneratorConfig {
   jellyfin_url?: string
   jellyfin_api_key?: string
   media_servers?: MediaServerConfig[]
+  local_mode?: boolean
   mock_enabled?: boolean
+  upload_after_generate?: boolean
   api_token?: string
   selected_servers: string[]
   all_servers?: string[] | { title?: string; name?: string; value?: string }[]

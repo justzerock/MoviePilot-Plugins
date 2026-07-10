@@ -27,8 +27,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "jellyfin_url": "",
     "jellyfin_api_key": "",
     "media_servers": [],
-    "mock_enabled": True,
-    "upload_after_generate": True,
+    "local_mode": True,
+    "mock_enabled": False,
+    "upload_after_generate": False,
     "api_token": "",
     "selected_servers": [],
     "all_servers": [],
@@ -114,6 +115,27 @@ def deep_merge(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]
     return result
 
 
+def has_media_server_config(config: dict[str, Any]) -> bool:
+    if str(config.get("emby_url") or "").strip() or str(config.get("emby_api_key") or "").strip():
+        return True
+    if str(config.get("jellyfin_url") or "").strip() or str(config.get("jellyfin_api_key") or "").strip():
+        return True
+    servers = config.get("media_servers")
+    return isinstance(servers, list) and any(
+        isinstance(item, dict)
+        and str(item.get("url") or "").strip()
+        and str(item.get("api_key") or "").strip()
+        for item in servers
+    )
+
+
+def infer_local_mode(raw: dict[str, Any]) -> dict[str, Any]:
+    if "local_mode" not in raw and has_media_server_config(raw):
+        raw = dict(raw)
+        raw["local_mode"] = False
+    return raw
+
+
 def load_config() -> dict[str, Any]:
     ensure_data_dirs()
     if CONFIG_PATH.is_dir():
@@ -137,7 +159,8 @@ def load_config() -> dict[str, Any]:
         raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
     except Exception:
         raw = {}
-    config = normalize_config(deep_merge(DEFAULT_CONFIG, raw if isinstance(raw, dict) else {}))
+    raw_config = infer_local_mode(raw) if isinstance(raw, dict) else {}
+    config = normalize_config(deep_merge(DEFAULT_CONFIG, raw_config))
     if not isinstance(raw, dict) or not str(raw.get("api_token") or "").strip() or raw.get("monitor_source") != config.get("monitor_source"):
         CONFIG_PATH.write_text(
             yaml.safe_dump(config, allow_unicode=True, sort_keys=False),
@@ -148,7 +171,8 @@ def load_config() -> dict[str, Any]:
 
 def save_config(config: dict[str, Any]) -> dict[str, Any]:
     ensure_data_dirs()
-    normalized = normalize_config(deep_merge(DEFAULT_CONFIG, config or {}))
+    incoming = infer_local_mode(config or {}) if isinstance(config, dict) else {}
+    normalized = normalize_config(deep_merge(DEFAULT_CONFIG, incoming))
     CONFIG_PATH.write_text(
         yaml.safe_dump(normalized, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
@@ -163,6 +187,9 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
     config["monitor_source"] = monitor_source
     if not str(config.get("api_token") or "").strip():
         config["api_token"] = secrets.token_urlsafe(24)
+    if config.get("local_mode") is True:
+        config["mock_enabled"] = False
+        config["upload_after_generate"] = False
     return config
 
 

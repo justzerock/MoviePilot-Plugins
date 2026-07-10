@@ -220,18 +220,38 @@
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">媒体服务器</div>
-                    <p class="mcr-config-section-card__copy">配置 Emby / Jellyfin 连接；测试模式无需服务器，只在本地生成封面。</p>
+                    <p class="mcr-config-section-card__copy">可连接 Emby / Jellyfin，也可以仅使用本地图片生成封面。</p>
                   </div>
                 </header>
                 <v-row class="mcr-form-grid mcr-form-grid--center" align="center">
                   <v-col cols="12" md="3" class="mcr-config-switch-col">
                     <v-switch
-                      v-model="config.mock_enabled"
-                      label="测试模式"
+                      v-model="config.local_mode"
+                      label="本地图片模式"
                       hide-details
                     />
                   </v-col>
-                  <v-col cols="12">
+                  <v-col cols="12" md="3" class="mcr-config-switch-col">
+                    <v-switch
+                      v-model="config.mock_enabled"
+                      label="测试模式"
+                      :disabled="config.local_mode"
+                      hide-details
+                    />
+                  </v-col>
+                  <v-col v-if="config.local_mode" cols="12">
+                    <div class="mcr-local-mode-card">
+                      <v-icon icon="mdi-folder-image" size="24" />
+                      <div>
+                        <strong>无需媒体服务器 API</strong>
+                        <span>
+                          将图片放入 <code>/app/data/input/媒体库名/</code>，每个子文件夹会作为一个本地媒体库；
+                          生成结果保存到 <code>/app/data/output</code>。
+                        </span>
+                      </div>
+                    </div>
+                  </v-col>
+                  <v-col v-else cols="12">
                     <div class="mcr-server-card-list">
                       <article
                         v-for="(server, index) in normalizedMediaServers"
@@ -268,11 +288,11 @@
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">媒体库范围</div>
-                    <p class="mcr-config-section-card__copy">限定参与封面更新的服务器与媒体库。</p>
+                    <p class="mcr-config-section-card__copy">{{ config.local_mode ? '限定参与生成的本地图片文件夹。' : '限定参与封面更新的服务器与媒体库。' }}</p>
                   </div>
                 </header>
                 <v-row class="mcr-form-grid">
-                  <v-col cols="12" md="6">
+                  <v-col v-if="!config.local_mode" cols="12" md="6">
                     <BlueprintSelect
                       v-model="config.selected_servers"
                       :items="serverItems"
@@ -288,8 +308,8 @@
                       :items="libraryItems"
                       multiple
                       clearable
-                      label="更新媒体库"
-                      hint="默认更新全部，或只更新勾选的媒体库"
+                      :label="config.local_mode ? '本地图片文件夹' : '更新媒体库'"
+                      :hint="config.local_mode ? '默认生成全部子文件夹，或只生成勾选的文件夹' : '默认更新全部，或只更新勾选的媒体库'"
                     />
                   </v-col>
                 </v-row>
@@ -299,13 +319,14 @@
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">自定义图片目录</div>
-                    <p class="mcr-config-section-card__copy">优先使用指定目录中的真实素材生成封面。</p>
+                    <p class="mcr-config-section-card__copy">本地图片模式会从这里扫描素材；媒体服务器模式下也会优先使用这里的同名文件夹素材。</p>
                   </div>
                 </header>
                 <BlueprintField
                   v-model="config.covers_input"
                   label="自定义图片目录"
-                  hint="图片放在与媒体库同名的文件夹下；留空则使用媒体服务器素材"
+                  placeholder="/app/data/input"
+                  hint="飞牛等无 API 场景：按媒体库名建立子文件夹，例如 /app/data/input/动漫/01.jpg"
                 />
               </section>
 
@@ -775,7 +796,9 @@ const defaults: MediaCoverGeneratorConfig = {
   jellyfin_url: '',
   jellyfin_api_key: '',
   media_servers: [],
-  mock_enabled: true,
+  local_mode: true,
+  mock_enabled: false,
+  upload_after_generate: false,
   api_token: '',
   selected_servers: [],
   all_servers: [],
@@ -1065,6 +1088,8 @@ function deleteMediaServer(index: number) {
 function normalizeConfigInput(input?: Partial<MediaCoverGeneratorConfig> | Record<string, any>) {
   const raw = (input || {}) as Record<string, any>
   const mediaServers = normalizeMediaServers(raw)
+  const hasServerConfig = mediaServers.some((server) => String(server.url || '').trim() && String(server.api_key || '').trim())
+  const localMode = raw.local_mode === undefined ? !hasServerConfig : Boolean(raw.local_mode)
   return {
     ...raw,
     update_now: false,
@@ -1087,6 +1112,13 @@ function normalizeConfigInput(input?: Partial<MediaCoverGeneratorConfig> | Recor
     backup_enabled: Boolean(raw.backup_enabled ?? defaults.backup_enabled),
     backup_cron: raw.backup_cron ?? defaults.backup_cron,
     backup_path: raw.backup_path ?? defaults.backup_path,
+    local_mode: localMode,
+    mock_enabled: localMode
+      ? false
+      : Boolean(raw.mock_enabled ?? defaults.mock_enabled),
+    upload_after_generate: localMode
+      ? false
+      : Boolean(raw.upload_after_generate ?? defaults.upload_after_generate),
     media_servers: mediaServers,
     emby_url: mediaServers.find((server) => server.type === 'emby')?.url ?? raw.emby_url ?? defaults.emby_url,
     emby_api_key: mediaServers.find((server) => server.type === 'emby')?.api_key ?? raw.emby_api_key ?? defaults.emby_api_key,
@@ -1108,6 +1140,16 @@ watch(
     })
   },
   { deep: true },
+)
+
+watch(
+  () => config.value.local_mode,
+  (enabled) => {
+    if (!enabled) return
+    config.value.mock_enabled = false
+    config.value.upload_after_generate = false
+    config.value.selected_servers = []
+  },
 )
 
 watch(
@@ -1992,6 +2034,11 @@ async function saveConfig(options: { auto?: boolean } = {}) {
     payload.jellyfin_api_key = jellyfin?.api_key || ''
     if (payload.transfer_monitor && payload.lock_latest_sort) {
       payload.sort_by = 'DateCreated'
+    }
+    if (payload.local_mode) {
+      payload.mock_enabled = false
+      payload.upload_after_generate = false
+      payload.selected_servers = []
     }
     const resp = await props.api.post<{ code: number; data?: { config?: Partial<MediaCoverGeneratorConfig> }; msg?: string }>(
       'plugin/MediaCoverGenerator/save_config',
@@ -5226,6 +5273,52 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   gap: 12px;
 }
 
+.mcr-local-mode-card {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--mcr-color-border);
+  border-radius: 20px;
+  background: var(--color-primary-soft, #eaf2ff);
+  color: var(--mcr-color-on-surface);
+  box-shadow: 0 14px 34px var(--mcr-color-shadow);
+}
+
+.mcr-local-mode-card > .v-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--mcr-color-surface);
+  color: var(--mcr-color-primary);
+}
+
+.mcr-local-mode-card div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mcr-local-mode-card strong {
+  color: var(--mcr-color-on-surface);
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.mcr-local-mode-card span {
+  color: var(--mcr-color-on-surface-variant);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.mcr-local-mode-card code {
+  color: var(--mcr-color-primary);
+  font-weight: 800;
+}
+
 .mcr-server-card,
 .mcr-server-add-card {
   min-height: 92px;
@@ -5344,9 +5437,14 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 }
 
 .mcr-config-shell[data-mcr-theme="dark"] .mcr-server-card,
-.mcr-config-shell[data-mcr-theme="dark"] .mcr-server-add-card {
+.mcr-config-shell[data-mcr-theme="dark"] .mcr-server-add-card,
+.mcr-config-shell[data-mcr-theme="dark"] .mcr-local-mode-card {
   border-color: var(--mcr-color-border);
   background: var(--mcr-color-surface-container-low) !important;
+}
+
+.mcr-config-shell[data-mcr-theme="dark"] .mcr-local-mode-card > .v-icon {
+  background: var(--mcr-color-surface-container);
 }
 
 .mcr-config-shell[data-mcr-theme="dark"] .mcr-server-card__actions button {

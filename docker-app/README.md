@@ -4,7 +4,7 @@
 
 - 通过 Emby / Jellyfin API 获取媒体库、媒体项目、图片素材，并上传媒体库封面。
 - 前端复用 MoviePilot 插件版 Vue / Vuetify 页面，并通过 Docker 兼容 API 适配运行。
-- 支持使用本地 `data/input` 图片离线生成。
+- 支持使用本地 `data/input` 图片离线生成，适合飞牛影视等没有 API 的媒体应用。
 - 内置静态、动态和自定义画布兼容渲染，前端复用插件版 Vue 页面。
 - 使用 `config.yaml` 管理服务器、标题映射和样式参数。
 - 提供 Web API 和轻量 Web UI。
@@ -146,19 +146,35 @@ volumes:
 
 - `data/config.yaml`：应用配置。
 - `data/fonts`：自定义字体目录，支持 `ttf` / `ttc` / `otf` 等 Pillow 可读取字体。
-- `data/input`：本地图片素材。可直接放图片，也可按媒体库名建子目录。
+- `data/input`：本地图片素材。飞牛影视等无 API 场景建议按媒体库名建子目录。
 - `data/output`：生成后的封面。
+
+本地图片模式的推荐目录结构：
+
+```text
+data/input/
+  动漫/
+    01.jpg
+    02.jpg
+  音乐/
+    01.jpg
+    02.jpg
+```
+
+每个子文件夹会显示为一个本地媒体库。点击「立即生成」后，封面会保存到 `data/output`，不需要配置 Emby / Jellyfin。
 
 ## 配置说明
 
-默认配置位于 [data/config.yaml](/Users/liu/MoviePilot-Plugins/docker-app/data/config.yaml)。
+默认配置位于 `data/config.yaml`。首次启动会自动创建配置文件。
 
 ```yaml
-emby_url: "http://127.0.0.1:8096"
-emby_api_key: "YOUR_EMBY_API_KEY"
+emby_url: ""
+emby_api_key: ""
 jellyfin_url: ""
 jellyfin_api_key: ""
-mock_enabled: true
+local_mode: true
+mock_enabled: false
+upload_after_generate: false
 covers_input: /app/data/input
 covers_output: /app/data/output
 title_config:
@@ -195,7 +211,9 @@ api_token: "自动生成，建议不要留空"
 
 - `emby_url` / `emby_api_key`：Emby 地址和 API Key。
 - `jellyfin_url` / `jellyfin_api_key`：Jellyfin 地址和 API Key。
-- `mock_enabled`：是否使用模拟媒体库。没有 Emby / Jellyfin 时建议设为 `true`。
+- `local_mode`：本地图片模式。开启后不需要媒体服务器 API，只扫描 `covers_input` 并生成到 `covers_output`。
+- `mock_enabled`：测试模式，仅用于演示模拟媒体库。本地图片模式开启时会自动关闭。
+- `upload_after_generate`：生成后是否上传到媒体服务器。本地图片模式开启时会自动关闭。
 - `covers_input`：本地素材目录，容器内建议保持 `/app/data/input`。
 - `covers_output`：封面输出目录，容器内建议保持 `/app/data/output`。
 - `title_config`：媒体库标题映射，键名必须和媒体库名称一致。
@@ -216,8 +234,8 @@ api_token: "自动生成，建议不要留空"
 ## Web API
 
 - `GET /api/health`：健康检查。
-- `GET /api/libraries`：获取 Emby / Jellyfin 媒体库列表。
-- `POST /api/generate`：生成全部媒体库封面；未配置媒体服务器时使用本地 `data/input`。
+- `GET /api/libraries`：获取媒体库列表；本地图片模式下返回 `data/input` 子文件夹。
+- `POST /api/generate`：生成全部媒体库封面；本地图片模式下只写入 `data/output`。
 - `POST /api/generate/{library_name}`：生成指定媒体库封面。
 - `POST /api/upload/{library_name}`：上传最近生成的指定媒体库封面。
 - `GET /api/config`：读取配置。
@@ -374,16 +392,38 @@ Docker 版会按输出文件扩展名上传正确的 `Content-Type`：
 
 如果媒体服务器不接受动图作为媒体库封面，可将动态方案格式改为 `gif` 或切回静态方案后上传。
 
-### Mock 模式怎么用
+### 本地图片模式怎么用
 
-可以。默认 `mock_enabled: true`，无需连接 Emby / Jellyfin，也会返回模拟媒体库并自动生成测试素材。调用：
+适合飞牛影视、本地文件夹或没有媒体服务器 API 的场景。保持设置页「本地图片模式」开启，然后把图片放到：
+
+```text
+data/input/媒体库名/
+```
+
+例如：
+
+```text
+data/input/动漫/01.jpg
+data/input/动漫/02.jpg
+data/input/音乐/01.jpg
+```
+
+刷新页面或点击「立即生成」后，`动漫`、`音乐` 会作为本地媒体库参与生成。生成结果在：
+
+```text
+data/output/
+```
+
+### 测试模式怎么用
+
+测试模式只用于体验页面效果。关闭「本地图片模式」并开启「测试模式」后，无需连接 Emby / Jellyfin，也会返回模拟媒体库并自动生成测试素材。调用：
 
 ```bash
 curl http://localhost:8899/api/libraries
 curl -X POST http://localhost:8899/api/generate -H 'Content-Type: application/json' -d '{}'
 ```
 
-切换真实 Emby / Jellyfin 时，把 `mock_enabled` 改成 `false`，并填写对应服务器 URL 和 API Key。
+切换真实 Emby / Jellyfin 时，关闭「本地图片模式」和「测试模式」，并填写对应服务器 URL 和 API Key。
 
 ### 清理缓存会删除什么
 

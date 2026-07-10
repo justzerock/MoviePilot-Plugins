@@ -45,7 +45,7 @@ plugins.v2/yahahacoverstudio/dist
 
 ## Docker 独立版
 
-Docker 版不依赖 MoviePilot，可直接运行独立 Web UI。
+Docker 版不依赖 MoviePilot，可直接运行独立 Web UI。没有 Emby / Jellyfin API 时，也可以使用本地图片模式，只生成封面到本地文件夹。
 
 使用 Docker Hub 镜像：
 
@@ -74,6 +74,19 @@ services:
 ```
 
 注意：不要单独挂载 `./data/config.yaml:/app/data/config.yaml`。如果宿主机文件不存在，Docker 会把 `config.yaml` 创建成目录。挂载整个 `./data:/app/data` 后，程序会自动生成真正的 `config.yaml` 文件。
+
+飞牛影视等无 API 场景，可以直接把图片按媒体库名放到本地目录：
+
+```text
+data/input/
+  动漫/
+    01.jpg
+    02.jpg
+  音乐/
+    01.jpg
+```
+
+保持设置页「本地图片模式」开启，不需要配置媒体服务器；生成结果会输出到 `data/output`。
 
 默认访问地址：
 
