@@ -4,6 +4,7 @@ from copy import deepcopy
 import os
 from pathlib import Path
 import secrets
+import shutil
 from typing import Any
 
 import yaml
@@ -115,6 +116,20 @@ def deep_merge(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]
 
 def load_config() -> dict[str, Any]:
     ensure_data_dirs()
+    if CONFIG_PATH.is_dir():
+        backup_path = DATA_DIR / "config.yaml.invalid-dir"
+        index = 1
+        while backup_path.exists():
+            backup_path = DATA_DIR / f"config.yaml.invalid-dir.{index}"
+            index += 1
+        try:
+            if any(CONFIG_PATH.iterdir()):
+                shutil.move(str(CONFIG_PATH), str(backup_path))
+            else:
+                CONFIG_PATH.rmdir()
+        except Exception:
+            raw = {}
+            return normalize_config(deep_merge(DEFAULT_CONFIG, raw))
     if not CONFIG_PATH.exists():
         save_config(DEFAULT_CONFIG)
         return load_config()

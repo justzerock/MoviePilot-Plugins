@@ -50,6 +50,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+!docker-app/app/cover/
+!docker-app/app/cover/**
 
 # Translations
 *.mo

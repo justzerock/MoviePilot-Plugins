@@ -16,8 +16,7 @@
 创建数据目录：
 
 ```bash
-mkdir -p yahaha-cover-studio/data/{fonts,input,output}
-touch yahaha-cover-studio/data/config.yaml
+mkdir -p yahaha-cover-studio/data
 cd yahaha-cover-studio
 ```
 
@@ -27,10 +26,7 @@ cd yahaha-cover-studio
 docker run -d \
   --name yahaha-cover-studio \
   -p 8899:8080 \
-  -v "$PWD/data/config.yaml:/app/data/config.yaml" \
-  -v "$PWD/data/fonts:/app/data/fonts" \
-  -v "$PWD/data/input:/app/data/input" \
-  -v "$PWD/data/output:/app/data/output" \
+  -v "$PWD/data:/app/data" \
   --restart unless-stopped \
   justzerock/yahaha-cover-studio:latest
 ```
@@ -41,10 +37,7 @@ docker run -d \
 docker run -d \
   --name yahaha-cover-studio \
   -p 8899:8080 \
-  -v "$PWD/data/config.yaml:/app/data/config.yaml" \
-  -v "$PWD/data/fonts:/app/data/fonts" \
-  -v "$PWD/data/input:/app/data/input" \
-  -v "$PWD/data/output:/app/data/output" \
+  -v "$PWD/data:/app/data" \
   --restart unless-stopped \
   ghcr.io/justzerock/yahaha-cover-studio:latest
 ```
@@ -71,10 +64,7 @@ docker rm yahaha-cover-studio
 docker run -d \
   --name yahaha-cover-studio \
   -p 8899:8080 \
-  -v "$PWD/data/config.yaml:/app/data/config.yaml" \
-  -v "$PWD/data/fonts:/app/data/fonts" \
-  -v "$PWD/data/input:/app/data/input" \
-  -v "$PWD/data/output:/app/data/output" \
+  -v "$PWD/data:/app/data" \
   --restart unless-stopped \
   justzerock/yahaha-cover-studio:latest
 ```
@@ -84,8 +74,7 @@ docker run -d \
 创建目录：
 
 ```bash
-mkdir -p yahaha-cover-studio/data/{fonts,input,output}
-touch yahaha-cover-studio/data/config.yaml
+mkdir -p yahaha-cover-studio/data
 cd yahaha-cover-studio
 ```
 
@@ -99,12 +88,11 @@ services:
     ports:
       - "8899:8080"
     volumes:
-      - ./data/config.yaml:/app/data/config.yaml
-      - ./data/fonts:/app/data/fonts
-      - ./data/input:/app/data/input
-      - ./data/output:/app/data/output
+      - ./data:/app/data
     restart: unless-stopped
 ```
+
+不要单独挂载 `./data/config.yaml:/app/data/config.yaml`。如果宿主机上 `config.yaml` 还不存在，Docker 会把它创建成目录，导致配置无法保存。挂载整个 `./data:/app/data` 后，应用会在首次启动时自动生成 `config.yaml`，并创建 `fonts`、`input`、`output` 等子目录。
 
 启动：
 
@@ -188,10 +176,7 @@ DOCKERHUB_TOKEN
 
 ```yaml
 volumes:
-  - ./data/config.yaml:/app/data/config.yaml
-  - ./data/fonts:/app/data/fonts
-  - ./data/input:/app/data/input
-  - ./data/output:/app/data/output
+  - ./data:/app/data
 ```
 
 目录用途：

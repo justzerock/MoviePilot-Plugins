@@ -50,15 +50,11 @@ Docker 版不依赖 MoviePilot，可直接运行独立 Web UI。
 使用 Docker Hub 镜像：
 
 ```bash
-mkdir -p yahaha-cover-studio/data/{fonts,input,output}
-touch yahaha-cover-studio/data/config.yaml
+mkdir -p yahaha-cover-studio/data
 docker run -d \
   --name yahaha-cover-studio \
   -p 8899:8080 \
-  -v "$PWD/yahaha-cover-studio/data/config.yaml:/app/data/config.yaml" \
-  -v "$PWD/yahaha-cover-studio/data/fonts:/app/data/fonts" \
-  -v "$PWD/yahaha-cover-studio/data/input:/app/data/input" \
-  -v "$PWD/yahaha-cover-studio/data/output:/app/data/output" \
+  -v "$PWD/yahaha-cover-studio/data:/app/data" \
   --restart unless-stopped \
   justzerock/yahaha-cover-studio:latest
 ```
@@ -73,12 +69,11 @@ services:
     ports:
       - "8899:8080"
     volumes:
-      - ./data/config.yaml:/app/data/config.yaml
-      - ./data/fonts:/app/data/fonts
-      - ./data/input:/app/data/input
-      - ./data/output:/app/data/output
+      - ./data:/app/data
     restart: unless-stopped
 ```
+
+注意：不要单独挂载 `./data/config.yaml:/app/data/config.yaml`。如果宿主机文件不存在，Docker 会把 `config.yaml` 创建成目录。挂载整个 `./data:/app/data` 后，程序会自动生成真正的 `config.yaml` 文件。
 
 默认访问地址：
 
