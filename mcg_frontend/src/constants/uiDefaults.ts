@@ -1,0 +1,41 @@
+export const MCR_CONTROL_DEFAULTS = {
+  VTextField: {
+    density: 'compact',
+    variant: 'outlined',
+    color: 'var(--mcr-control-color)',
+    baseColor: 'var(--mcr-control-base)',
+    bgColor: 'var(--mcr-control-bg)',
+    rounded: 'lg',
+    hideDetails: 'auto',
+  },
+  VTextarea: {
+    density: 'comfortable',
+    variant: 'outlined',
+    color: 'var(--mcr-control-color)',
+    baseColor: 'var(--mcr-control-base)',
+    bgColor: 'var(--mcr-control-bg)',
+    rounded: 'lg',
+    hideDetails: 'auto',
+  },
+  VSelect: {
+    density: 'compact',
+    variant: 'outlined',
+    color: 'var(--mcr-control-color)',
+    baseColor: 'var(--mcr-control-base)',
+    bgColor: 'var(--mcr-control-bg)',
+    rounded: 'lg',
+    hideDetails: 'auto',
+  },
+  VSwitch: {
+    density: 'compact',
+    color: 'var(--mcr-control-color)',
+    baseColor: 'var(--mcr-control-base-soft)',
+    hideDetails: 'auto',
+  },
+  VSlider: {
+    color: 'var(--mcr-control-color)',
+    trackColor: 'var(--mcr-control-track)',
+    thumbColor: 'var(--mcr-control-color)',
+    hideDetails: 'auto',
+  },
+} as const

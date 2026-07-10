@@ -163,3 +163,52 @@ cython_debug/
 .vscode/
 .DS_Store
 plugins.v2/.DS_Store
+
+# JavaScript dependencies and local build caches
+node_modules/
+*/node_modules/
+mcg_frontend/node_modules/
+docker-app/frontend/node_modules/
+.vite/
+
+# Python caches inside plugin sources
+__pycache__/
+*.py[cod]
+plugins.v2/**/__pycache__/
+plugins.v2/**/*.pyc
+
+# Local runtime data and secrets
+docker-app/data/config.yaml
+docker-app/data/input/**
+docker-app/data/output/**
+docker-app/data/fonts/**
+docker-app/data/stickers/**
+docker-app/data/backups/**
+docker-app/data/tmp/**
+!docker-app/data/input/.gitkeep
+!docker-app/data/output/.gitkeep
+!docker-app/data/fonts/.gitkeep
+!docker-app/data/stickers/.gitkeep
+!docker-app/data/backups/.gitkeep
+!docker-app/data/tmp/.gitkeep
+
+# Local agent/session files
+.codex/
+.codex
+CODEX_CONTEXT.md
+
+# Local backup files from iterative frontend edits
+*.bak
+*.bak[0-9]
+*.old
+
+# New Yahaha plugin files were copied to plugins.v2/yahahacoverstudio.
+# Keep the legacy plugin directory clean in this branch without deleting local leftovers.
+plugins.v2/mediacovergenerator/assets/
+plugins.v2/mediacovergenerator/dist/
+plugins.v2/mediacovergenerator/style/legacy_presets_20260430/
+plugins.v2/mediacovergenerator/style/preset_backup_20260506/
+plugins.v2/mediacovergenerator/style/preset_templates.py
+plugins.v2/mediacovergenerator/style/style_static_custom.py
+plugins.v2/mediacovergenerator/style/style_static_template.py
+plugins.v2/mediacovergenerator/template_renderer.py

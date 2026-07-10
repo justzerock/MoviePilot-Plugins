@@ -29,5 +29,17 @@
             "v0.2": "测试",
             "v0.1": "自定义字体"
         }
+    },
+    "YahahaCoverStudio": {
+        "name": "呀哈哈封面工坊",
+        "description": "Yahaha Cover Studio，新版媒体库封面工坊，支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控与 Docker 独立版",
+        "labels": "Yahaha Cover Studio,媒体库封面,Emby,Jellyfin,动态封面,可编辑画布,Webhook",
+        "version": "2.0.0",
+        "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.webp",
+        "author": "Yahaha Design",
+        "level": 1,
+        "history": {
+            "v2.0.0": "更名为呀哈哈封面工坊 / Yahaha Cover Studio，作为新版插件发布；新增 Vue 前端、可编辑布局、方案管理、历史封面、Webhook 与 Docker 独立版。旧版媒体库封面生成已保留在 legacy-media-cover-generator 分支和 v1-legacy-media-cover-generator tag。"
+        }
     }
 }

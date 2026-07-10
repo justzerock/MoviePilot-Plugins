@@ -1,0 +1,14 @@
+services:
+  yahaha-cover-studio:
+    build: .
+    image: docker-app-yahaha-cover-studio:latest
+    container_name: yahaha-cover-studio
+    platform: linux/arm64
+    ports:
+      - "8899:8080"
+    volumes:
+      - ./data/config.yaml:/app/data/config.yaml
+      - ./data/fonts:/app/data/fonts
+      - ./data/input:/app/data/input
+      - ./data/output:/app/data/output
+    restart: unless-stopped
