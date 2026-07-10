@@ -45,6 +45,13 @@ jobs:
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./docker-app/frontend/package.json').version")"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -56,11 +63,14 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/yahaha-cover-studio' }}
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/yahaha-cover-studio' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/yahaha-cover-studio' || startsWith(github.ref, 'refs/tags/v') }}
           labels: |
             org.opencontainers.image.title=Yahaha Cover Studio
             org.opencontainers.image.description=Yahaha Cover Studio / 呀哈哈封面工坊 Docker app
-            org.opencontainers.image.vendor=Yahaha Design
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.vendor=Yahaha
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
