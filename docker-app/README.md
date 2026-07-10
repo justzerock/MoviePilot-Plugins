@@ -3,9 +3,8 @@
 独立 Docker 版媒体库封面生成器。它从当前 MoviePilot 插件的封面生成思路中拆出了一个不依赖 MoviePilot 的服务：
 
 - 通过 Emby / Jellyfin API 获取媒体库、媒体项目、图片素材，并上传媒体库封面。
-- 前端复用 MoviePilot 插件版 Vue / Vuetify 页面，并通过 Docker 兼容 API 适配运行。
 - 支持使用本地 `data/input` 图片离线生成，适合飞牛影视等没有 API 的媒体应用。
-- 内置静态、动态和自定义画布兼容渲染，前端复用插件版 Vue 页面。
+- 内置静态、动态和自定义画布兼容渲染。
 - 使用 `config.yaml` 管理服务器、标题映射和样式参数。
 - 提供 Web API 和轻量 Web UI。
 
@@ -92,8 +91,6 @@ services:
     restart: unless-stopped
 ```
 
-不要单独挂载 `./data/config.yaml:/app/data/config.yaml`。如果宿主机上 `config.yaml` 还不存在，Docker 会把它创建成目录，导致配置无法保存。挂载整个 `./data:/app/data` 后，应用会在首次启动时自动生成 `config.yaml`，并创建 `fonts`、`input`、`output` 等子目录。
-
 启动：
 
 ```bash
@@ -117,20 +114,6 @@ docker compose down
 ```bash
 docker compose pull
 docker compose up -d
-```
-
-### 本地源码构建
-
-```bash
-cd /Users/liu/MoviePilot-Plugins/docker-app
-cd frontend && npm ci && npm run build && cd ..
-docker compose up -d --build
-```
-
-如果只是重启已构建镜像：
-
-```bash
-docker compose up -d --no-build
 ```
 
 ## 持久化目录

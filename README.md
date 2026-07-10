@@ -1,18 +1,8 @@
 # 呀哈哈封面工坊 / Yahaha Cover Studio
 
-Yahaha Cover Studio 是新版媒体库封面生成工具，用于为 Emby / Jellyfin 媒体库生成静态或动态封面。新版在原「媒体库封面生成 / Media Cover Generator」基础上重做了 Vue 前端、可编辑画布、方案管理、历史封面和入库 Webhook 监控。
+Yahaha Cover Studio 是新版媒体库封面生成工具，用于为 Emby / Jellyfin 媒体库生成静态或动态封面。新版在原「媒体库封面生成 / Media Cover Generator」基础上增加了可编辑画布、方案管理、历史封面和入库 Webhook 监控。
 
 Designed by Yahaha.
-
-## 版本说明
-
-- 新版插件：`plugins.v2/yahahacoverstudio`
-- 旧版插件：`plugins.v2/mediacovergenerator`
-- 旧版留档分支：`legacy-media-cover-generator`
-- 旧版留档 tag：`v1-legacy-media-cover-generator`
-- 新版首次发布 tag：`v2.0.0`
-
-旧版「媒体库封面生成 / Media Cover Generator」不会被删除；需要旧版时可切换到留档分支或 tag。
 
 ## MoviePilot 插件版
 
@@ -28,20 +18,6 @@ Designed by Yahaha.
 - Emby / Jellyfin 媒体库素材读取
 - Webhook 入库监控
 - 配置备份与还原
-
-前端构建目录：
-
-```bash
-cd mcg_frontend
-npm install
-npm run build
-```
-
-构建产物会输出到：
-
-```text
-plugins.v2/yahahacoverstudio/dist
-```
 
 ## Docker 独立版
 
@@ -72,8 +48,6 @@ services:
       - ./data:/app/data
     restart: unless-stopped
 ```
-
-注意：不要单独挂载 `./data/config.yaml:/app/data/config.yaml`。如果宿主机文件不存在，Docker 会把 `config.yaml` 创建成目录。挂载整个 `./data:/app/data` 后，程序会自动生成真正的 `config.yaml` 文件。
 
 飞牛影视等无 API 场景，可以直接把图片按媒体库名放到本地目录：
 
