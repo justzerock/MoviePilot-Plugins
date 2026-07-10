@@ -1957,6 +1957,8 @@ function stopGenerationStatusPoller() {
 
 async function refreshAfterGenerationComplete() {
   if (!componentActive) return
+  await loadHistory()
+  if (!componentActive) return
   await loadPreviewSources()
   if (!componentActive) return
   if (previewMode.value === 'backend') {

@@ -187,14 +187,27 @@ class MediaServerClient:
     async def upload_library_cover(self, library_id: str, image_path: Path) -> dict[str, Any]:
         content_type = media_image_mime_type(image_path)
         image_base64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        headers = {
+            "Content-Type": content_type,
+            # Both headers are accepted by the Emby/Jellyfin families. The
+            # query key remains for older Emby builds and reverse proxies.
+            "X-Emby-Token": self.api_key,
+            "X-MediaBrowser-Token": self.api_key,
+        }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
                 self._url(f"Items/{library_id}/Images/Primary"),
                 content=image_base64,
-                headers={"Content-Type": content_type},
+                headers=headers,
             )
-            response.raise_for_status()
-            return {"ok": True, "status_code": response.status_code}
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as error:
+                detail = response.text.strip().replace("\n", " ")[:300]
+                raise RuntimeError(
+                    f"{self.server_name} 上传媒体库封面失败 ({response.status_code}){': ' + detail if detail else ''}"
+                ) from error
+            return {"ok": True, "uploaded": True, "status_code": response.status_code}
 
 
 def configured_clients(config: dict[str, Any]) -> list[MediaServerClient]:

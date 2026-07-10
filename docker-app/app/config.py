@@ -29,7 +29,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "media_servers": [],
     "local_mode": True,
     "mock_enabled": False,
-    "upload_after_generate": False,
+    # Server-backed generation always applies the cover after rendering. Local
+    # and mock modes keep this disabled because there is no target server.
+    "upload_after_generate": True,
     "api_token": "",
     "selected_servers": [],
     "all_servers": [],
@@ -190,6 +192,11 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
     if config.get("local_mode") is True:
         config["mock_enabled"] = False
         config["upload_after_generate"] = False
+    elif has_media_server_config(config) and not bool(config.get("mock_enabled", False)):
+        # Older Docker configs defaulted this value to false, which left a
+        # generated image in data/output without ever applying it to Emby or
+        # Jellyfin. Server mode should never silently behave like local mode.
+        config["upload_after_generate"] = True
     return config
 
 

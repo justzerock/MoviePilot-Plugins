@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import urllib.request
@@ -231,6 +232,32 @@ class CoverService:
 
     def renderer(self) -> CoverRenderer:
         return CoverRenderer(DATA_DIR / "fonts")
+
+    async def render_cover(
+        self,
+        image_paths: list[Path],
+        title: str,
+        subtitle: str,
+        style_name: str,
+        render_config: dict[str, Any],
+        output_path: Path,
+    ) -> Path:
+        """Keep CPU-bound Pillow rendering off FastAPI's event loop.
+
+        The generation manager is intentionally cooperative: a stop request
+        can be served immediately while the current cover finishes rendering,
+        and the manager will not begin another library afterwards.
+        """
+        renderer = self.renderer()
+        return await asyncio.to_thread(
+            renderer.render,
+            image_paths,
+            title,
+            subtitle,
+            style_name,
+            render_config,
+            output_path,
+        )
 
     def font_library_index(self) -> dict[str, str]:
         fonts_dir = DATA_DIR / "fonts"
@@ -465,7 +492,10 @@ class CoverService:
                 output.append(await self.generate_library(client, library, style))
             return output
 
-        return [await self.generate_from_local(style)]
+        # A configured server must never fall back to local/mock sources. That
+        # creates a convincing output file but leaves the real library cover
+        # untouched and makes diagnosis unnecessarily difficult.
+        raise ValueError("未发现可生成的媒体库，请检查媒体服务器连接与媒体库范围")
 
     async def generate_library(self, client: MediaServerClient, library: MediaLibrary, style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
@@ -505,7 +535,7 @@ class CoverService:
         title, subtitle = title_for_library(self.config, library.name)
         render_config = self.render_config(style_config, library.name, style_name)
         output_path = output_dir / f"{slugify(library.name)}_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
+        await self.render_cover(image_paths, title, subtitle, style_name, render_config, output_path)
         uploaded = False
         upload_error = ""
         if bool(self.config.get("upload_after_generate", True)):
@@ -547,7 +577,7 @@ class CoverService:
             raise ValueError("本地图片模式未找到素材，请将图片放入 /app/data/input 或 /app/data/input/媒体库名")
         render_config = self.render_config(style_config, "本地封面", style_name)
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
+        await self.render_cover(image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
         record_history_item({
             "path": str(output_path),
             "library": "本地封面",
@@ -581,7 +611,7 @@ class CoverService:
         title, subtitle = title_for_library(self.config, library_name)
         render_config = self.render_config(style_config, library_name, style_name)
         output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
+        await self.render_cover(image_paths, title, subtitle, style_name, render_config, output_path)
         record_history_item({
             "path": str(output_path),
             "library": library_name,
@@ -718,7 +748,7 @@ class CoverService:
         image_paths = ensure_mock_images(input_dir, slugify(library["name"]), title, image_limit)
         render_config = self.render_config(style_config, library["name"], style_name)
         output_path = output_dir / f"{slugify(library['name'])}_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
+        await self.render_cover(image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
         record_history_item({
             "path": str(output_path),
             "library": library["name"],

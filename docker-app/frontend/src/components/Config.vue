@@ -1108,7 +1108,7 @@ function normalizeConfigInput(input?: Partial<MediaCoverGeneratorConfig> | Recor
       : Boolean(raw.mock_enabled ?? defaults.mock_enabled),
     upload_after_generate: localMode
       ? false
-      : Boolean(raw.upload_after_generate ?? defaults.upload_after_generate),
+      : hasServerConfig && !Boolean(raw.mock_enabled),
     media_servers: mediaServers,
     emby_url: mediaServers.find((server) => server.type === 'emby')?.url ?? raw.emby_url ?? defaults.emby_url,
     emby_api_key: mediaServers.find((server) => server.type === 'emby')?.api_key ?? raw.emby_api_key ?? defaults.emby_api_key,
@@ -2075,6 +2075,10 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       payload.mock_enabled = false
       payload.upload_after_generate = false
       payload.selected_servers = []
+    } else if (servers.some((server) => server.url.trim() && server.api_key.trim()) && !payload.mock_enabled) {
+      // Docker server mode has one expected outcome: render and immediately
+      // apply the cover. Do not preserve the old local-mode default here.
+      payload.upload_after_generate = true
     }
     const resp = await props.api.post<{ code: number; data?: { config?: Partial<MediaCoverGeneratorConfig> }; msg?: string }>(
       'plugin/MediaCoverGenerator/save_config',

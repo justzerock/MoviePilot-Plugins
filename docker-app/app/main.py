@@ -175,7 +175,7 @@ class GenerationManager:
     async def stop(self) -> dict[str, Any]:
         if self.task and not self.task.done():
             self.stop_requested = True
-            self.label = "停止中"
+            self.label = "正在停止，完成当前封面后取消"
             return self.snapshot()
         self.is_generating = False
         self.label = "已停止"
@@ -189,8 +189,11 @@ class GenerationManager:
                 self.total = 1
                 self.label = f"正在生成 {library_name}"
                 self.items.extend(await self.service.generate(library_name, style_name))
+                if self.stop_requested:
+                    self.label = "已停止"
+                    return
                 self.current = 1
-                self.label = "生成完成"
+                self.label = self._completion_label()
                 return
             libraries = self.service.selected_generation_libraries(await self.service.libraries())
             if not libraries:
@@ -199,11 +202,7 @@ class GenerationManager:
                     self.total = 0
                     self.label = "未找到匹配的媒体库"
                     return
-                self.total = 1
-                self.label = "正在生成本地封面"
-                self.items.extend(await self.service.generate(None, style_name))
-                self.current = 1
-                self.label = "生成完成"
+                self.label = "未发现可生成的媒体库"
                 return
             self.total = len(libraries)
             for library in libraries:
@@ -218,15 +217,27 @@ class GenerationManager:
                 self.label = f"正在生成 {library_name}"
                 self.items.extend(await self.service.generate(library_key or library_name, style_name))
                 self.current += 1
+                if self.stop_requested:
+                    self.label = "已停止"
+                    break
                 await asyncio.sleep(0)
             if not self.stop_requested:
-                self.label = "生成完成"
+                self.label = self._completion_label()
         except Exception as err:
             self.error = str(err)
             self.label = "生成失败"
         finally:
             self.is_generating = False
             self.stop_requested = False
+
+    def _completion_label(self) -> str:
+        upload_errors = [
+            item for item in self.items
+            if item.get("upload_error") or (item.get("server") not in {"local", "mock"} and not item.get("uploaded"))
+        ]
+        if upload_errors:
+            return f"生成完成，{len(upload_errors)} 个封面上传失败"
+        return "生成完成"
 
 
 generation_manager = GenerationManager(service)
@@ -532,21 +543,33 @@ async def plugin_status():
 
 @app.get("/api/plugin/MediaCoverGenerator/history")
 async def plugin_history():
-    output_dir = Path(load_config().get("covers_output") or "/app/data/output")
-    if not output_dir.is_absolute():
-        output_dir = DATA_DIR / output_dir
+    output_dir = resolve_data_path(load_config().get("covers_output"), "/app/data/output")
     history_index = read_history_index()
     items = []
-    for path in sorted(output_dir.glob("*.*"), key=lambda item: item.stat().st_mtime, reverse=True):
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+    known_paths: dict[str, Path] = {}
+    for path in output_dir.glob("*.*"):
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            known_paths[str(path.resolve())] = path
+    # Keep indexed results visible when the output directory was changed after
+    # generation. Stale index entries are ignored instead of producing blank
+    # history cards.
+    for meta in history_index.values():
+        raw_path = str(meta.get("path") or "").strip()
+        if not raw_path:
             continue
+        path = Path(raw_path)
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
+            known_paths[str(path.resolve())] = path
+    for path in sorted(known_paths.values(), key=lambda item: item.stat().st_mtime, reverse=True):
         stat = path.stat()
         name = path.stem
         meta = history_index.get(str(path.resolve())) or history_index.get(path.name) or {}
         library = str(meta.get("library") or history_library_name(name))
         created_at = float(meta.get("created_at") or stat.st_mtime)
         created_dt = datetime.fromtimestamp(created_at)
-        url = data_file_url(path)
+        # The fixed output filename is intentionally reused on regeneration;
+        # version the URL so the browser does not keep showing an old image.
+        url = f"{data_file_url(path)}?v={stat.st_mtime_ns}"
         items.append({
             "path": str(path),
             "name": path.name,
