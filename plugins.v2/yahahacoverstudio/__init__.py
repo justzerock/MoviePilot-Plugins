@@ -8703,20 +8703,43 @@ class YahahaCoverStudio(_PluginBase):
         try:
             if not service:
                 return []
-            try:
-                if service.type == 'emby':
-                    url = f'[HOST]emby/Library/VirtualFolders/Query?api_key=[APIKEY]'
-                else:
-                    url = f'[HOST]emby/Library/VirtualFolders/?api_key=[APIKEY]'
-                res = service.instance.get_data(url=url)
-                if res:
+            urls = [
+                f'[HOST]emby/Library/VirtualFolders/Query?api_key=[APIKEY]',
+                f'[HOST]emby/Library/VirtualFolders?api_key=[APIKEY]',
+                f'[HOST]emby/Library/MediaFolders?api_key=[APIKEY]',
+                f'[HOST]emby/Items?IncludeItemTypes=CollectionFolder&Recursive=false&Fields=Path,CollectionType,Locations&api_key=[APIKEY]',
+            ]
+            merged = []
+            seen = set()
+            last_error = None
+            for url in urls:
+                try:
+                    res = service.instance.get_data(url=url)
+                    if not res:
+                        continue
                     data = res.json()
-                    if service.type == 'emby':
-                        return data.get("Items", [])
-                    else:
-                        return data
-            except Exception as err:
-                logger.error(f"获取媒体库列表失败：{str(err)}")
+                    items = data.get("Items", data) if isinstance(data, dict) else data
+                    if not isinstance(items, list):
+                        continue
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        library_id = str(item.get("Id") or item.get("ItemId") or item.get("Guid") or "").strip()
+                        name = str(item.get("Name") or "").strip()
+                        if not library_id or not name:
+                            continue
+                        key = (library_id, name)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        merged.append(item)
+                except Exception as err:
+                    last_error = err
+                    continue
+            if merged:
+                return merged
+            if last_error:
+                logger.error(f"获取媒体库列表失败：{str(last_error)}")
             return []
         except Exception as err:
             logger.error(f"获取媒体库列表失败：{str(err)}")
@@ -8733,8 +8756,10 @@ class YahahaCoverStudio(_PluginBase):
                     library_id = library.get("ItemId")
                 if library['Name'] and library_id:
                     lib_item = {
-                        "name": f"{server}: {library['Name']}",
-                        "value": f"{server}-{library_id}"
+                        "name": library['Name'],
+                        "value": f"{server}-{library_id}",
+                        "server": server,
+                        "library_id": str(library_id),
                     }
                     lib_items.append(lib_item)
             return lib_items

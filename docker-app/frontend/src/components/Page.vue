@@ -98,16 +98,6 @@
                   >
                     <v-icon icon="mdi-cog-outline" size="22" />
                   </v-btn>
-                  <v-btn
-                    size="small"
-                    class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn"
-                    icon
-                    title="关闭"
-                    aria-label="关闭"
-                    @click="notifyClose"
-                  >
-                    <v-icon icon="mdi-close" size="22" />
-                  </v-btn>
                 </div>
                 <div class="yh-preview-chips" aria-label="当前参数">
                   <span>{{ currentStyleLabel }}</span>

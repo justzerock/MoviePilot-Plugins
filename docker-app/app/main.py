@@ -192,8 +192,13 @@ class GenerationManager:
                 self.current = 1
                 self.label = "生成完成"
                 return
-            libraries = await self.service.libraries()
+            libraries = self.service.selected_generation_libraries(await self.service.libraries())
             if not libraries:
+                has_library_filter = bool(self.service.config.get("include_libraries") or self.service.config.get("selected_servers"))
+                if has_library_filter:
+                    self.total = 0
+                    self.label = "未找到匹配的媒体库"
+                    return
                 self.total = 1
                 self.label = "正在生成本地封面"
                 self.items.extend(await self.service.generate(None, style_name))
@@ -206,11 +211,12 @@ class GenerationManager:
                     self.label = "已停止"
                     break
                 library_name = str(library.get("name") or library.get("id") or "").strip()
+                library_key = str(library.get("value") or library.get("id") or library.get("name") or "").strip()
                 if not library_name:
                     self.current += 1
                     continue
                 self.label = f"正在生成 {library_name}"
-                self.items.extend(await self.service.generate(library_name, style_name))
+                self.items.extend(await self.service.generate(library_key or library_name, style_name))
                 self.current += 1
                 await asyncio.sleep(0)
             if not self.stop_requested:
@@ -510,7 +516,15 @@ async def plugin_config():
 
 @app.get("/api/plugin/MediaCoverGenerator/status")
 async def plugin_status():
-    payload = to_status_payload(load_config())
+    config = load_config()
+    if not generation_manager.is_generating:
+        try:
+            libraries = await service.libraries()
+            remember_libraries(config, libraries)
+            config = load_config()
+        except Exception:
+            pass
+    payload = to_status_payload(config)
     payload.update(generation_manager.snapshot())
     payload.update(scheduler.snapshot())
     return ok(payload)
@@ -743,7 +757,7 @@ async def plugin_fonts():
     fonts_dir = DATA_DIR / "fonts"
     items = [
         storage.font_item(path)
-        for path in sorted(fonts_dir.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True)
+        for path in sorted(fonts_dir.rglob("*"), key=lambda item: item.stat().st_mtime, reverse=True)
         if path.is_file() and path.suffix.lower() in storage.FONT_EXTENSIONS
     ]
     return ok({"custom": items})
@@ -1486,13 +1500,22 @@ def cached_preview_payload(config: dict[str, Any], library_name: str, style: str
 
 
 def remember_libraries(config: dict[str, Any], libraries: list[dict[str, Any]]) -> None:
-    if not libraries or config.get("mock_enabled", True):
+    if not libraries or (config.get("mock_enabled", True) and not config.get("local_mode", False)):
         return
-    entries = [
-        {"name": str(item.get("name") or item.get("id") or ""), "value": str(item.get("name") or item.get("id") or "")}
-        for item in libraries
-        if str(item.get("name") or item.get("id") or "").strip()
-    ]
+    entries = []
+    for item in libraries:
+        name = str(item.get("name") or item.get("id") or "").strip()
+        library_id = str(item.get("id") or name).strip()
+        server = str(item.get("server") or ("local" if config.get("local_mode", False) else "")).strip()
+        if not name:
+            continue
+        value = f"{server}-{library_id}" if server and server not in {"local", "mock"} else name
+        entries.append({
+            "name": name,
+            "value": value,
+            "server": server,
+            "library_id": library_id,
+        })
     if not entries:
         return
     config["all_libraries"] = entries
@@ -1984,9 +2007,9 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
     mock = bool(config.get("mock_enabled", True)) and not local_mode
     local_libraries = service.local_libraries() if local_mode else []
     libraries = (
-        [{"name": item["name"], "value": item["name"]} for item in MOCK_LIBRARIES]
+        [{"name": item["name"], "value": item["name"], "server": "mock", "library_id": item.get("id", item["name"])} for item in MOCK_LIBRARIES]
         if mock
-        else ([{"name": item["name"], "value": item["name"]} for item in local_libraries] if local_mode else (config.get("all_libraries") or []))
+        else ([{"name": item["name"], "value": item["name"], "server": "local", "library_id": item.get("id", item["name"])} for item in local_libraries] if local_mode else (config.get("all_libraries") or []))
     )
     all_servers = ["local"] if local_mode else (["mock"] if mock else [client.server_name for client in configured_clients(config)])
     allowed_servers = set(all_servers)
@@ -2007,7 +2030,7 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
         "generation_total": 0,
         "generation_label": "",
         "all_servers": all_servers,
-        "selected_servers": selected_servers or ([] if mock else all_servers),
+        "selected_servers": selected_servers,
         "include_libraries": config.get("include_libraries") or [],
         "all_libraries": libraries,
         "monitor_source": str(config.get("monitor_source") or "webhook") if str(config.get("monitor_source") or "webhook") in {"webhook", "emby", "jellyfin"} else "webhook",

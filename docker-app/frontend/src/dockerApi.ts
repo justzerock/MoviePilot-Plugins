@@ -8,16 +8,23 @@ type ApiEnvelope<T = any> = {
 
 async function request<T = any>(method: 'GET' | 'POST' | 'DELETE', path: string, data?: any): Promise<T> {
   const normalized = normalizePluginPath(path, method === 'GET' ? data : undefined)
-  const response = await fetch(normalized, {
-    method,
-    headers: method === 'GET' ? undefined : { 'Content-Type': 'application/json' },
-    body: method === 'GET' ? undefined : JSON.stringify(data ?? {}),
-  })
-  if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(detail || response.statusText)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 30000)
+  try {
+    const response = await fetch(normalized, {
+      method,
+      headers: method === 'GET' ? undefined : { 'Content-Type': 'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify(data ?? {}),
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const detail = await response.text()
+      throw new Error(detail || response.statusText)
+    }
+    return response.json() as Promise<T>
+  } finally {
+    window.clearTimeout(timeout)
   }
-  return response.json() as Promise<T>
 }
 
 function normalizePluginPath(path: string, params?: Record<string, any>) {

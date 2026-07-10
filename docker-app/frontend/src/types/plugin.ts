@@ -19,7 +19,7 @@ export interface MediaCoverGeneratorConfig {
   selected_servers: string[]
   all_servers?: string[] | { title?: string; name?: string; value?: string }[]
   include_libraries: string[]
-  all_libraries?: { name: string; value: string }[] | null
+  all_libraries?: { name: string; value: string; server?: string; library_id?: string }[] | null
   sort_by: string
   covers_input: string
   covers_output: string
@@ -350,7 +350,7 @@ export interface StatusPayload {
   all_servers?: string[] | { title?: string; name?: string; value?: string }[]
   selected_servers?: string[]
   include_libraries?: string[]
-  all_libraries?: { name: string; value: string }[] | null
+  all_libraries?: { name: string; value: string; server?: string; library_id?: string }[] | null
   monitor_source?: 'webhook' | 'emby' | 'jellyfin'
   cover_style_base: CoverStyleBase
   cover_style_variant: CoverStyleVariant

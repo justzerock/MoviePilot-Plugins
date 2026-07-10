@@ -18,6 +18,20 @@ FONT_EXTENSIONS = {".ttf", ".ttc", ".otf", ".woff", ".woff2"}
 HISTORY_INDEX_FILE = DATA_DIR / "output" / ".history.json"
 LEGACY_HISTORY_INDEX_FILE = DATA_DIR / "history.json"
 BUILTIN_FONT_URLS = {
+    "chaohei": {
+        "filename": "chaohei.ttf",
+        "urls": [
+            "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/chaohei.ttf",
+            "https://github.com/justzerock/MoviePilot-Plugins/raw/main/fonts/chaohei.ttf",
+        ],
+    },
+    "yasong": {
+        "filename": "yasong.ttf",
+        "urls": [
+            "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/yasong.ttf",
+            "https://github.com/justzerock/MoviePilot-Plugins/raw/main/fonts/yasong.ttf",
+        ],
+    },
     "emblemaone": {
         "filename": "EmblemaOne-Regular.ttf",
         "urls": [
@@ -42,26 +56,33 @@ BUILTIN_FONT_URLS = {
 }
 BUILTIN_FONT_FALLBACKS = {
     "chaohei": [
+        "/app/app/builtin_fonts/chaohei.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ],
     "yasong": [
+        "/app/app/builtin_fonts/yasong.ttf",
         "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     ],
     "emblemaone": [
+        "/app/app/builtin_fonts/EmblemaOne.woff2",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ],
     "melete": [
+        "/app/app/builtin_fonts/Melete.otf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     ],
     "phosphate": [
+        "/app/app/builtin_fonts/phosphate.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
     ],
     "josefinsans": [
+        "/app/app/builtin_fonts/josefinsans.woff2",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ],
     "lilitaone": [
+        "/app/app/builtin_fonts/lilitaone.woff2",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ],
 }
@@ -215,7 +236,7 @@ class CoverService:
         fonts_dir = DATA_DIR / "fonts"
         index: dict[str, str] = {}
         if fonts_dir.exists():
-            for path in fonts_dir.iterdir():
+            for path in fonts_dir.rglob("*"):
                 if not path.is_file() or path.suffix.lower() not in FONT_EXTENSIONS:
                     continue
                 resolved = str(path.resolve())
@@ -359,13 +380,57 @@ class CoverService:
         result: list[dict[str, Any]] = []
         for client in self.clients():
             for library in await client.get_libraries():
-                result.append(library.__dict__)
+                item = library.__dict__.copy()
+                if item.get("server") and item.get("id"):
+                    item["value"] = f"{item['server']}-{item['id']}"
+                result.append(item)
+        return result
+
+    @staticmethod
+    def library_filter_candidates(library: dict[str, Any]) -> set[str]:
+        server = str(library.get("server") or "").strip()
+        library_id = str(library.get("id") or library.get("library_id") or "").strip()
+        name = str(library.get("name") or "").strip()
+        candidates = {item for item in (name, library_id) if item}
+        if server:
+            candidates.add(server)
+            if name:
+                candidates.add(f"{server}:{name}")
+                candidates.add(f"{server}: {name}")
+                candidates.add(f"{server} - {name}")
+            if library_id:
+                candidates.add(f"{server}-{library_id}")
+                candidates.add(f"{server}:{library_id}")
+        return candidates
+
+    def selected_generation_libraries(self, libraries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        selected_servers = {
+            str(item).strip()
+            for item in (self.config.get("selected_servers") or [])
+            if str(item).strip()
+        }
+        include_libraries = {
+            str(item).strip()
+            for item in (self.config.get("include_libraries") or [])
+            if str(item).strip()
+        }
+        result: list[dict[str, Any]] = []
+        for library in libraries:
+            server = str(library.get("server") or "").strip()
+            if selected_servers and server and server not in selected_servers:
+                continue
+            candidates = self.library_filter_candidates(library)
+            if include_libraries and candidates.isdisjoint(include_libraries):
+                continue
+            result.append(library)
         return result
 
     async def find_library(self, library_name: str) -> tuple[MediaServerClient, MediaLibrary]:
+        requested = str(library_name or "").strip()
         for client in self.clients():
             for library in await client.get_libraries():
-                if library.name == library_name or library.id == library_name:
+                candidates = self.library_filter_candidates(library.__dict__)
+                if library.name == requested or library.id == requested or requested in candidates:
                     return client, library
         raise ValueError(f"Library not found: {library_name}")
 
@@ -373,9 +438,11 @@ class CoverService:
         if self.local_mode():
             if library_name:
                 return [await self.generate_local_library(library_name, style)]
-            libraries = self.local_libraries()
+            libraries = self.selected_generation_libraries(self.local_libraries())
             if libraries:
                 return [await self.generate_local_library(str(library["name"]), style) for library in libraries]
+            if self.config.get("include_libraries"):
+                return []
             return [await self.generate_from_local(style)]
 
         if self.mock_enabled():
@@ -390,11 +457,11 @@ class CoverService:
             client, library = await self.find_library(library_name)
             return [await self.generate_library(client, library, style)]
 
-        libraries = await self.libraries()
+        libraries = self.selected_generation_libraries(await self.libraries())
         if libraries:
             output = []
             for library_info in libraries:
-                client, library = await self.find_library(library_info["name"])
+                client, library = await self.find_library(str(library_info.get("value") or library_info.get("id") or library_info.get("name") or ""))
                 output.append(await self.generate_library(client, library, style))
             return output
 
@@ -540,13 +607,15 @@ class CoverService:
     def local_images(self, library_name: str = "", limit: int = 9, include_mock: bool = True) -> list[Path]:
         input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
         roots: list[Path] = []
-        if library_name:
+        normalized_library_name = str(library_name or "").strip()
+        if normalized_library_name and normalized_library_name not in {"local", "本地封面"}:
             exact_root = input_dir / str(library_name)
             slug_root = input_dir / slugify(library_name)
             roots.extend([exact_root])
             if slug_root != exact_root:
                 roots.append(slug_root)
-        roots.append(input_dir)
+        if not roots:
+            roots.append(input_dir)
         paths: list[Path] = []
         for root in roots:
             if not root.exists():
@@ -579,6 +648,7 @@ class CoverService:
                     "name": child.name,
                     "server": "local",
                     "type": "local",
+                    "value": child.name,
                     "image_count": len(images),
                 })
         root_images = [
@@ -592,6 +662,7 @@ class CoverService:
                 "name": "本地封面",
                 "server": "local",
                 "type": "local",
+                "value": "本地封面",
                 "image_count": len(root_images),
             })
         return libraries

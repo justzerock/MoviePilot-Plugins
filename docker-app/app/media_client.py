@@ -60,12 +60,12 @@ class MediaServerClient:
             }),
         ]
         last_error: Exception | None = None
+        merged: list[MediaLibrary] = []
+        seen: set[tuple[str, str]] = set()
         for path, params in candidates:
             try:
                 data = await self._get_json(path, params)
                 items = data.get("Items", data) if isinstance(data, dict) else data
-                libraries: list[MediaLibrary] = []
-                seen: set[tuple[str, str]] = set()
                 for item in items or []:
                     library_id = str(item.get("ItemId") or item.get("Id") or item.get("Guid") or "")
                     name = str(
@@ -83,7 +83,7 @@ class MediaServerClient:
                     dedupe_key = (library_id, name)
                     if library_id and name and dedupe_key not in seen:
                         seen.add(dedupe_key)
-                        libraries.append(
+                        merged.append(
                             MediaLibrary(
                                 id=library_id,
                                 name=name,
@@ -97,10 +97,10 @@ class MediaServerClient:
                                 locations=[str(location) for location in locations or []],
                             )
                         )
-                if libraries:
-                    return libraries
             except Exception as err:
                 last_error = err
+        if merged:
+            return merged
         if last_error:
             raise last_error
         return []

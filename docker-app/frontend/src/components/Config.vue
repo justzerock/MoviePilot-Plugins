@@ -54,16 +54,6 @@
                 >
                   <v-icon icon="mdi-image-multiple-outline" size="22" />
                 </v-btn>
-                <v-btn
-                  size="small"
-                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn"
-                  icon
-                  title="关闭"
-                  aria-label="关闭"
-                  @click="notifyClose"
-                >
-                  <v-icon icon="mdi-close" size="22" />
-                </v-btn>
               </div>
               <span v-if="configSaveMessage" class="mcr-config-save-message mcr-config-save-message--floating">{{ configSaveMessage }}</span>
               <div class="mcr-config-tags yh-header-chips" aria-label="配置摘要">
@@ -1566,15 +1556,43 @@ const subtitleFontItems = computed(() => {
   return items
 })
 
+function parseLibraryOption(lib: { name?: string; value?: string; server?: string; library_id?: string }) {
+  const rawName = String(lib.name || lib.value || '').trim()
+  const value = String(lib.value || rawName).trim()
+  let server = String(lib.server || '').trim()
+  let name = rawName
+  const colonIndex = rawName.indexOf(':')
+  if (!server && colonIndex >= 0) {
+    server = rawName.slice(0, colonIndex).trim()
+    name = rawName.slice(colonIndex + 1).trim()
+  }
+  if (!server) {
+    const matched = serverItems.value
+      .map((item) => item.value)
+      .find((item) => value.startsWith(`${item}-`) || value.startsWith(`${item}:`))
+    if (matched) server = matched
+  }
+  return { server, name: name || rawName || value, value }
+}
+
 const libraryItems = computed(() => {
   const all = (config.value as any).all_libraries as
-    | { name: string; value: string }[]
+    | { name: string; value: string; server?: string; library_id?: string }[]
     | undefined
   if (!Array.isArray(all)) return []
-  return all.map((lib) => ({
-    title: lib.name,
-    value: lib.value,
-  }))
+  const selectedServers = Array.isArray(config.value.selected_servers)
+    ? config.value.selected_servers.map((item) => String(item)).filter(Boolean)
+    : []
+  const showServerPrefix = selectedServers.length !== 1
+  return all
+    .map(parseLibraryOption)
+    .filter((lib) => !selectedServers.length || !lib.server || selectedServers.includes(lib.server))
+    .map((lib) => ({
+      title: showServerPrefix && lib.server && lib.server !== 'local' && lib.server !== 'mock'
+        ? `${lib.server} - ${lib.name}`
+        : lib.name,
+      value: lib.value,
+    }))
 })
 
 const serverItems = computed(() => {
@@ -1618,6 +1636,21 @@ watch(
     const filtered = config.value.selected_servers.filter((item) => allowed.has(String(item)))
     if (filtered.length !== config.value.selected_servers.length) {
       config.value.selected_servers = filtered
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+const selectedLibraryValues = computed(() => new Set(libraryItems.value.map((item) => item.value)))
+
+watch(
+  [libraryItems, () => config.value.include_libraries],
+  () => {
+    const allowed = selectedLibraryValues.value
+    if (!allowed.size || !Array.isArray(config.value.include_libraries)) return
+    const filtered = config.value.include_libraries.filter((item) => allowed.has(String(item)))
+    if (filtered.length !== config.value.include_libraries.length) {
+      config.value.include_libraries = filtered
     }
   },
   { deep: true, immediate: true },
@@ -2018,12 +2051,15 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       update_now: false,
       main_title_font_custom: '',
       subtitle_font_custom: '',
-      custom_text_font_custom: '',
-      backup_enabled: Boolean(String(config.value.backup_cron || '').trim()),
-      selected_servers: Array.isArray(config.value.selected_servers)
-        ? config.value.selected_servers.filter((item) => selectedServerValues.value.has(String(item)))
-        : [],
-    }
+	      custom_text_font_custom: '',
+	      backup_enabled: Boolean(String(config.value.backup_cron || '').trim()),
+	      selected_servers: Array.isArray(config.value.selected_servers)
+	        ? config.value.selected_servers.filter((item) => selectedServerValues.value.has(String(item)))
+	        : [],
+	      include_libraries: Array.isArray(config.value.include_libraries)
+	        ? config.value.include_libraries.filter((item) => selectedLibraryValues.value.has(String(item)))
+	        : [],
+	    }
     const servers = normalizeMediaServers(payload)
     payload.media_servers = servers
     const emby = servers.find((server) => server.type === 'emby')
@@ -2047,16 +2083,19 @@ async function saveConfig(options: { auto?: boolean } = {}) {
     if (!resp || resp.code !== 0) {
       throw new Error(resp?.msg || '保存配置失败')
     }
-    if (resp.data?.config) {
-      restoreSuppressOnNextTick = true
-      config.value = {
-        ...defaults,
-        ...normalizeConfigInput(resp.data.config),
-      }
-      nextTick(() => {
-        suppressConfigAutoSave = previousSuppressAutoSave
-      })
-    }
+	    if (resp.data?.config) {
+	      restoreSuppressOnNextTick = true
+	      config.value = {
+	        ...defaults,
+	        ...normalizeConfigInput(resp.data.config),
+	      }
+	      emit('save', config.value)
+	      nextTick(() => {
+	        suppressConfigAutoSave = previousSuppressAutoSave
+	      })
+	    } else {
+	      emit('save', payload)
+	    }
     showConfigSaveMessage(options.auto ? '已自动保存' : '配置已保存')
     return true
   } catch (error) {
@@ -2068,6 +2107,10 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       suppressConfigAutoSave = previousSuppressAutoSave
     }
     configSaving.value = false
+    if (configAutoSavePending) {
+      configAutoSavePending = false
+      scheduleConfigAutoSave(800)
+    }
   }
 }
 

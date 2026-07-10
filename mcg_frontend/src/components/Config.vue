@@ -1280,15 +1280,45 @@ const subtitleFontItems = computed(() => {
   return items
 })
 
+function parseLibraryOption(lib: { name?: string; value?: string; server?: string; library_id?: string }) {
+  const rawName = String(lib.name || lib.value || '').trim()
+  const value = String(lib.value || rawName).trim()
+  let server = String(lib.server || '').trim()
+  let name = rawName
+  const colonIndex = rawName.indexOf(':')
+  if (!server && colonIndex >= 0) {
+    server = rawName.slice(0, colonIndex).trim()
+    name = rawName.slice(colonIndex + 1).trim()
+  }
+  if (!server) {
+    const allServers = (config.value as any).all_servers
+    const serverValues = Array.isArray(allServers)
+      ? allServers.map((item: any) => typeof item === 'object' && item !== null
+        ? String(item.value ?? item.title ?? item.name ?? '')
+        : String(item ?? ''))
+      : []
+    const matched = serverValues.find((item) => item && (value.startsWith(`${item}-`) || value.startsWith(`${item}:`)))
+    if (matched) server = matched
+  }
+  return { server, name: name || rawName || value, value }
+}
+
 const libraryItems = computed(() => {
   const all = (config.value as any).all_libraries as
-    | { name: string; value: string }[]
+    | { name: string; value: string; server?: string; library_id?: string }[]
     | undefined
   if (!Array.isArray(all)) return []
-  return all.map((lib) => ({
-    title: lib.name,
-    value: lib.value,
-  }))
+  const selectedServers = Array.isArray(config.value.selected_servers)
+    ? config.value.selected_servers.map((item) => String(item)).filter(Boolean)
+    : []
+  const showServerPrefix = selectedServers.length !== 1
+  return all
+    .map(parseLibraryOption)
+    .filter((lib) => !selectedServers.length || !lib.server || selectedServers.includes(lib.server))
+    .map((lib) => ({
+      title: showServerPrefix && lib.server ? `${lib.server} - ${lib.name}` : lib.name,
+      value: lib.value,
+    }))
 })
 
 const serverItems = computed(() => {
@@ -1309,17 +1339,50 @@ const serverItems = computed(() => {
       }
     }
   }
-  for (const lib of libraryItems.value) {
-    const text = typeof lib.title === 'string' ? lib.title : String(lib.title)
-    const idx = text.indexOf(':')
-    const server = (idx >= 0 ? text.slice(0, idx) : text).trim()
-    if (server && !seen.has(server)) {
-      seen.add(server)
-      items.push({ title: server, value: server })
+  const allLibraries = (config.value as any).all_libraries
+  if (Array.isArray(allLibraries)) {
+    for (const raw of allLibraries) {
+      if (!raw || typeof raw !== 'object') continue
+      const parsed = parseLibraryOption(raw)
+      const server = parsed.server.trim()
+      if (server && !seen.has(server)) {
+        seen.add(server)
+        items.push({ title: server, value: server })
+      }
     }
   }
   return items
 })
+
+const selectedServerValues = computed(() => new Set(serverItems.value.map((item) => item.value)))
+
+watch(
+  [serverItems, () => config.value.selected_servers],
+  () => {
+    const allowed = selectedServerValues.value
+    if (!allowed.size || !Array.isArray(config.value.selected_servers)) return
+    const filtered = config.value.selected_servers.filter((item) => allowed.has(String(item)))
+    if (filtered.length !== config.value.selected_servers.length) {
+      config.value.selected_servers = filtered
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+const selectedLibraryValues = computed(() => new Set(libraryItems.value.map((item) => item.value)))
+
+watch(
+  [libraryItems, () => config.value.include_libraries],
+  () => {
+    const allowed = selectedLibraryValues.value
+    if (!allowed.size || !Array.isArray(config.value.include_libraries)) return
+    const filtered = config.value.include_libraries.filter((item) => allowed.has(String(item)))
+    if (filtered.length !== config.value.include_libraries.length) {
+      config.value.include_libraries = filtered
+    }
+  },
+  { deep: true, immediate: true },
+)
 
 const titleConfigReference = `媒体库名称:
   title: "主标题"
@@ -1696,19 +1759,28 @@ async function saveConfig(options: { auto?: boolean } = {}) {
     configSaving.value = false
     return false
   }
-  try {
-    config.value.update_now = false
-    config.value.main_title_font_custom = ''
-    config.value.subtitle_font_custom = ''
-    config.value.custom_text_font_custom = ''
-    config.value.backup_enabled = Boolean(String(config.value.backup_cron || '').trim())
-    if (config.value.transfer_monitor && config.value.lock_latest_sort) {
-      config.value.sort_by = 'DateCreated'
-    }
-    const resp = await props.api.post<{ code: number; data?: { config?: Partial<YahahaCoverStudioConfig> }; msg?: string }>(
-      'plugin/YahahaCoverStudio/save_config',
-      config.value,
-    )
+	  try {
+	    const payload = {
+	      ...config.value,
+	      update_now: false,
+	      main_title_font_custom: '',
+	      subtitle_font_custom: '',
+	      custom_text_font_custom: '',
+	      backup_enabled: Boolean(String(config.value.backup_cron || '').trim()),
+	      selected_servers: Array.isArray(config.value.selected_servers)
+	        ? config.value.selected_servers.filter((item) => selectedServerValues.value.has(String(item)))
+	        : [],
+	      include_libraries: Array.isArray(config.value.include_libraries)
+	        ? config.value.include_libraries.filter((item) => selectedLibraryValues.value.has(String(item)))
+	        : [],
+	    }
+	    if (payload.transfer_monitor && payload.lock_latest_sort) {
+	      payload.sort_by = 'DateCreated'
+	    }
+	    const resp = await props.api.post<{ code: number; data?: { config?: Partial<YahahaCoverStudioConfig> }; msg?: string }>(
+	      'plugin/YahahaCoverStudio/save_config',
+	      payload,
+	    )
     if (!resp || resp.code !== 0) {
       throw new Error(resp?.msg || '保存配置失败')
     }
