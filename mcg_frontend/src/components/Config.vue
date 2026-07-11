@@ -65,7 +65,6 @@
                   <v-icon icon="mdi-close" size="22" />
                 </v-btn>
               </div>
-              <span v-if="configSaveMessage" class="mcr-config-save-message mcr-config-save-message--floating">{{ configSaveMessage }}</span>
               <div class="mcr-config-tags yh-header-chips" aria-label="配置摘要">
                 <span class="mcr-config-tag">
                   <span>状态</span>
@@ -619,6 +618,7 @@
             </main>
           </div>
         </div>
+        <ViewportSaveToast :message="configSaveMessage" :theme="isDark ? 'dark' : 'light'" />
       </v-defaults-provider>
 
     </v-card>
@@ -633,6 +633,7 @@ import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { PropType } from 'vue'
 import BlueprintField from './BlueprintField.vue'
+import ViewportSaveToast from './ViewportSaveToast.vue'
 import AsyncStatusDots from './AsyncStatusDots.vue'
 import BlueprintSelect from './BlueprintSelect.vue'
 import type {

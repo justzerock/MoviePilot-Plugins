@@ -1,6 +1,6 @@
 import { importShared } from './__federation_fn_import-ui-rev-20260705-11.js';
 import { _ as _export_sfc } from './_plugin-vue_export-helper-ui-rev-20260705-11.js';
-import { B as BUILTIN_FONT_ITEMS, M as MCR_CONTROL_DEFAULTS, b as BlueprintField, c as BlueprintSelect, A as AsyncStatusDots, a as getTemplateFontFaceName } from './fonts-ui-rev-20260705-11.js';
+import { B as BUILTIN_FONT_ITEMS, M as MCR_CONTROL_DEFAULTS, b as BlueprintField, c as BlueprintSelect, A as AsyncStatusDots, V as ViewportSaveToast, a as getTemplateFontFaceName } from './ViewportSaveToast-ui-rev-20260705-11.js';
 
 const UI_REV = "20260705-11";
 
@@ -24,97 +24,93 @@ const _hoisted_9 = {
   class: "yh-run-percent"
 };
 const _hoisted_10 = {
-  key: 0,
-  class: "mcr-config-save-message mcr-config-save-message--floating"
-};
-const _hoisted_11 = {
   class: "mcr-config-tags yh-header-chips",
   "aria-label": "配置摘要"
 };
+const _hoisted_11 = { class: "mcr-config-tag" };
 const _hoisted_12 = { class: "mcr-config-tag" };
-const _hoisted_13 = { class: "mcr-config-tag" };
-const _hoisted_14 = {
+const _hoisted_13 = {
   class: "mcr-config-top-tabs yh-segment",
   role: "tablist",
   "aria-label": "设置页面切换"
 };
-const _hoisted_15 = ["aria-selected", "onClick"];
-const _hoisted_16 = { class: "mcr-config-workspace" };
-const _hoisted_17 = {
+const _hoisted_14 = ["aria-selected", "onClick"];
+const _hoisted_15 = { class: "mcr-config-workspace" };
+const _hoisted_16 = {
   class: "mcr-config-sidebar",
   "aria-label": "设置页面导航"
 };
-const _hoisted_18 = ["aria-selected", "onClick"];
-const _hoisted_19 = { class: "mcr-config-main" };
-const _hoisted_20 = { class: "mcr-config-section-card" };
-const _hoisted_21 = { class: "yh-switch-row" };
+const _hoisted_17 = ["aria-selected", "onClick"];
+const _hoisted_18 = { class: "mcr-config-main" };
+const _hoisted_19 = { class: "mcr-config-section-card" };
+const _hoisted_20 = { class: "yh-switch-row" };
+const _hoisted_21 = { class: "mcr-config-section-card" };
 const _hoisted_22 = { class: "mcr-config-section-card" };
 const _hoisted_23 = { class: "mcr-config-section-card" };
 const _hoisted_24 = { class: "mcr-config-section-card" };
 const _hoisted_25 = { class: "mcr-config-section-card" };
-const _hoisted_26 = { class: "mcr-config-section-card" };
-const _hoisted_27 = { class: "mcr-font-library" };
-const _hoisted_28 = { class: "mcr-font-library__header" };
-const _hoisted_29 = { class: "mcr-font-library__import" };
-const _hoisted_30 = { class: "mcr-font-link-field" };
-const _hoisted_31 = { class: "mcr-font-link-field__control" };
-const _hoisted_32 = ["disabled"];
-const _hoisted_33 = { class: "mcr-font-library__listbar" };
-const _hoisted_34 = {
+const _hoisted_26 = { class: "mcr-font-library" };
+const _hoisted_27 = { class: "mcr-font-library__header" };
+const _hoisted_28 = { class: "mcr-font-library__import" };
+const _hoisted_29 = { class: "mcr-font-link-field" };
+const _hoisted_30 = { class: "mcr-font-link-field__control" };
+const _hoisted_31 = ["disabled"];
+const _hoisted_32 = { class: "mcr-font-library__listbar" };
+const _hoisted_33 = {
   key: 0,
+  class: "mcr-font-library__empty"
+};
+const _hoisted_34 = {
+  key: 1,
   class: "mcr-font-library__empty"
 };
 const _hoisted_35 = {
-  key: 1,
-  class: "mcr-font-library__empty"
-};
-const _hoisted_36 = {
   key: 2,
   class: "mcr-font-library__grid"
 };
-const _hoisted_37 = ["title", "onClick"];
-const _hoisted_38 = { class: "mcr-font-item__name" };
+const _hoisted_36 = ["title", "onClick"];
+const _hoisted_37 = { class: "mcr-font-item__name" };
+const _hoisted_38 = ["onClick"];
 const _hoisted_39 = ["onClick"];
-const _hoisted_40 = ["onClick"];
-const _hoisted_41 = {
+const _hoisted_40 = {
   key: 3,
   class: "mcr-font-library__status"
 };
-const _hoisted_42 = { class: "mcr-config-section-card" };
-const _hoisted_43 = { class: "mcr-config-backup-grid mcr-config-backup-grid--cron-only" };
-const _hoisted_44 = { class: "mcr-config-backup-grid__actions" };
-const _hoisted_45 = { class: "mcr-config-backup-actions" };
-const _hoisted_46 = {
+const _hoisted_41 = { class: "mcr-config-section-card" };
+const _hoisted_42 = { class: "mcr-config-backup-grid mcr-config-backup-grid--cron-only" };
+const _hoisted_43 = { class: "mcr-config-backup-grid__actions" };
+const _hoisted_44 = { class: "mcr-config-backup-actions" };
+const _hoisted_45 = {
   key: 0,
   class: "mcr-backup-library"
 };
-const _hoisted_47 = {
+const _hoisted_46 = {
   key: 0,
   class: "mcr-font-library__empty"
 };
-const _hoisted_48 = {
+const _hoisted_47 = {
   key: 1,
   class: "mcr-font-library__empty"
 };
-const _hoisted_49 = {
+const _hoisted_48 = {
   key: 2,
   class: "mcr-backup-library__grid"
 };
-const _hoisted_50 = { class: "mcr-backup-item__main" };
-const _hoisted_51 = ["title"];
-const _hoisted_52 = { class: "mcr-backup-item__meta" };
-const _hoisted_53 = { key: 0 };
-const _hoisted_54 = { class: "mcr-backup-item__actions" };
+const _hoisted_49 = { class: "mcr-backup-item__main" };
+const _hoisted_50 = ["title"];
+const _hoisted_51 = { class: "mcr-backup-item__meta" };
+const _hoisted_52 = { key: 0 };
+const _hoisted_53 = { class: "mcr-backup-item__actions" };
+const _hoisted_54 = ["onClick"];
 const _hoisted_55 = ["onClick"];
 const _hoisted_56 = ["onClick"];
-const _hoisted_57 = ["onClick"];
-const _hoisted_58 = { class: "mcr-config-section-card" };
-const _hoisted_59 = { class: "mcr-config-clean-actions" };
+const _hoisted_57 = { class: "mcr-config-section-card" };
+const _hoisted_58 = { class: "mcr-config-clean-actions" };
+const _hoisted_59 = { class: "mcr-config-clean-action" };
 const _hoisted_60 = { class: "mcr-config-clean-action" };
-const _hoisted_61 = { class: "mcr-config-clean-action" };
-const _hoisted_62 = { class: "mcr-title-config-toolbar" };
-const _hoisted_63 = { class: "mcr-title-config-mode" };
-const _hoisted_64 = { class: "yh-ui-rev" };
+const _hoisted_61 = { class: "mcr-title-config-toolbar" };
+const _hoisted_62 = { class: "mcr-title-config-mode" };
+const _hoisted_63 = { class: "yh-ui-rev" };
 const {ref,watch,computed,nextTick,onMounted,onBeforeUnmount} = await importShared('vue');
 const titleConfigReference = `媒体库名称:
   title: "主标题"
@@ -1330,18 +1326,17 @@ ${yaml}
                           _: 1
                         })
                       ]),
-                      configSaveMessage.value ? (_openBlock(), _createElementBlock("span", _hoisted_10, _toDisplayString(configSaveMessage.value), 1)) : _createCommentVNode("", true),
-                      _createElementVNode("div", _hoisted_11, [
-                        _createElementVNode("span", _hoisted_12, [
+                      _createElementVNode("div", _hoisted_10, [
+                        _createElementVNode("span", _hoisted_11, [
                           _cache[27] || (_cache[27] = _createElementVNode("span", null, "状态", -1)),
                           _createElementVNode("strong", null, _toDisplayString(config.value.enabled ? "启用" : "停用"), 1)
                         ]),
-                        _createElementVNode("span", _hoisted_13, [
+                        _createElementVNode("span", _hoisted_12, [
                           _cache[28] || (_cache[28] = _createElementVNode("span", null, "调度", -1)),
                           _createElementVNode("strong", null, _toDisplayString(scheduleModeLabel.value), 1)
                         ])
                       ]),
-                      _createElementVNode("div", _hoisted_14, [
+                      _createElementVNode("div", _hoisted_13, [
                         (_openBlock(), _createElementBlock(_Fragment, null, _renderList(tabItems, (item) => {
                           return _createElementVNode("button", {
                             key: `top-${item.value}`,
@@ -1356,13 +1351,13 @@ ${yaml}
                               size: "18"
                             }, null, 8, ["icon"]),
                             _createElementVNode("span", null, _toDisplayString(item.title), 1)
-                          ], 10, _hoisted_15);
+                          ], 10, _hoisted_14);
                         }), 64))
                       ])
                     ])
                   ]),
-                  _createElementVNode("div", _hoisted_16, [
-                    _createElementVNode("aside", _hoisted_17, [
+                  _createElementVNode("div", _hoisted_15, [
+                    _createElementVNode("aside", _hoisted_16, [
                       _cache[30] || (_cache[30] = _createElementVNode("div", { class: "mcr-config-sidebar__label" }, "Sections", -1)),
                       (_openBlock(), _createElementBlock(_Fragment, null, _renderList(tabItems, (item) => {
                         return _createElementVNode("button", {
@@ -1378,11 +1373,11 @@ ${yaml}
                             size: "22"
                           }, null, 8, ["icon"]),
                           _createElementVNode("span", null, _toDisplayString(item.title), 1)
-                        ], 10, _hoisted_18);
+                        ], 10, _hoisted_17);
                       }), 64)),
                       _cache[31] || (_cache[31] = _createElementVNode("div", { class: "mcr-config-sidebar__spacer" }, null, -1))
                     ]),
-                    _createElementVNode("main", _hoisted_19, [
+                    _createElementVNode("main", _hoisted_18, [
                       _createVNode(_component_v_window, {
                         modelValue: tab.value,
                         "onUpdate:modelValue": _cache[25] || (_cache[25] = ($event) => tab.value = $event)
@@ -1392,7 +1387,7 @@ ${yaml}
                             default: _withCtx(() => [
                               _createVNode(_component_v_card_text, { class: "mcr-panel__body mcr-config-tabbody mcr-config-section-stack" }, {
                                 default: _withCtx(() => [
-                                  _createElementVNode("section", _hoisted_20, [
+                                  _createElementVNode("section", _hoisted_19, [
                                     _cache[32] || (_cache[32] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "运行与定时"),
@@ -1410,7 +1405,7 @@ ${yaml}
                                           class: "mcr-config-switch-col"
                                         }, {
                                           default: _withCtx(() => [
-                                            _createElementVNode("div", _hoisted_21, [
+                                            _createElementVNode("div", _hoisted_20, [
                                               _createVNode(_component_v_switch, {
                                                 modelValue: config.value.enabled,
                                                 "onUpdate:modelValue": _cache[1] || (_cache[1] = ($event) => config.value.enabled = $event),
@@ -1449,7 +1444,7 @@ ${yaml}
                                       _: 1
                                     })
                                   ]),
-                                  _createElementVNode("section", _hoisted_22, [
+                                  _createElementVNode("section", _hoisted_21, [
                                     _cache[33] || (_cache[33] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "入库监控"),
@@ -1540,7 +1535,7 @@ ${yaml}
                                       _createTextVNode(" 为设置中的 API_TOKEN。Emby 需要在通知中勾选「媒体库 -> 新媒体已添加」。 Jellyfin 的通知配置方式暂未确认。 ")
                                     ], -1))
                                   ]),
-                                  _createElementVNode("section", _hoisted_23, [
+                                  _createElementVNode("section", _hoisted_22, [
                                     _cache[35] || (_cache[35] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "媒体库范围"),
@@ -1587,7 +1582,7 @@ ${yaml}
                                       _: 1
                                     })
                                   ]),
-                                  _createElementVNode("section", _hoisted_24, [
+                                  _createElementVNode("section", _hoisted_23, [
                                     _cache[36] || (_cache[36] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "自定义图片目录"),
@@ -1601,7 +1596,7 @@ ${yaml}
                                       hint: "图片放在与媒体库同名的文件夹下；留空则使用媒体服务器素材"
                                     }, null, 8, ["modelValue"])
                                   ]),
-                                  _createElementVNode("section", _hoisted_25, [
+                                  _createElementVNode("section", _hoisted_24, [
                                     _cache[37] || (_cache[37] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "历史封面"),
@@ -1678,7 +1673,7 @@ ${yaml}
                                       _: 1
                                     })
                                   ]),
-                                  _createElementVNode("section", _hoisted_26, [
+                                  _createElementVNode("section", _hoisted_25, [
                                     _cache[42] || (_cache[42] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "字体库"),
@@ -1740,8 +1735,8 @@ ${yaml}
                                       accept: ".ttf,.ttc,.otf,.woff,.woff2,font/*",
                                       onChange: onFontFileInputChange
                                     }, null, 544),
-                                    _createElementVNode("div", _hoisted_27, [
-                                      _createElementVNode("div", _hoisted_28, [
+                                    _createElementVNode("div", _hoisted_26, [
+                                      _createElementVNode("div", _hoisted_27, [
                                         _cache[39] || (_cache[39] = _createElementVNode("div", null, [
                                           _createElementVNode("div", { class: "mcr-panel__eyebrow" }, "Font Library"),
                                           _createElementVNode("div", { class: "mcr-panel__title mcr-font-library__title" }, "自定义字体库")
@@ -1759,10 +1754,10 @@ ${yaml}
                                           _: 1
                                         }, 8, ["disabled"])
                                       ]),
-                                      _createElementVNode("div", _hoisted_29, [
-                                        _createElementVNode("label", _hoisted_30, [
+                                      _createElementVNode("div", _hoisted_28, [
+                                        _createElementVNode("label", _hoisted_29, [
                                           _cache[40] || (_cache[40] = _createElementVNode("span", { class: "mcr-blueprint-field__label" }, "网络字体链接", -1)),
-                                          _createElementVNode("span", _hoisted_31, [
+                                          _createElementVNode("span", _hoisted_30, [
                                             _withDirectives(_createElementVNode("input", {
                                               "onUpdate:modelValue": _cache[18] || (_cache[18] = ($event) => fontUrlInput.value = $event),
                                               class: "mcr-blueprint-field__control mcr-font-link-field__input",
@@ -1784,12 +1779,12 @@ ${yaml}
                                                 icon: "mdi-download",
                                                 size: "18"
                                               })
-                                            ], 8, _hoisted_32)) : _createCommentVNode("", true)
+                                            ], 8, _hoisted_31)) : _createCommentVNode("", true)
                                           ]),
                                           _cache[41] || (_cache[41] = _createElementVNode("span", { class: "mcr-blueprint-field__hint" }, "支持 ttf / ttc / otf / woff / woff2，导入后保存到插件数据目录", -1))
                                         ])
                                       ]),
-                                      _createElementVNode("div", _hoisted_33, [
+                                      _createElementVNode("div", _hoisted_32, [
                                         _createElementVNode("button", {
                                           type: "button",
                                           class: "mcr-config-collapse-button",
@@ -1802,7 +1797,7 @@ ${yaml}
                                           _createTextVNode(" 已上传字体 " + _toDisplayString(customFontItems.value.length) + " 个 ", 1)
                                         ])
                                       ]),
-                                      fontLibraryExpanded.value && fontLibraryLoading.value ? (_openBlock(), _createElementBlock("div", _hoisted_34, "正在读取字体库...")) : fontLibraryExpanded.value && !customFontItems.value.length ? (_openBlock(), _createElementBlock("div", _hoisted_35, "暂无自定义字体")) : fontLibraryExpanded.value ? (_openBlock(), _createElementBlock("div", _hoisted_36, [
+                                      fontLibraryExpanded.value && fontLibraryLoading.value ? (_openBlock(), _createElementBlock("div", _hoisted_33, "正在读取字体库...")) : fontLibraryExpanded.value && !customFontItems.value.length ? (_openBlock(), _createElementBlock("div", _hoisted_34, "暂无自定义字体")) : fontLibraryExpanded.value ? (_openBlock(), _createElementBlock("div", _hoisted_35, [
                                         (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(customFontItems.value, (item) => {
                                           return _openBlock(), _createElementBlock("button", {
                                             key: item.value,
@@ -1815,7 +1810,7 @@ ${yaml}
                                               class: "mcr-font-item__sample",
                                               style: _normalizeStyle({ fontFamily: getCustomFontFamily(item) })
                                             }, "Aa 字", 4),
-                                            _createElementVNode("span", _hoisted_38, _toDisplayString(item.title), 1),
+                                            _createElementVNode("span", _hoisted_37, _toDisplayString(item.title), 1),
                                             _createElementVNode("span", {
                                               role: "button",
                                               tabindex: "-1",
@@ -1827,7 +1822,7 @@ ${yaml}
                                                 icon: "mdi-pencil-outline",
                                                 size: "15"
                                               })
-                                            ], 8, _hoisted_39),
+                                            ], 8, _hoisted_38),
                                             _createElementVNode("span", {
                                               role: "button",
                                               tabindex: "-1",
@@ -1839,14 +1834,14 @@ ${yaml}
                                                 icon: "mdi-trash-can-outline",
                                                 size: "15"
                                               })
-                                            ], 8, _hoisted_40)
-                                          ], 8, _hoisted_37);
+                                            ], 8, _hoisted_39)
+                                          ], 8, _hoisted_36);
                                         }), 128))
                                       ])) : _createCommentVNode("", true),
-                                      fontUploadMessage.value ? (_openBlock(), _createElementBlock("div", _hoisted_41, _toDisplayString(fontUploadMessage.value), 1)) : _createCommentVNode("", true)
+                                      fontUploadMessage.value ? (_openBlock(), _createElementBlock("div", _hoisted_40, _toDisplayString(fontUploadMessage.value), 1)) : _createCommentVNode("", true)
                                     ])
                                   ]),
-                                  _createElementVNode("section", _hoisted_42, [
+                                  _createElementVNode("section", _hoisted_41, [
                                     _cache[46] || (_cache[46] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "备份还原"),
@@ -1861,7 +1856,7 @@ ${yaml}
                                       accept: ".json,application/json",
                                       onChange: onBackupFileInputChange
                                     }, null, 544),
-                                    _createElementVNode("div", _hoisted_43, [
+                                    _createElementVNode("div", _hoisted_42, [
                                       _createElementVNode("div", null, [
                                         _createVNode(BlueprintField, {
                                           modelValue: config.value.backup_path,
@@ -1880,8 +1875,8 @@ ${yaml}
                                           hint: "留空关闭定时备份；填写正确 5 位 cron 表达式则开启"
                                         }, null, 8, ["modelValue"])
                                       ]),
-                                      _createElementVNode("div", _hoisted_44, [
-                                        _createElementVNode("div", _hoisted_45, [
+                                      _createElementVNode("div", _hoisted_43, [
+                                        _createElementVNode("div", _hoisted_44, [
                                           _createVNode(_component_v_btn, {
                                             class: "mcr-button mcr-button--ghost mcr-button--dark-neutral",
                                             "prepend-icon": "mdi-content-save-cog-outline",
@@ -1931,24 +1926,24 @@ ${yaml}
                                             _createTextVNode(" 已备份 " + _toDisplayString(backupItems.value.length) + " 个 ", 1)
                                           ])
                                         ]),
-                                        backupLibraryExpanded.value ? (_openBlock(), _createElementBlock("div", _hoisted_46, [
-                                          backupListLoading.value ? (_openBlock(), _createElementBlock("div", _hoisted_47, "正在读取备份记录...")) : !backupItems.value.length ? (_openBlock(), _createElementBlock("div", _hoisted_48, "暂无备份记录")) : (_openBlock(), _createElementBlock("div", _hoisted_49, [
+                                        backupLibraryExpanded.value ? (_openBlock(), _createElementBlock("div", _hoisted_45, [
+                                          backupListLoading.value ? (_openBlock(), _createElementBlock("div", _hoisted_46, "正在读取备份记录...")) : !backupItems.value.length ? (_openBlock(), _createElementBlock("div", _hoisted_47, "暂无备份记录")) : (_openBlock(), _createElementBlock("div", _hoisted_48, [
                                             (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(backupItems.value, (item) => {
                                               return _openBlock(), _createElementBlock("article", {
                                                 key: item.path || item.name,
                                                 class: "mcr-backup-item"
                                               }, [
-                                                _createElementVNode("div", _hoisted_50, [
+                                                _createElementVNode("div", _hoisted_49, [
                                                   _createElementVNode("div", {
                                                     class: "mcr-backup-item__name",
                                                     title: item.name
-                                                  }, _toDisplayString(item.name), 9, _hoisted_51),
-                                                  _createElementVNode("div", _hoisted_52, [
+                                                  }, _toDisplayString(item.name), 9, _hoisted_50),
+                                                  _createElementVNode("div", _hoisted_51, [
                                                     _createTextVNode(_toDisplayString(item.exported_at || item.mtime_label || "未知时间") + " ", 1),
-                                                    item.version ? (_openBlock(), _createElementBlock("span", _hoisted_53, "v" + _toDisplayString(item.version), 1)) : _createCommentVNode("", true)
+                                                    item.version ? (_openBlock(), _createElementBlock("span", _hoisted_52, "v" + _toDisplayString(item.version), 1)) : _createCommentVNode("", true)
                                                   ])
                                                 ]),
-                                                _createElementVNode("div", _hoisted_54, [
+                                                _createElementVNode("div", _hoisted_53, [
                                                   _createElementVNode("button", {
                                                     type: "button",
                                                     title: "下载备份",
@@ -1958,7 +1953,7 @@ ${yaml}
                                                       icon: "mdi-download-outline",
                                                       size: "17"
                                                     })
-                                                  ], 8, _hoisted_55),
+                                                  ], 8, _hoisted_54),
                                                   _createElementVNode("button", {
                                                     type: "button",
                                                     title: "恢复配置",
@@ -1968,7 +1963,7 @@ ${yaml}
                                                       icon: "mdi-restore",
                                                       size: "17"
                                                     })
-                                                  ], 8, _hoisted_56),
+                                                  ], 8, _hoisted_55),
                                                   _createElementVNode("button", {
                                                     type: "button",
                                                     title: "删除备份",
@@ -1979,7 +1974,7 @@ ${yaml}
                                                       icon: "mdi-trash-can-outline",
                                                       size: "17"
                                                     })
-                                                  ], 8, _hoisted_57)
+                                                  ], 8, _hoisted_56)
                                                 ])
                                               ]);
                                             }), 128))
@@ -1988,15 +1983,15 @@ ${yaml}
                                       ])
                                     ])
                                   ]),
-                                  _createElementVNode("section", _hoisted_58, [
+                                  _createElementVNode("section", _hoisted_57, [
                                     _cache[51] || (_cache[51] = _createElementVNode("header", { class: "mcr-config-section-card__header" }, [
                                       _createElementVNode("div", null, [
                                         _createElementVNode("div", { class: "mcr-config-section-card__title" }, "清理缓存"),
                                         _createElementVNode("p", { class: "mcr-config-section-card__copy" }, "清理图片或字体缓存，不影响已保存的配置。")
                                       ])
                                     ], -1)),
-                                    _createElementVNode("div", _hoisted_59, [
-                                      _createElementVNode("div", _hoisted_60, [
+                                    _createElementVNode("div", _hoisted_58, [
+                                      _createElementVNode("div", _hoisted_59, [
                                         _cache[48] || (_cache[48] = _createElementVNode("div", null, [
                                           _createElementVNode("strong", null, "清理图片缓存"),
                                           _createElementVNode("span", null, "释放插件生成图片缓存占用的空间。")
@@ -2017,7 +2012,7 @@ ${yaml}
                                           label: "清理图片缓存"
                                         })) : _createCommentVNode("", true)
                                       ]),
-                                      _createElementVNode("div", _hoisted_61, [
+                                      _createElementVNode("div", _hoisted_60, [
                                         _cache[50] || (_cache[50] = _createElementVNode("div", null, [
                                           _createElementVNode("strong", null, "清理字体缓存"),
                                           _createElementVNode("span", null, "遇到字体读取异常时可尝试重新清理。")
@@ -2053,7 +2048,7 @@ ${yaml}
                                   _cache[54] || (_cache[54] = _createElementVNode("div", { class: "mcr-panel__eyebrow" }, "Titles", -1)),
                                   _cache[55] || (_cache[55] = _createElementVNode("div", { class: "mcr-panel__title" }, "主副标题配置", -1)),
                                   _cache[56] || (_cache[56] = _createElementVNode("p", { class: "mcr-panel__copy mcr-config-copy" }, " 严格模式按标准 YAML 校验；宽容模式会兼容中文冒号、冒号后无空格和部分缩进问题。 ", -1)),
-                                  _createElementVNode("div", _hoisted_62, [
+                                  _createElementVNode("div", _hoisted_61, [
                                     _createVNode(_component_v_switch, {
                                       modelValue: config.value.title_config_strict,
                                       "onUpdate:modelValue": _cache[23] || (_cache[23] = ($event) => config.value.title_config_strict = $event),
@@ -2062,7 +2057,7 @@ ${yaml}
                                       density: "comfortable",
                                       label: config.value.title_config_strict ? "严格模式" : "宽容模式"
                                     }, null, 8, ["modelValue", "label"]),
-                                    _createElementVNode("span", _hoisted_63, _toDisplayString(config.value.title_config_strict ? "必须使用标准 YAML 语法" : "允许常见中文符号和空格容错"), 1),
+                                    _createElementVNode("span", _hoisted_62, _toDisplayString(config.value.title_config_strict ? "必须使用标准 YAML 语法" : "允许常见中文符号和空格容错"), 1),
                                     _createVNode(_component_v_btn, {
                                       size: "small",
                                       class: "mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-title-config-template-btn",
@@ -2103,10 +2098,14 @@ ${yaml}
                         ]),
                         _: 1
                       }, 8, ["modelValue"]),
-                      _createElementVNode("div", _hoisted_64, "UI Rev " + _toDisplayString(_unref(UI_REV)), 1)
+                      _createElementVNode("div", _hoisted_63, "UI Rev " + _toDisplayString(_unref(UI_REV)), 1)
                     ])
                   ])
-                ])
+                ]),
+                _createVNode(ViewportSaveToast, {
+                  message: configSaveMessage.value,
+                  theme: isDark.value ? "dark" : "light"
+                }, null, 8, ["message", "theme"])
               ]),
               _: 1
             }, 8, ["defaults"])
@@ -2118,6 +2117,6 @@ ${yaml}
   }
 });
 
-const Config = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-62ec0700"]]);
+const Config = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-73415794"]]);
 
 export { Config as default };

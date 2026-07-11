@@ -1,6 +1,6 @@
 import { importShared } from './__federation_fn_import-ui-rev-20260705-11.js';
 import { _ as _export_sfc } from './_plugin-vue_export-helper-ui-rev-20260705-11.js';
-import { g as getTemplateFontFamilyStack, S as SEMANTIC_FONT_ITEMS, B as BUILTIN_FONT_ITEMS, a as getTemplateFontFaceName, b as BlueprintField, c as BlueprintSelect, M as MCR_CONTROL_DEFAULTS, A as AsyncStatusDots } from './fonts-ui-rev-20260705-11.js';
+import { g as getTemplateFontFamilyStack, S as SEMANTIC_FONT_ITEMS, B as BUILTIN_FONT_ITEMS, a as getTemplateFontFaceName, b as BlueprintField, c as BlueprintSelect, M as MCR_CONTROL_DEFAULTS, A as AsyncStatusDots, V as ViewportSaveToast } from './ViewportSaveToast-ui-rev-20260705-11.js';
 
 const {defineComponent:_defineComponent$4} = await importShared('vue');
 
@@ -5572,7 +5572,7 @@ const images = {
 
 const {defineComponent:_defineComponent} = await importShared('vue');
 
-const {createElementVNode:_createElementVNode,unref:_unref,openBlock:_openBlock,createElementBlock:_createElementBlock,createCommentVNode:_createCommentVNode,resolveComponent:_resolveComponent,createBlock:_createBlock,createVNode:_createVNode,withModifiers:_withModifiers,normalizeClass:_normalizeClass,toDisplayString:_toDisplayString,normalizeStyle:_normalizeStyle,withCtx:_withCtx,Transition:_Transition,createTextVNode:_createTextVNode,vModelSelect:_vModelSelect,withDirectives:_withDirectives,withKeys:_withKeys,renderList:_renderList,Fragment:_Fragment,mergeProps:_mergeProps,vShow:_vShow,Teleport:_Teleport} = await importShared('vue');
+const {createElementVNode:_createElementVNode,unref:_unref,openBlock:_openBlock,createElementBlock:_createElementBlock,createCommentVNode:_createCommentVNode,resolveComponent:_resolveComponent,createBlock:_createBlock,createVNode:_createVNode,withModifiers:_withModifiers,normalizeClass:_normalizeClass,toDisplayString:_toDisplayString,normalizeStyle:_normalizeStyle,withCtx:_withCtx,createTextVNode:_createTextVNode,vModelSelect:_vModelSelect,withDirectives:_withDirectives,withKeys:_withKeys,Transition:_Transition,renderList:_renderList,Fragment:_Fragment,mergeProps:_mergeProps,vShow:_vShow,Teleport:_Teleport} = await importShared('vue');
 
 const _hoisted_1 = ["data-mcr-theme"];
 const _hoisted_2 = { class: "mcr-shell__header mcr-page-hero" };
@@ -5616,135 +5616,127 @@ const _hoisted_26 = ["disabled"];
 const _hoisted_27 = ["aria-label", "title", "disabled"];
 const _hoisted_28 = { class: "mcr-editor-save-mode" };
 const _hoisted_29 = {
-  key: 0,
-  class: "mcr-editor-save-hint"
-};
-const _hoisted_30 = {
   key: 1,
   class: "blueprint-preview-frame"
 };
-const _hoisted_31 = {
+const _hoisted_30 = {
   key: 2,
   class: "blueprint-meta-grid mcr-render-options"
 };
-const _hoisted_32 = { class: "mcr-render-option" };
-const _hoisted_33 = ["disabled"];
-const _hoisted_34 = { class: "mcr-render-option" };
-const _hoisted_35 = { class: "yh-field-label" };
-const _hoisted_36 = {
+const _hoisted_31 = { class: "mcr-render-option" };
+const _hoisted_32 = ["disabled"];
+const _hoisted_33 = { class: "mcr-render-option" };
+const _hoisted_34 = { class: "yh-field-label" };
+const _hoisted_35 = {
   key: 0,
   class: "yh-inline-lock-badge"
 };
-const _hoisted_37 = ["disabled"];
-const _hoisted_38 = { value: "DateCreated" };
-const _hoisted_39 = { class: "mcr-render-option" };
-const _hoisted_40 = ["disabled"];
-const _hoisted_41 = {
+const _hoisted_36 = ["disabled"];
+const _hoisted_37 = { value: "DateCreated" };
+const _hoisted_38 = { class: "mcr-render-option" };
+const _hoisted_39 = ["disabled"];
+const _hoisted_40 = {
   key: 1,
   class: "mcr-render-option__value"
 };
-const _hoisted_42 = ["aria-expanded"];
-const _hoisted_43 = { class: "mcr-collapsible-heading__title" };
-const _hoisted_44 = { class: "mcr-panel__title" };
-const _hoisted_45 = ["aria-pressed", "aria-disabled", "disabled", "onKeydown"];
-const _hoisted_46 = {
+const _hoisted_41 = ["aria-expanded"];
+const _hoisted_42 = { class: "mcr-collapsible-heading__title" };
+const _hoisted_43 = { class: "mcr-panel__title" };
+const _hoisted_44 = ["aria-pressed", "aria-disabled", "disabled", "onKeydown"];
+const _hoisted_45 = {
   key: 0,
   class: "mcr-animated-parameter-panel"
 };
-const _hoisted_47 = { class: "mcr-animated-parameter-panel__header" };
-const _hoisted_48 = { class: "mcr-animated-settings__grid" };
-const _hoisted_49 = {
+const _hoisted_46 = { class: "mcr-animated-parameter-panel__header" };
+const _hoisted_47 = { class: "mcr-animated-settings__grid" };
+const _hoisted_48 = {
   key: 3,
   class: "mcr-note"
 };
-const _hoisted_50 = { class: "mcr-animated-parameter-panel__actions" };
-const _hoisted_51 = {
-  key: 1,
-  class: "mcr-animated-parameter-panel__saved"
-};
-const _hoisted_52 = ["aria-disabled", "tabindex", "onClick", "onKeydown"];
-const _hoisted_53 = { class: "mcr-scheme-row__media" };
-const _hoisted_54 = { class: "mcr-scheme-row__body" };
-const _hoisted_55 = { key: 0 };
-const _hoisted_56 = { key: 1 };
-const _hoisted_57 = { class: "mcr-scheme-row__actions" };
-const _hoisted_58 = {
+const _hoisted_49 = { class: "mcr-animated-parameter-panel__actions" };
+const _hoisted_50 = ["aria-disabled", "tabindex", "onClick", "onKeydown"];
+const _hoisted_51 = { class: "mcr-scheme-row__media" };
+const _hoisted_52 = { class: "mcr-scheme-row__body" };
+const _hoisted_53 = { key: 0 };
+const _hoisted_54 = { key: 1 };
+const _hoisted_55 = { class: "mcr-scheme-row__actions" };
+const _hoisted_56 = {
   key: 0,
   class: "mcr-scheme-list__tail"
 };
-const _hoisted_59 = ["aria-expanded"];
-const _hoisted_60 = { class: "mcr-collapsible-heading__title" };
-const _hoisted_61 = { class: "mcr-panel__title" };
-const _hoisted_62 = ["data-mcr-theme"];
-const _hoisted_63 = { class: "mcr-history-selection-count" };
+const _hoisted_57 = ["aria-expanded"];
+const _hoisted_58 = { class: "mcr-collapsible-heading__title" };
+const _hoisted_59 = { class: "mcr-panel__title" };
+const _hoisted_60 = ["data-mcr-theme"];
+const _hoisted_61 = { class: "mcr-history-selection-count" };
+const _hoisted_62 = ["disabled"];
+const _hoisted_63 = ["disabled"];
 const _hoisted_64 = ["disabled"];
 const _hoisted_65 = ["disabled"];
-const _hoisted_66 = ["disabled"];
-const _hoisted_67 = ["disabled"];
-const _hoisted_68 = {
+const _hoisted_66 = {
   id: "mcr-history-list-content",
   class: "mcr-history-list-content"
 };
-const _hoisted_69 = {
+const _hoisted_67 = {
   key: 0,
   class: "mcr-history-groups"
 };
-const _hoisted_70 = { class: "mcr-history-group__heading" };
-const _hoisted_71 = { class: "mcr-history-group__title" };
-const _hoisted_72 = { class: "mcr-history-card__media" };
-const _hoisted_73 = ["aria-pressed", "aria-label", "disabled", "onClick"];
-const _hoisted_74 = {
+const _hoisted_68 = { class: "mcr-history-group__heading" };
+const _hoisted_69 = { class: "mcr-history-group__title" };
+const _hoisted_70 = { class: "mcr-history-card__media" };
+const _hoisted_71 = ["aria-pressed", "aria-label", "disabled", "onClick"];
+const _hoisted_72 = {
   key: 0,
   class: "mcr-history-card__title"
 };
-const _hoisted_75 = { class: "mcr-history-card__actions" };
-const _hoisted_76 = { class: "mcr-history-card__meta" };
-const _hoisted_77 = {
+const _hoisted_73 = { class: "mcr-history-card__actions" };
+const _hoisted_74 = { class: "mcr-history-card__meta" };
+const _hoisted_75 = {
   key: 1,
   class: "mcr-history-empty"
 };
-const _hoisted_78 = {
+const _hoisted_76 = {
   key: 0,
   class: "mcr-donation-profile"
 };
-const _hoisted_79 = ["src"];
-const _hoisted_80 = {
+const _hoisted_77 = ["src"];
+const _hoisted_78 = {
   class: "mcr-donation-profile__crown",
   "aria-hidden": "true"
 };
-const _hoisted_81 = { class: "mcr-donation-title" };
-const _hoisted_82 = { class: "mcr-donation-subtitle" };
-const _hoisted_83 = {
+const _hoisted_79 = { class: "mcr-donation-title" };
+const _hoisted_80 = { class: "mcr-donation-subtitle" };
+const _hoisted_81 = {
   class: "mcr-donation-heart",
   "aria-hidden": "true"
 };
-const _hoisted_84 = {
+const _hoisted_82 = {
   key: 2,
   class: "mcr-donation-stats"
 };
-const _hoisted_85 = { class: "mcr-donation-stat-card" };
-const _hoisted_86 = { class: "mcr-donation-stat-card__top" };
-const _hoisted_87 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--static" };
-const _hoisted_88 = { class: "mcr-donation-stat-card" };
-const _hoisted_89 = { class: "mcr-donation-stat-card__top" };
-const _hoisted_90 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--dynamic" };
-const _hoisted_91 = { class: "mcr-donation-stat-card" };
-const _hoisted_92 = { class: "mcr-donation-stat-card__top" };
-const _hoisted_93 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--history" };
-const _hoisted_94 = { class: "mcr-donation-stat-card" };
-const _hoisted_95 = { class: "mcr-donation-stat-card__top" };
-const _hoisted_96 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--run" };
-const _hoisted_97 = {
+const _hoisted_83 = { class: "mcr-donation-stat-card" };
+const _hoisted_84 = { class: "mcr-donation-stat-card__top" };
+const _hoisted_85 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--static" };
+const _hoisted_86 = { class: "mcr-donation-stat-card" };
+const _hoisted_87 = { class: "mcr-donation-stat-card__top" };
+const _hoisted_88 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--dynamic" };
+const _hoisted_89 = { class: "mcr-donation-stat-card" };
+const _hoisted_90 = { class: "mcr-donation-stat-card__top" };
+const _hoisted_91 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--history" };
+const _hoisted_92 = { class: "mcr-donation-stat-card" };
+const _hoisted_93 = { class: "mcr-donation-stat-card__top" };
+const _hoisted_94 = { class: "mcr-donation-stat-icon mcr-donation-stat-icon--run" };
+const _hoisted_95 = {
   key: 3,
   class: "mcr-donation-qr"
 };
-const _hoisted_98 = ["src"];
-const _hoisted_99 = {
+const _hoisted_96 = ["src"];
+const _hoisted_97 = {
   key: 4,
   class: "mcr-donation-message"
 };
-const _hoisted_100 = { class: "mcr-donation-card__actions" };
-const _hoisted_101 = {
+const _hoisted_98 = { class: "mcr-donation-card__actions" };
+const _hoisted_99 = {
   key: 5,
   class: "mcr-donation-footnote"
 };
@@ -5811,7 +5803,6 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
     const presetStaticRenderMode = ref("layout");
     const animatedSettingsPanelOpen = ref(false);
     const animatedSettingsSaving = ref(false);
-    const animatedSettingsSaved = ref(false);
     const animatedSettingsBaseStyle = ref("static_1");
     const animatedSettingsByStyle = ref({});
     const customFontItems = ref([]);
@@ -6609,7 +6600,6 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
       if (item.kind !== "preset") return;
       animatedSettingsBaseStyle.value = item.baseStyle;
       syncAnimatedSettings(null, item.baseStyle);
-      animatedSettingsSaved.value = false;
       animatedSettingsPanelOpen.value = true;
       if (coverStyleBase.value !== item.baseStyle || styleVariant.value !== "animated") {
         await setCoverStyle(item.baseStyle, "animated");
@@ -6643,12 +6633,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
           throw new Error(resp.msg || "save animated settings failed");
         }
         syncAnimatedSettings(resp?.data || payload, animatedSettingsBaseStyle.value);
-        animatedSettingsSaved.value = true;
+        showEditorSaveStatus("已保存");
         backendPreview.value = null;
         await loadPreviewSources();
-        window.setTimeout(() => {
-          animatedSettingsSaved.value = false;
-        }, 1800);
       } catch (e) {
         console.error("save animated settings failed", e);
       } finally {
@@ -8162,19 +8149,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                         }, [
                                           _createElementVNode("span", _hoisted_28, _toDisplayString(editorAutoSaveEnabled.value ? "AUTO" : "MANUAL"), 1)
                                         ], 8, _hoisted_27)
-                                      ]),
-                                      _createVNode(_Transition, { name: "mcr-save-hint" }, {
-                                        default: _withCtx(() => [
-                                          editorSaveStatus.value ? (_openBlock(), _createElementBlock("span", _hoisted_29, [
-                                            _createVNode(_component_v_icon, {
-                                              icon: "mdi-content-save-check-outline",
-                                              size: "14"
-                                            }),
-                                            _createElementVNode("span", null, _toDisplayString(editorSaveStatus.value), 1)
-                                          ])) : _createCommentVNode("", true)
-                                        ]),
-                                        _: 1
-                                      })
+                                      ])
                                     ]),
                                     _createVNode(_component_v_btn, {
                                       size: "small",
@@ -8200,7 +8175,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                     }, 8, ["disabled"])
                                   ]),
                                   _: 1
-                                }, 8, ["model-value", "preview-source", "params", "floating-tools-visible", "theme", "api"])) : (_openBlock(), _createElementBlock("div", _hoisted_30, [
+                                }, 8, ["model-value", "preview-source", "params", "floating-tools-visible", "theme", "api"])) : (_openBlock(), _createElementBlock("div", _hoisted_29, [
                                   showMainPreviewSkeleton.value ? (_openBlock(), _createElementBlock("div", {
                                     key: 0,
                                     class: _normalizeClass(["blueprint-skeleton blueprint-skeleton--preview", { "blueprint-skeleton--active": resourceSkeletonActive.value }]),
@@ -8217,8 +8192,8 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                     params: simulationParams
                                   }, null, 8, ["source", "params"]))
                                 ])),
-                                !isEditingLayout.value ? (_openBlock(), _createElementBlock("div", _hoisted_31, [
-                                  _createElementVNode("label", _hoisted_32, [
+                                !isEditingLayout.value ? (_openBlock(), _createElementBlock("div", _hoisted_30, [
+                                  _createElementVNode("label", _hoisted_31, [
                                     _cache[57] || (_cache[57] = _createElementVNode("span", null, "海报来源", -1)),
                                     _withDirectives(_createElementVNode("select", {
                                       "onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => posterSource.value = $event),
@@ -8227,14 +8202,14 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                     }, [..._cache[56] || (_cache[56] = [
                                       _createElementVNode("option", { value: "backdrop" }, "横版 Backdrop", -1),
                                       _createElementVNode("option", { value: "poster" }, "竖版 Poster", -1)
-                                    ])], 40, _hoisted_33), [
+                                    ])], 40, _hoisted_32), [
                                       [_vModelSelect, posterSource.value]
                                     ])
                                   ]),
-                                  _createElementVNode("label", _hoisted_34, [
-                                    _createElementVNode("span", _hoisted_35, [
+                                  _createElementVNode("label", _hoisted_33, [
+                                    _createElementVNode("span", _hoisted_34, [
                                       _cache[58] || (_cache[58] = _createElementVNode("span", null, "封面来源排序", -1)),
-                                      sourceSortLocked.value ? (_openBlock(), _createElementBlock("span", _hoisted_36, "已锁定")) : _createCommentVNode("", true)
+                                      sourceSortLocked.value ? (_openBlock(), _createElementBlock("span", _hoisted_35, "已锁定")) : _createCommentVNode("", true)
                                     ]),
                                     _withDirectives(_createElementVNode("select", {
                                       "onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => sourceSortBy.value = $event),
@@ -8242,13 +8217,13 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                       onChange: saveRenderOptions
                                     }, [
                                       _cache[59] || (_cache[59] = _createElementVNode("option", { value: "Random" }, "随机", -1)),
-                                      _createElementVNode("option", _hoisted_38, _toDisplayString(sourceSortLocked.value ? "最新入库（已锁定）" : "最新入库"), 1),
+                                      _createElementVNode("option", _hoisted_37, _toDisplayString(sourceSortLocked.value ? "最新入库（已锁定）" : "最新入库"), 1),
                                       _cache[60] || (_cache[60] = _createElementVNode("option", { value: "PremiereDate" }, "最新发行", -1))
-                                    ], 40, _hoisted_37), [
+                                    ], 40, _hoisted_36), [
                                       [_vModelSelect, sourceSortBy.value]
                                     ])
                                   ]),
-                                  _createElementVNode("label", _hoisted_39, [
+                                  _createElementVNode("label", _hoisted_38, [
                                     _cache[62] || (_cache[62] = _createElementVNode("span", null, "分辨率", -1)),
                                     styleVariant.value === "static" ? _withDirectives((_openBlock(), _createElementBlock("select", {
                                       key: 0,
@@ -8259,9 +8234,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                       _createElementVNode("option", { value: "480p" }, "480p", -1),
                                       _createElementVNode("option", { value: "720p" }, "720p", -1),
                                       _createElementVNode("option", { value: "1080p" }, "1080p", -1)
-                                    ])], 40, _hoisted_40)), [
+                                    ])], 40, _hoisted_39)), [
                                       [_vModelSelect, staticResolution.value]
-                                    ]) : (_openBlock(), _createElementBlock("span", _hoisted_41, _toDisplayString(animatedResolutionLabel.value), 1))
+                                    ]) : (_openBlock(), _createElementBlock("span", _hoisted_40, _toDisplayString(animatedResolutionLabel.value), 1))
                                   ])
                                 ])) : _createCommentVNode("", true)
                               ], 2),
@@ -8282,9 +8257,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                     _cache[8] || (_cache[8] = _withKeys(_withModifiers(($event) => schemeListCollapsed.value = !schemeListCollapsed.value, ["prevent"]), ["space"]))
                                   ]
                                 }, [
-                                  _createElementVNode("div", _hoisted_43, [
+                                  _createElementVNode("div", _hoisted_42, [
                                     _cache[64] || (_cache[64] = _createElementVNode("div", { class: "mcr-panel__eyebrow" }, "Presets", -1)),
-                                    _createElementVNode("div", _hoisted_44, [
+                                    _createElementVNode("div", _hoisted_43, [
                                       _cache[63] || (_cache[63] = _createTextVNode(" 封面方案 ", -1)),
                                       _createVNode(_component_v_icon, {
                                         icon: "mdi-chevron-up",
@@ -8325,11 +8300,11 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                         _createElementVNode("span", { class: "blueprint-mode-option blueprint-mode-option--animated" }, [
                                           _createElementVNode("span", null, "动图")
                                         ], -1)
-                                      ])], 42, _hoisted_45)) : _createCommentVNode("", true)
+                                      ])], 42, _hoisted_44)) : _createCommentVNode("", true)
                                     ]),
                                     _: 1
                                   })
-                                ], 42, _hoisted_42),
+                                ], 42, _hoisted_41),
                                 _createVNode(_Transition, { name: "mcr-list-collapse" }, {
                                   default: _withCtx(() => [
                                     _withDirectives(_createElementVNode("div", {
@@ -8337,8 +8312,8 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                       class: _normalizeClass(["mcr-scheme-list", { "mcr-scheme-list--animated": styleVariant.value === "animated" }]),
                                       "aria-label": "封面方案列表"
                                     }, [
-                                      animatedSettingsPanelOpen.value ? (_openBlock(), _createElementBlock("div", _hoisted_46, [
-                                        _createElementVNode("div", _hoisted_47, [
+                                      animatedSettingsPanelOpen.value ? (_openBlock(), _createElementBlock("div", _hoisted_45, [
+                                        _createElementVNode("div", _hoisted_46, [
                                           _createElementVNode("button", {
                                             type: "button",
                                             class: "mcr-animated-parameter-panel__back",
@@ -8356,7 +8331,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                             _createElementVNode("strong", null, _toDisplayString(animatedSettingsTitle.value), 1)
                                           ])
                                         ]),
-                                        _createElementVNode("div", _hoisted_48, [
+                                        _createElementVNode("div", _hoisted_47, [
                                           _createVNode(BlueprintSelect, {
                                             modelValue: animatedSettings.animationFormat,
                                             "onUpdate:modelValue": _cache[10] || (_cache[10] = ($event) => animatedSettings.animationFormat = $event),
@@ -8460,14 +8435,13 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                             label: "动画风格",
                                             items: animatedDepartureItems
                                           }, null, 8, ["modelValue"])) : _createCommentVNode("", true),
-                                          animatedSettingsBaseStyle.value === "static_3" ? (_openBlock(), _createElementBlock("p", _hoisted_49, " 方案 3 使用固定九宫格滚动，素材数量按 9 张处理。 ")) : _createCommentVNode("", true)
+                                          animatedSettingsBaseStyle.value === "static_3" ? (_openBlock(), _createElementBlock("p", _hoisted_48, " 方案 3 使用固定九宫格滚动，素材数量按 9 张处理。 ")) : _createCommentVNode("", true)
                                         ]),
-                                        _createElementVNode("div", _hoisted_50, [
+                                        _createElementVNode("div", _hoisted_49, [
                                           animatedSettingsSaving.value ? (_openBlock(), _createBlock(AsyncStatusDots, {
                                             key: 0,
                                             label: "保存参数"
                                           })) : _createCommentVNode("", true),
-                                          animatedSettingsSaved.value ? (_openBlock(), _createElementBlock("span", _hoisted_51, "已保存")) : _createCommentVNode("", true),
                                           _createVNode(_component_v_btn, {
                                             size: "small",
                                             class: "mcr-button mcr-button--primary mcr-button--apple-primary",
@@ -8506,7 +8480,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                                   _withKeys(_withModifiers(($event) => !controlsLocked.value && selectSchemeItem(item), ["prevent"]), ["space"])
                                                 ]
                                               }, [
-                                                _createElementVNode("span", _hoisted_53, [
+                                                _createElementVNode("span", _hoisted_51, [
                                                   showStylePreviewSkeleton.value ? (_openBlock(), _createElementBlock("span", {
                                                     key: 0,
                                                     class: _normalizeClass(["blueprint-skeleton blueprint-skeleton--card", { "blueprint-skeleton--active": resourceSkeletonActive.value }]),
@@ -8523,12 +8497,12 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                                     params: simulationParams
                                                   }, null, 8, ["source", "params"])) : _createCommentVNode("", true)
                                                 ]),
-                                                _createElementVNode("span", _hoisted_54, [
+                                                _createElementVNode("span", _hoisted_52, [
                                                   _createElementVNode("strong", null, _toDisplayString(item.title), 1),
-                                                  styleVariant.value === "static" ? (_openBlock(), _createElementBlock("span", _hoisted_55, _toDisplayString(item.kind === "preset" ? "预设方案" : "自定义方案"), 1)) : (_openBlock(), _createElementBlock("span", _hoisted_56, _toDisplayString(animatedResolutionLabel.value), 1))
+                                                  styleVariant.value === "static" ? (_openBlock(), _createElementBlock("span", _hoisted_53, _toDisplayString(item.kind === "preset" ? "预设方案" : "自定义方案"), 1)) : (_openBlock(), _createElementBlock("span", _hoisted_54, _toDisplayString(animatedResolutionLabel.value), 1))
                                                 ])
-                                              ], 42, _hoisted_52),
-                                              _createElementVNode("div", _hoisted_57, [
+                                              ], 42, _hoisted_50),
+                                              _createElementVNode("div", _hoisted_55, [
                                                 styleVariant.value === "static" ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
                                                   _createVNode(_component_v_btn, {
                                                     icon: "mdi-tune-variant",
@@ -8627,7 +8601,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                             ], 2);
                                           }), 128))
                                         ])),
-                                        styleVariant.value === "static" ? (_openBlock(), _createElementBlock("div", _hoisted_58, [
+                                        styleVariant.value === "static" ? (_openBlock(), _createElementBlock("div", _hoisted_56, [
                                           _createVNode(_component_v_btn, {
                                             size: "small",
                                             class: "mcr-button mcr-button--primary mcr-button--dark-neutral mcr-scheme-tail-button",
@@ -8729,9 +8703,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                 _cache[31] || (_cache[31] = _withKeys(_withModifiers(($event) => historyListCollapsed.value = !historyListCollapsed.value, ["prevent"]), ["space"]))
                               ]
                             }, [
-                              _createElementVNode("div", _hoisted_60, [
+                              _createElementVNode("div", _hoisted_58, [
                                 _cache[76] || (_cache[76] = _createElementVNode("div", { class: "mcr-panel__eyebrow" }, "History", -1)),
-                                _createElementVNode("div", _hoisted_61, [
+                                _createElementVNode("div", _hoisted_59, [
                                   _cache[75] || (_cache[75] = _createTextVNode(" 历史封面 ", -1)),
                                   _createVNode(_component_v_icon, {
                                     icon: "mdi-chevron-up",
@@ -8797,7 +8771,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                 ]),
                                 _: 1
                               })
-                            ], 42, _hoisted_59),
+                            ], 42, _hoisted_57),
                             (_openBlock(), _createBlock(_Teleport, { to: "body" }, [
                               pageTab.value === "history-tab" && !historyListCollapsed.value && selectedHistoryPaths.value.length ? (_openBlock(), _createElementBlock("div", {
                                 key: 0,
@@ -8807,7 +8781,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                 role: "toolbar",
                                 "aria-label": "历史封面批量操作"
                               }, [
-                                _createElementVNode("span", _hoisted_63, "已选择 " + _toDisplayString(selectedHistoryPaths.value.length), 1),
+                                _createElementVNode("span", _hoisted_61, "已选择 " + _toDisplayString(selectedHistoryPaths.value.length), 1),
                                 _createElementVNode("button", {
                                   type: "button",
                                   class: "mcr-history-floating-button",
@@ -8815,7 +8789,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                   onPointerdown: _cache[32] || (_cache[32] = _withModifiers(() => {
                                   }, ["prevent"])),
                                   onClick: _withModifiers(toggleSelectAllHistory, ["prevent", "stop"])
-                                }, _toDisplayString(allHistorySelected.value ? "取消全选" : "全选"), 41, _hoisted_64),
+                                }, _toDisplayString(allHistorySelected.value ? "取消全选" : "全选"), 41, _hoisted_62),
                                 _createElementVNode("button", {
                                   type: "button",
                                   class: "mcr-history-floating-button mcr-history-floating-button--primary",
@@ -8823,7 +8797,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                   onPointerdown: _cache[33] || (_cache[33] = _withModifiers(() => {
                                   }, ["prevent"])),
                                   onClick: _withModifiers(downloadSelectedCoversDirect, ["prevent", "stop"])
-                                }, " 直接下载 ", 40, _hoisted_65),
+                                }, " 直接下载 ", 40, _hoisted_63),
                                 _createElementVNode("button", {
                                   type: "button",
                                   class: "mcr-history-floating-button",
@@ -8831,7 +8805,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                   onPointerdown: _cache[34] || (_cache[34] = _withModifiers(() => {
                                   }, ["prevent"])),
                                   onClick: _withModifiers(downloadSelectedCoversZip, ["prevent", "stop"])
-                                }, " 下载 ZIP ", 40, _hoisted_66),
+                                }, " 下载 ZIP ", 40, _hoisted_64),
                                 _createElementVNode("button", {
                                   type: "button",
                                   class: "mcr-history-floating-button mcr-history-floating-button--danger",
@@ -8839,20 +8813,20 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                   onPointerdown: _cache[35] || (_cache[35] = _withModifiers(() => {
                                   }, ["prevent"])),
                                   onClick: _withModifiers(deleteSelectedCovers, ["prevent", "stop"])
-                                }, " 删除 ", 40, _hoisted_67)
-                              ], 12, _hoisted_62)) : _createCommentVNode("", true)
+                                }, " 删除 ", 40, _hoisted_65)
+                              ], 12, _hoisted_60)) : _createCommentVNode("", true)
                             ])),
                             _createVNode(_Transition, { name: "mcr-list-collapse" }, {
                               default: _withCtx(() => [
-                                _withDirectives(_createElementVNode("div", _hoisted_68, [
-                                  history.value.length ? (_openBlock(), _createElementBlock("div", _hoisted_69, [
+                                _withDirectives(_createElementVNode("div", _hoisted_66, [
+                                  history.value.length ? (_openBlock(), _createElementBlock("div", _hoisted_67, [
                                     (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(groupedHistory.value, (group) => {
                                       return _openBlock(), _createElementBlock("section", {
                                         key: group.key,
                                         class: "mcr-history-group"
                                       }, [
-                                        _createElementVNode("div", _hoisted_70, [
-                                          _createElementVNode("div", _hoisted_71, [
+                                        _createElementVNode("div", _hoisted_68, [
+                                          _createElementVNode("div", _hoisted_69, [
                                             _createElementVNode("span", null, _toDisplayString(group.title), 1),
                                             _createElementVNode("strong", null, _toDisplayString(group.items.length), 1)
                                           ]),
@@ -8884,7 +8858,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                                     class: _normalizeClass(["mcr-panel mcr-history-card", { "mcr-history-card--selected": selectedHistoryPaths.value.includes(item.path) }])
                                                   }, {
                                                     default: _withCtx(() => [
-                                                      _createElementVNode("div", _hoisted_72, [
+                                                      _createElementVNode("div", _hoisted_70, [
                                                         _createVNode(_component_v_img, {
                                                           src: item.src,
                                                           "aspect-ratio": "16/9",
@@ -8903,9 +8877,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                                             class: "mcr-history-card__check-mark",
                                                             "aria-hidden": "true"
                                                           }, null, -1)
-                                                        ])], 10, _hoisted_73),
-                                                        historyGroupMode.value !== "library" ? (_openBlock(), _createElementBlock("div", _hoisted_74, _toDisplayString(item.library || item.name), 1)) : _createCommentVNode("", true),
-                                                        _createElementVNode("div", _hoisted_75, [
+                                                        ])], 10, _hoisted_71),
+                                                        historyGroupMode.value !== "library" ? (_openBlock(), _createElementBlock("div", _hoisted_72, _toDisplayString(item.library || item.name), 1)) : _createCommentVNode("", true),
+                                                        _createElementVNode("div", _hoisted_73, [
                                                           _createVNode(_component_v_btn, {
                                                             size: "small",
                                                             class: "mcr-button mcr-button--ghost mcr-history-card__action mcr-history-card__action--download",
@@ -8934,7 +8908,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                                       ]),
                                                       _createVNode(_component_v_card_text, { class: "mcr-panel__body mcr-panel__body--tight" }, {
                                                         default: _withCtx(() => [
-                                                          _createElementVNode("div", _hoisted_76, _toDisplayString(item.server || "Unknown") + " · " + _toDisplayString(item.date_label || item.mtime || "--") + " · " + _toDisplayString(item.size), 1)
+                                                          _createElementVNode("div", _hoisted_74, _toDisplayString(item.server || "Unknown") + " · " + _toDisplayString(item.date_label || item.mtime || "--") + " · " + _toDisplayString(item.size), 1)
                                                         ]),
                                                         _: 2
                                                       }, 1024)
@@ -8950,7 +8924,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                                         }, 1024)
                                       ]);
                                     }), 128))
-                                  ])) : (_openBlock(), _createElementBlock("div", _hoisted_77, "暂无历史封面"))
+                                  ])) : (_openBlock(), _createElementBlock("div", _hoisted_75, "暂无历史封面"))
                                 ], 512), [
                                   [_vShow, !historyListCollapsed.value]
                                 ])
@@ -8986,7 +8960,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
               default: _withCtx(() => [
                 _createVNode(_component_v_card_text, { class: "mcr-donation-card__body" }, {
                   default: _withCtx(() => [
-                    donationView.value === "overview" ? (_openBlock(), _createElementBlock("div", _hoisted_78, [
+                    donationView.value === "overview" ? (_openBlock(), _createElementBlock("div", _hoisted_76, [
                       _createElementVNode("div", {
                         class: _normalizeClass(["mcr-donation-profile__avatar", { "is-supported": donationAcknowledged.value }])
                       }, [
@@ -8994,22 +8968,22 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                           key: 0,
                           src: donationAvatarImage.value,
                           alt: ""
-                        }, null, 8, _hoisted_79)) : (_openBlock(), _createBlock(_component_v_icon, {
+                        }, null, 8, _hoisted_77)) : (_openBlock(), _createBlock(_component_v_icon, {
                           key: 1,
                           icon: donationAvatarIcon.value,
                           size: "38"
                         }, null, 8, ["icon"])),
-                        _createElementVNode("span", _hoisted_80, [
+                        _createElementVNode("span", _hoisted_78, [
                           _createVNode(_component_v_icon, {
                             icon: "mdi-crown",
                             size: "26"
                           })
                         ])
                       ], 2),
-                      _createElementVNode("h3", _hoisted_81, _toDisplayString(donationView.value === "support" ? "感谢您的支持" : "呀哈哈封面工坊"), 1),
-                      _createElementVNode("div", _hoisted_82, _toDisplayString(donationView.value === "support" ? "Heartfelt giving" : "使用数据统计"), 1)
+                      _createElementVNode("h3", _hoisted_79, _toDisplayString(donationView.value === "support" ? "感谢您的支持" : "呀哈哈封面工坊"), 1),
+                      _createElementVNode("div", _hoisted_80, _toDisplayString(donationView.value === "support" ? "Heartfelt giving" : "使用数据统计"), 1)
                     ])) : (_openBlock(), _createElementBlock(_Fragment, { key: 1 }, [
-                      _createElementVNode("div", _hoisted_83, [
+                      _createElementVNode("div", _hoisted_81, [
                         _createVNode(_component_v_icon, {
                           icon: "mdi-heart-outline",
                           size: "30"
@@ -9017,10 +8991,10 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                       ]),
                       _cache[82] || (_cache[82] = _createElementVNode("h3", { class: "mcr-donation-title" }, "感谢您的支持", -1))
                     ], 64)),
-                    donationView.value === "overview" ? (_openBlock(), _createElementBlock("div", _hoisted_84, [
-                      _createElementVNode("div", _hoisted_85, [
-                        _createElementVNode("div", _hoisted_86, [
-                          _createElementVNode("span", _hoisted_87, [
+                    donationView.value === "overview" ? (_openBlock(), _createElementBlock("div", _hoisted_82, [
+                      _createElementVNode("div", _hoisted_83, [
+                        _createElementVNode("div", _hoisted_84, [
+                          _createElementVNode("span", _hoisted_85, [
                             _createVNode(_component_v_icon, {
                               icon: "mdi-view-grid-outline",
                               size: "20"
@@ -9031,9 +9005,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                         _createElementVNode("strong", null, _toDisplayString(donationStaticSchemeCount.value), 1),
                         _cache[84] || (_cache[84] = _createElementVNode("span", null, "静态方案", -1))
                       ]),
-                      _createElementVNode("div", _hoisted_88, [
-                        _createElementVNode("div", _hoisted_89, [
-                          _createElementVNode("span", _hoisted_90, [
+                      _createElementVNode("div", _hoisted_86, [
+                        _createElementVNode("div", _hoisted_87, [
+                          _createElementVNode("span", _hoisted_88, [
                             _createVNode(_component_v_icon, {
                               icon: "mdi-lightning-bolt-outline",
                               size: "20"
@@ -9047,9 +9021,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                         _createElementVNode("strong", null, _toDisplayString(donationDynamicSchemeCount.value), 1),
                         _cache[86] || (_cache[86] = _createElementVNode("span", null, "动态方案", -1))
                       ]),
-                      _createElementVNode("div", _hoisted_91, [
-                        _createElementVNode("div", _hoisted_92, [
-                          _createElementVNode("span", _hoisted_93, [
+                      _createElementVNode("div", _hoisted_89, [
+                        _createElementVNode("div", _hoisted_90, [
+                          _createElementVNode("span", _hoisted_91, [
                             _createVNode(_component_v_icon, {
                               icon: "mdi-layers-outline",
                               size: "20"
@@ -9059,9 +9033,9 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                         _createElementVNode("strong", null, _toDisplayString(donationHistoryCount.value), 1),
                         _cache[87] || (_cache[87] = _createElementVNode("span", null, "历史封面", -1))
                       ]),
-                      _createElementVNode("div", _hoisted_94, [
-                        _createElementVNode("div", _hoisted_95, [
-                          _createElementVNode("span", _hoisted_96, [
+                      _createElementVNode("div", _hoisted_92, [
+                        _createElementVNode("div", _hoisted_93, [
+                          _createElementVNode("span", _hoisted_94, [
                             _createVNode(_component_v_icon, {
                               icon: "mdi-play-circle-outline",
                               size: "20"
@@ -9072,15 +9046,15 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                         _cache[88] || (_cache[88] = _createElementVNode("span", null, "执行次数", -1))
                       ])
                     ])) : _createCommentVNode("", true),
-                    donationView.value === "support" ? (_openBlock(), _createElementBlock("div", _hoisted_97, [
+                    donationView.value === "support" ? (_openBlock(), _createElementBlock("div", _hoisted_95, [
                       _createElementVNode("img", {
                         class: "mcr-donation-qr__image",
                         src: donationQrImage.value,
                         alt: "赞赏码"
-                      }, null, 8, _hoisted_98)
+                      }, null, 8, _hoisted_96)
                     ])) : _createCommentVNode("", true),
-                    donationView.value === "support" ? (_openBlock(), _createElementBlock("p", _hoisted_99, " 您的慷慨支持是我持续创作的动力。 ")) : _createCommentVNode("", true),
-                    _createElementVNode("div", _hoisted_100, [
+                    donationView.value === "support" ? (_openBlock(), _createElementBlock("p", _hoisted_97, " 您的慷慨支持是我持续创作的动力。 ")) : _createCommentVNode("", true),
+                    _createElementVNode("div", _hoisted_98, [
                       donationView.value === "support" ? (_openBlock(), _createBlock(_component_v_btn, {
                         key: 0,
                         class: "mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-donation-soft-action",
@@ -9121,7 +9095,7 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
                         _: 1
                       }))
                     ]),
-                    donationView.value === "support" ? (_openBlock(), _createElementBlock("div", _hoisted_101, "HEARTFELT GIVING • LUMINOUS CHARITY")) : _createCommentVNode("", true)
+                    donationView.value === "support" ? (_openBlock(), _createElementBlock("div", _hoisted_99, "HEARTFELT GIVING • LUMINOUS CHARITY")) : _createCommentVNode("", true)
                   ]),
                   _: 1
                 })
@@ -9131,12 +9105,16 @@ const _sfc_main = /* @__PURE__ */ _defineComponent({
           ]),
           _: 1
         }, 8, ["modelValue"]),
-        _createCommentVNode("", true)
+        _createCommentVNode("", true),
+        _createVNode(ViewportSaveToast, {
+          message: editorSaveStatus.value,
+          theme: isDark.value ? "dark" : "light"
+        }, null, 8, ["message", "theme"])
       ], 8, _hoisted_1);
     };
   }
 });
 
-const Page = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-de3db183"]]);
+const Page = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-248f542b"]]);
 
 export { Page as default };

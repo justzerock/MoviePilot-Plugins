@@ -2,10 +2,10 @@ const currentImports = {};
       const exportSet = new Set(['Module', '__esModule', 'default', '_export_sfc']);
       let moduleMap = {
 "./Page":()=>{
-      dynamicLoadingCss(["__federation_expose_Page-ui-rev-20260705-11.css","_plugin-vue_export-helper-ui-rev-20260705-11.css","fonts-ui-rev-20260705-11.css"], false, './Page');
+      dynamicLoadingCss(["__federation_expose_Page-ui-rev-20260705-11.css","_plugin-vue_export-helper-ui-rev-20260705-11.css","ViewportSaveToast-ui-rev-20260705-11.css"], false, './Page');
       return __federation_import('./__federation_expose_Page-ui-rev-20260705-11.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Config":()=>{
-      dynamicLoadingCss(["__federation_expose_Config-ui-rev-20260705-11.css","_plugin-vue_export-helper-ui-rev-20260705-11.css","fonts-ui-rev-20260705-11.css"], false, './Config');
+      dynamicLoadingCss(["__federation_expose_Config-ui-rev-20260705-11.css","_plugin-vue_export-helper-ui-rev-20260705-11.css","ViewportSaveToast-ui-rev-20260705-11.css"], false, './Config');
       return __federation_import('./__federation_expose_Config-ui-rev-20260705-11.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Dashboard":()=>{
       dynamicLoadingCss(["__federation_expose_Dashboard-ui-rev-20260705-11.css","_plugin-vue_export-helper-ui-rev-20260705-11.css"], false, './Dashboard');

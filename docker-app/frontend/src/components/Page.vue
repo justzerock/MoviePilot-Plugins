@@ -201,12 +201,6 @@
                             </span>
                           </button>
                         </span>
-                        <transition name="mcr-save-hint">
-                          <span v-if="editorSaveStatus" class="mcr-editor-save-hint">
-                            <v-icon icon="mdi-content-save-check-outline" size="14" />
-                            <span>{{ editorSaveStatus }}</span>
-                          </span>
-                        </transition>
                       </span>
                       <v-btn
                         size="small"
@@ -463,7 +457,6 @@
                         </div>
                         <div class="mcr-animated-parameter-panel__actions">
                           <AsyncStatusDots v-if="animatedSettingsSaving" label="保存参数" />
-                          <span v-if="animatedSettingsSaved" class="mcr-animated-parameter-panel__saved">已保存</span>
                           <v-btn
                             size="small"
                             class="mcr-button mcr-button--primary mcr-button--apple-primary"
@@ -1032,12 +1025,6 @@
 	                            </span>
 	                          </button>
 	                        </span>
-	                        <transition name="mcr-save-hint">
-	                          <span v-if="editorSaveStatus" class="mcr-editor-save-hint">
-	                            <v-icon icon="mdi-content-save-check-outline" size="14" />
-	                            <span>{{ editorSaveStatus }}</span>
-	                          </span>
-	                        </transition>
 	                      </span>
 	                      <v-btn
                         size="small"
@@ -1194,6 +1181,8 @@
       </v-card>
     </v-dialog>
 
+    <ViewportSaveToast :message="editorSaveStatus" :theme="isDark ? 'dark' : 'light'" />
+
   </div>
 </template>
 
@@ -1208,6 +1197,7 @@ import BlueprintSelect from './BlueprintSelect.vue'
 import AsyncStatusDots from './AsyncStatusDots.vue'
 import CustomLayoutEditor from './CustomLayoutEditor.vue'
 import GeneratePreviewSimulation from './GeneratePreviewSimulation.vue'
+import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
 import { images } from '../assets/base64/images.js'
@@ -1317,7 +1307,6 @@ const activeEditorTemplateId = ref<string | null>(null)
 const presetStaticRenderMode = ref<StaticRenderMode>('layout')
 const animatedSettingsPanelOpen = ref(false)
 const animatedSettingsSaving = ref(false)
-const animatedSettingsSaved = ref(false)
 const animatedSettingsBaseStyle = ref<CoverStyleBase>('static_1')
 const animatedSettingsByStyle = ref<Partial<Record<AnimatedStyleKey, AnimatedStyleSettings>>>({})
 const customFontItems = ref<FontLibraryItem[]>([])
@@ -2284,7 +2273,6 @@ async function openAnimatedSettings(item: SchemeListItem) {
   if (item.kind !== 'preset') return
   animatedSettingsBaseStyle.value = item.baseStyle
   syncAnimatedSettings(null, item.baseStyle)
-  animatedSettingsSaved.value = false
   animatedSettingsPanelOpen.value = true
   if (coverStyleBase.value !== item.baseStyle || styleVariant.value !== 'animated') {
     await setCoverStyle(item.baseStyle, 'animated')
@@ -2323,12 +2311,9 @@ async function saveAnimatedSettings() {
       throw new Error(resp.msg || 'save animated settings failed')
     }
     syncAnimatedSettings(resp?.data || payload, animatedSettingsBaseStyle.value)
-    animatedSettingsSaved.value = true
+    showEditorSaveStatus('已保存')
     backendPreview.value = null
     await loadPreviewSources()
-    window.setTimeout(() => {
-      animatedSettingsSaved.value = false
-    }, 1800)
   } catch (e) {
     console.error('save animated settings failed', e)
   } finally {

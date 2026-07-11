@@ -796,13 +796,7 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
-        <Teleport to="body">
-          <span
-            v-if="configSaveMessage"
-            class="mcr-config-save-message--viewport"
-            :data-mcr-theme="isDark ? 'dark' : 'light'"
-          >{{ configSaveMessage }}</span>
-        </Teleport>
+        <ViewportSaveToast :message="configSaveMessage" :theme="isDark ? 'dark' : 'light'" />
       </v-defaults-provider>
 
     </v-card>
@@ -819,6 +813,7 @@ import type { PropType } from 'vue'
 import BlueprintField from './BlueprintField.vue'
 import AsyncStatusDots from './AsyncStatusDots.vue'
 import BlueprintSelect from './BlueprintSelect.vue'
+import ViewportSaveToast from './ViewportSaveToast.vue'
 import type {
   MediaCoverGeneratorConfig,
   MediaServerConfig,
