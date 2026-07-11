@@ -219,6 +219,11 @@ GEMINI.md
 # Keep the legacy plugin directory clean in this branch without deleting local leftovers.
 plugins.v2/mediacovergenerator/assets/
 plugins.v2/mediacovergenerator/dist/
+
+# Yahaha Cover Studio is a MoviePilot Vue federation plugin: its checked-in
+# dist is the runtime frontend loaded by MoviePilot, not a disposable build.
+!plugins.v2/yahahacoverstudio/dist/
+!plugins.v2/yahahacoverstudio/dist/**
 plugins.v2/mediacovergenerator/style/legacy_presets_20260430/
 plugins.v2/mediacovergenerator/style/preset_backup_20260506/
 plugins.v2/mediacovergenerator/style/preset_templates.py
