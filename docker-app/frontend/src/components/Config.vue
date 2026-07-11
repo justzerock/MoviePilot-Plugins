@@ -54,16 +54,6 @@
                 >
                   <v-icon icon="mdi-image-multiple-outline" size="22" />
                 </v-btn>
-                <v-btn
-                  size="small"
-                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn"
-                  icon
-                  title="关闭"
-                  aria-label="关闭"
-                  @click="notifyClose"
-                >
-                  <v-icon icon="mdi-close" size="22" />
-                </v-btn>
               </div>
               <span v-if="configSaveMessage" class="mcr-config-save-message mcr-config-save-message--floating">{{ configSaveMessage }}</span>
               <div class="mcr-config-tags yh-header-chips" aria-label="配置摘要">
@@ -776,7 +766,6 @@ const props = defineProps({
 
 const emit = defineEmits<{
   (e: 'save', config: MediaCoverGeneratorConfig): void
-  (e: 'close'): void
   (e: 'switch'): void
 }>()
 
@@ -2097,17 +2086,32 @@ function resolveRequestedCoverStyle() {
   return config.value.cover_style_variant === 'animated' ? `animated_${suffix}` : `static_${suffix}`
 }
 
+function resolveGenerationStyle() {
+  const requested = resolveRequestedCoverStyle()
+  if (config.value.cover_style_variant === 'animated' || requested === 'custom_static') {
+    return requested
+  }
+
+  // Page.vue renders editable static presets through `custom_static`, rather
+  // than through the legacy static_1/2/3/4 renderer. Persist the matching
+  // preset canvas first so the settings-page action follows the same path.
+  const presetId = `__preset_${config.value.cover_style_base || 'static_1'}`
+  const canvasLayout = getCustomTemplates().find((template) => template.id === presetId)?.layout
+  if (!canvasLayout) return requested
+  config.value.custom_static_layout = cloneLayout(canvasLayout)
+  return 'custom_static'
+}
+
 async function startGeneration() {
   if (generatingNow.value || isGenerating.value) return
   generatingNow.value = true
   try {
     config.value.update_now = false
-    // The preview page persists its active layout before starting. Mirror that
-    // contract here so this button never renders with a stale server-side
-    // layout, font, background, or selected style.
+    const style = resolveGenerationStyle()
+    // Keep settings generation on the same persisted canvas branch as the
+    // preview/editor, including font, image placement, and shadows.
     const saved = await saveConfig()
     if (!saved) return
-    const style = resolveRequestedCoverStyle()
     const resp = await props.api.post<{ code: number; msg?: string }>(
       `plugin/MediaCoverGenerator/start_generation?style=${encodeURIComponent(style)}`,
     )
@@ -2155,10 +2159,6 @@ async function handleGenerateAction() {
 
 function notifySwitch() {
   emit('switch')
-}
-
-function notifyClose() {
-  emit('close')
 }
 
 async function onCleanImages() {

@@ -6,14 +6,12 @@
         :api="dockerApi"
         :initial-config="initialConfig"
         @switch="view = 'page'"
-        @close="closeApp"
         @save="onConfigSaved"
       />
       <Page
         v-else
         :api="dockerApi"
         @switch="view = 'config'"
-        @close="closeApp"
         @action="onGenerated"
       />
     </v-main>
@@ -32,10 +30,6 @@ const initialConfig = ref<Partial<MediaCoverGeneratorConfig>>({})
 
 async function refreshConfig() {
   initialConfig.value = await loadDockerConfig()
-}
-
-function closeApp() {
-  window.close()
 }
 
 async function onConfigSaved(config: MediaCoverGeneratorConfig) {
