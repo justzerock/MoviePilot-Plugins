@@ -383,8 +383,27 @@ class CoverService:
         if self.mock_enabled():
             return [dict(item) for item in MOCK_LIBRARIES]
         result: list[dict[str, Any]] = []
+        selected_servers = {
+            str(value).strip()
+            for value in (self.config.get("selected_servers") or [])
+            if str(value).strip()
+        }
         for client in self.clients():
-            for library in await client.get_libraries():
+            # Filter before making the network request. A configured but
+            # unselected server must never be able to break this run.
+            if selected_servers and client.server_id not in selected_servers:
+                continue
+            try:
+                libraries = await client.get_libraries()
+            except Exception as error:
+                APP_LOGGER.warning(
+                    "读取媒体库失败，已跳过服务器 server=%s server_id=%s: %s",
+                    client.server_name,
+                    client.server_id,
+                    error,
+                )
+                continue
+            for library in libraries:
                 item = library.__dict__.copy()
                 item["server_id"] = client.server_id
                 item["value"] = f"{client.server_id}:{library.id}"
@@ -408,8 +427,25 @@ class CoverService:
         ]
 
     async def find_library(self, library_name: str) -> tuple[MediaServerClient, MediaLibrary]:
+        selected_servers = {
+            str(value).strip()
+            for value in (self.config.get("selected_servers") or [])
+            if str(value).strip()
+        }
         for client in self.clients():
-            for library in await client.get_libraries():
+            if selected_servers and client.server_id not in selected_servers:
+                continue
+            try:
+                libraries = await client.get_libraries()
+            except Exception as error:
+                APP_LOGGER.warning(
+                    "查找媒体库时跳过不可用服务器 server=%s server_id=%s: %s",
+                    client.server_name,
+                    client.server_id,
+                    error,
+                )
+                continue
+            for library in libraries:
                 if library.name == library_name or library.id == library_name or f"{client.server_id}:{library.id}" == library_name:
                     return client, library
         raise ValueError(f"Library not found: {library_name}")
