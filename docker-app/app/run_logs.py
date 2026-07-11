@@ -26,10 +26,11 @@ class RunLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._handler = logging.FileHandler(self.path, encoding="utf-8")
         self._handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        self.logger = logging.getLogger(f"yahaha_cover_studio.run.{self.task_id}")
-        self.logger.setLevel(logging.INFO)
+        # A generation is single-flight. Attach the run file to the shared app
+        # logger so download, render and upload failures emitted by services are
+        # captured in this task's file as well as Docker stdout.
+        self.logger = APP_LOGGER
         self.logger.addHandler(self._handler)
-        self.logger.propagate = True
 
     def info(self, message: str, *args: object) -> None:
         self.logger.info(message, *args)

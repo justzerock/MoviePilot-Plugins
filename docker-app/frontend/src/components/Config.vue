@@ -56,6 +56,9 @@
                 </v-btn>
               </div>
               <span v-if="configSaveMessage" class="mcr-config-save-message mcr-config-save-message--floating">{{ configSaveMessage }}</span>
+              <span class="mcr-config-save-state" :class="{ 'is-dirty': configDirty, 'is-failed': configSaveFailed, 'is-saving': configSaving }">
+                {{ configSaving ? '保存中' : configSaveFailed ? '保存失败' : configDirty ? '有未保存修改' : '已保存' }}
+              </span>
               <div class="mcr-config-tags yh-header-chips" aria-label="配置摘要">
                 <span class="mcr-config-tag">
                   <span>状态</span>
@@ -637,6 +640,46 @@
                   </div>
                 </div>
               </section>
+
+              <section class="mcr-config-section-card">
+                <header class="mcr-config-section-card__header mcr-config-section-card__header--inline">
+                  <div>
+                    <div class="mcr-config-section-card__title">运行日志</div>
+                    <p class="mcr-config-section-card__copy">每次手动、定时或监控执行都会单独记录，可查看、下载或删除。</p>
+                  </div>
+                  <div class="mcr-run-log-actions">
+                    <v-btn
+                      size="small"
+                      class="mcr-button mcr-button--ghost mcr-button--dark-neutral"
+                      prepend-icon="mdi-refresh"
+                      :loading="runLogsLoading"
+                      @click="loadRunLogs"
+                    >刷新</v-btn>
+                    <v-btn
+                      size="small"
+                      class="mcr-button mcr-button--ghost mcr-button--dark-neutral"
+                      prepend-icon="mdi-broom"
+                      :disabled="runLogsLoading"
+                      @click="cleanupRunLogs"
+                    >清理过期日志</v-btn>
+                  </div>
+                </header>
+                <div v-if="runLogsLoading" class="mcr-font-library__empty">正在读取运行日志...</div>
+                <div v-else-if="!normalizedRunLogs.length" class="mcr-font-library__empty">暂无运行日志</div>
+                <div v-else class="mcr-run-log-list">
+                  <article v-for="item in normalizedRunLogs" :key="item.name" class="mcr-run-log-item">
+                    <div class="mcr-run-log-item__main">
+                      <strong :title="item.name">{{ item.label }}</strong>
+                      <span>{{ item.dateLabel }} · {{ formatLogSize(item.size) }}</span>
+                    </div>
+                    <div class="mcr-run-log-item__actions">
+                      <button type="button" title="查看日志" @click="openRunLog(item)"><v-icon icon="mdi-text-box-search-outline" size="18" /></button>
+                      <button type="button" title="下载日志" @click="downloadRunLog(item)"><v-icon icon="mdi-download-outline" size="18" /></button>
+                      <button type="button" class="mcr-run-log-item__danger" title="删除日志" @click="deleteRunLog(item)"><v-icon icon="mdi-trash-can-outline" size="18" /></button>
+                    </div>
+                  </article>
+                </div>
+              </section>
             </v-card-text>
           </v-window-item>
 
@@ -734,6 +777,18 @@
             <v-card-actions class="mcr-server-dialog-card__actions">
               <v-btn class="mcr-button mcr-button--ghost mcr-button--dark-neutral" @click="mediaServerDialogOpen = false">取消</v-btn>
               <v-btn class="mcr-button mcr-button--primary mcr-button--apple-primary" @click="saveMediaServerDraft">保存服务器</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+        <v-dialog v-model="runLogDialogOpen" max-width="860">
+          <v-card class="mcr-server-dialog-card mcr-run-log-dialog" :data-mcr-theme="isDark ? 'dark' : 'light'">
+            <v-card-title>运行日志</v-card-title>
+            <v-card-text class="mcr-server-dialog-card__body">
+              <div class="mcr-run-log-dialog__name">{{ activeRunLogName }}</div>
+              <pre class="mcr-run-log-dialog__content">{{ activeRunLogContent || '日志为空' }}</pre>
+            </v-card-text>
+            <v-card-actions class="mcr-server-dialog-card__actions">
+              <v-btn class="mcr-button mcr-button--ghost mcr-button--dark-neutral" @click="runLogDialogOpen = false">关闭</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -960,18 +1015,31 @@ interface BackupItem {
   schema?: string
 }
 
+interface RunLogItem {
+  name: string
+  size: number
+  modified: number
+}
+
 const fontFileInputEl = ref<HTMLInputElement | null>(null)
 const backupFileInputEl = ref<HTMLInputElement | null>(null)
 const fontLibraryLoading = ref(false)
 const backupListLoading = ref(false)
 const customFontItems = ref<FontLibraryItem[]>([])
 const backupItems = ref<BackupItem[]>([])
+const runLogs = ref<RunLogItem[]>([])
 const fontLibraryExpanded = ref(true)
 const backupLibraryExpanded = ref(true)
 const fontUrlInput = ref('')
 const fontUploadMessage = ref('')
 const backupResult = ref('')
 const configSaveMessage = ref('')
+const configDirty = ref(false)
+const configSaveFailed = ref(false)
+const runLogsLoading = ref(false)
+const runLogDialogOpen = ref(false)
+const activeRunLogName = ref('')
+const activeRunLogContent = ref('')
 const titleConfigValidationMessage = ref('')
 const titleConfigValidationValid = ref(false)
 const titleTemplateLoading = ref(false)
@@ -981,6 +1049,7 @@ let configSaveMessageTimer: number | null = null
 let suppressConfigAutoSave = true
 let configAutoSavePending = false
 let configSaveQueued = false
+let configRevision = 0
 const loadedConfigFontUrls = new Map<string, Promise<void>>()
 
 function normalizeMediaServers(source: Partial<MediaCoverGeneratorConfig> | Record<string, any>): MediaServerConfig[] {
@@ -1136,6 +1205,8 @@ watch(
       ...normalizeConfigInput(val as MediaCoverGeneratorConfig),
     }
     nextTick(() => {
+      configDirty.value = false
+      configSaveFailed.value = false
       suppressConfigAutoSave = false
     })
   },
@@ -1155,6 +1226,10 @@ watch(
 watch(
   config,
   () => {
+    if (suppressConfigAutoSave) return
+    configRevision += 1
+    configDirty.value = true
+    configSaveFailed.value = false
     scheduleConfigAutoSave()
   },
   { deep: true },
@@ -1347,6 +1422,81 @@ async function loadBackupLibrary() {
     console.warn('load backup library failed', error)
   } finally {
     backupListLoading.value = false
+  }
+}
+
+function runLogDisplayName(item: RunLogItem) {
+  const filename = String(item.name || '').split('/').pop() || '运行日志'
+  return filename.replace(/\.log$/i, '').replace(/_/g, ' ')
+}
+
+function formatLogSize(size: number) {
+  const value = Number(size || 0)
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function formatLogDate(timestamp: number) {
+  const date = new Date(Number(timestamp || 0) * 1000)
+  return Number.isNaN(date.getTime()) ? '未知时间' : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+const normalizedRunLogs = computed(() => runLogs.value.map((item) => ({
+  ...item,
+  label: runLogDisplayName(item),
+  dateLabel: formatLogDate(item.modified),
+})))
+
+async function loadRunLogs() {
+  runLogsLoading.value = true
+  try {
+    const response = await props.api.get<{ items?: RunLogItem[] }>('/api/logs')
+    runLogs.value = Array.isArray(response?.items) ? response.items : []
+  } catch (error) {
+    console.warn('load run logs failed', error)
+    showConfigSaveMessage('读取运行日志失败')
+  } finally {
+    runLogsLoading.value = false
+  }
+}
+
+async function openRunLog(item: RunLogItem) {
+  try {
+    const response = await props.api.get<{ name?: string; content?: string }>(`/api/logs/content/${encodeURIComponent(item.name)}`)
+    activeRunLogName.value = response?.name || item.name
+    activeRunLogContent.value = response?.content || ''
+    runLogDialogOpen.value = true
+  } catch (error) {
+    console.warn('read run log failed', error)
+    showConfigSaveMessage('读取日志内容失败')
+  }
+}
+
+function downloadRunLog(item: RunLogItem) {
+  if (typeof window === 'undefined') return
+  window.open(`/api/logs/download/${encodeURIComponent(item.name)}`, '_blank', 'noopener')
+}
+
+async function deleteRunLog(item: RunLogItem) {
+  if (typeof window !== 'undefined' && !window.confirm(`删除运行日志「${runLogDisplayName(item)}」？`)) return
+  try {
+    await props.api.delete(`/api/logs/${encodeURIComponent(item.name)}`)
+    runLogs.value = runLogs.value.filter((entry) => entry.name !== item.name)
+  } catch (error) {
+    console.warn('delete run log failed', error)
+    showConfigSaveMessage('删除运行日志失败')
+  }
+}
+
+async function cleanupRunLogs() {
+  try {
+    const response = await props.api.post<{ removed?: number }>('/api/logs/cleanup')
+    await loadRunLogs()
+    showConfigSaveMessage(`已清理 ${Number(response?.removed || 0)} 个过期日志`)
+  } catch (error) {
+    console.warn('cleanup run logs failed', error)
+    showConfigSaveMessage('清理运行日志失败')
   }
 }
 
@@ -1860,6 +2010,7 @@ onMounted(() => {
   void loadDynamicLibraryOptions()
   void loadFontLibrary()
   void loadBackupLibrary()
+  void loadRunLogs()
   void validateTitleConfig(false)
   nextTick(() => {
     suppressConfigAutoSave = false
@@ -2016,7 +2167,7 @@ function showConfigSaveMessage(message: string) {
 async function saveConfig(options: { auto?: boolean } = {}) {
   if (configSaving.value) {
     configSaveQueued = true
-    configAutoSavePending = true
+    configAutoSavePending = Boolean(config.value.auto_save_config)
     return false
   }
   configSaving.value = true
@@ -2025,10 +2176,13 @@ async function saveConfig(options: { auto?: boolean } = {}) {
     configAutoSaveTimer = null
   }
   configAutoSavePending = false
+  configSaveFailed.value = false
+  const savedRevision = configRevision
   const titleConfigOk = await validateTitleConfig(true)
   if (!titleConfigOk) {
     if (!options.auto) tab.value = 'title-tab'
     configSaving.value = false
+    configSaveFailed.value = true
     return false
   }
   const previousSuppressAutoSave = suppressConfigAutoSave
@@ -2082,10 +2236,20 @@ async function saveConfig(options: { auto?: boolean } = {}) {
         suppressConfigAutoSave = previousSuppressAutoSave
       })
     }
+    if (configRevision === savedRevision) {
+      configDirty.value = false
+    } else {
+      configDirty.value = true
+      configSaveQueued = true
+    }
+    configSaveFailed.value = false
+    emit('save', config.value)
     showConfigSaveMessage(options.auto ? '已自动保存' : '配置已保存')
     return true
   } catch (error) {
     console.warn('save config failed', error)
+    configSaveFailed.value = true
+    configDirty.value = true
     showConfigSaveMessage(error instanceof Error ? error.message : '保存配置失败')
     return false
   } finally {
@@ -2441,6 +2605,105 @@ async function deleteBackupItem(item: BackupItem) {
 .mcr-config-section-card__header {
   display: block;
   margin-bottom: 16px;
+}
+
+.mcr-config-section-card__header--inline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mcr-run-log-actions,
+.mcr-run-log-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mcr-run-log-list {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.mcr-run-log-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--mcr-config-border);
+  border-radius: 14px;
+  background: rgba(var(--mcr-rgb-surface-container-lowest), 0.72);
+}
+
+.mcr-run-log-item__main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.mcr-run-log-item__main strong {
+  overflow: hidden;
+  color: var(--mcr-config-ink);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcr-run-log-item__main span {
+  color: var(--mcr-config-muted);
+  font-size: 12px;
+}
+
+.mcr-run-log-item__actions button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--mcr-config-border);
+  border-radius: 10px;
+  background: var(--mcr-color-surface-container-lowest);
+  color: var(--mcr-config-primary);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.mcr-run-log-item__actions button:hover {
+  transform: translateY(-1px);
+  background: var(--mcr-config-primary-soft);
+}
+
+.mcr-run-log-item__actions .mcr-run-log-item__danger {
+  color: var(--mcr-color-error);
+}
+
+.mcr-run-log-dialog__name {
+  margin-bottom: 10px;
+  overflow: hidden;
+  color: var(--mcr-config-muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcr-run-log-dialog__content {
+  max-height: min(58vh, 600px);
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--mcr-config-border);
+  border-radius: 14px;
+  background: var(--mcr-color-surface-container-lowest);
+  color: var(--mcr-config-ink);
+  font: 12px/1.6 'SFMono-Regular', Consolas, monospace;
+  white-space: pre-wrap;
 }
 
 .mcr-config-section-card__title {
@@ -3432,6 +3695,17 @@ async function deleteBackupItem(item: BackupItem) {
   transform: translateY(-1px);
   border-color: rgba(var(--mcr-rgb-primary-container), 0.34);
   box-shadow: 0 10px 22px rgba(var(--mcr-rgb-shadow), 0.07);
+}
+
+.mcr-config-shell :deep(.v-switch:focus-within) {
+  border-color: rgba(var(--mcr-rgb-primary), 0.78);
+  box-shadow: 0 0 0 3px rgba(var(--mcr-rgb-primary), 0.16), 0 8px 18px rgba(var(--mcr-rgb-shadow), 0.08);
+}
+
+.mcr-config-shell :deep(.v-switch.v-input--disabled) {
+  opacity: 0.54;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .mcr-config-shell :deep(.v-switch .v-selection-control) {
@@ -4743,6 +5017,22 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   box-shadow: 0 10px 24px rgba(28, 77, 160, 0.12);
   pointer-events: none;
 }
+
+.mcr-config-shell .mcr-config-save-state {
+  position: absolute;
+  top: 62px;
+  left: 16px;
+  z-index: 3;
+  color: var(--yahaha-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  pointer-events: none;
+}
+
+.mcr-config-shell .mcr-config-save-state.is-dirty { color: var(--mcr-config-primary); }
+.mcr-config-shell .mcr-config-save-state.is-failed { color: var(--mcr-color-error); }
+.mcr-config-shell .mcr-config-save-state.is-saving { color: var(--mcr-config-primary); }
 
 .mcr-config-shell .yh-run-btn {
   --yh-run-progress: 0%;

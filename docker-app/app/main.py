@@ -330,6 +330,9 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 assets_dir = static_dir / "assets"
 if assets_dir.exists():
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+icons_dir = static_dir / "icons"
+if icons_dir.exists():
+    app.mount("/icons", StaticFiles(directory=icons_dir), name="icons")
 app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
 
 
@@ -340,18 +343,15 @@ async def index():
 
 @app.get("/favicon.ico")
 async def favicon():
-    svg = """
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-      <rect width="64" height="64" rx="18" fill="#f6fbff"/>
-      <circle cx="32" cy="30" r="18" fill="#ffe1b7"/>
-      <path d="M13 31c4-16 17-25 32-20 10 4 16 13 14 25-8-9-16-12-25-11-9 1-15 3-21 6z" fill="#45a82f"/>
-      <path d="M20 21c8-9 23-10 32-1-8-2-15 0-22 4-4 3-7 3-10-3z" fill="#ffd245"/>
-      <circle cx="25" cy="33" r="3" fill="#102228"/>
-      <circle cx="39" cy="33" r="3" fill="#102228"/>
-      <path d="M25 43c5 4 10 4 15 0" fill="none" stroke="#102228" stroke-width="3" stroke-linecap="round"/>
-    </svg>
-    """.strip()
-    return Response(svg, media_type="image/svg+xml")
+    icon = icons_dir / "favicon-32.png"
+    if icon.exists():
+        return FileResponse(icon, media_type="image/png")
+    return Response(status_code=204)
+
+
+@app.get("/manifest.webmanifest")
+async def manifest():
+    return FileResponse(static_dir / "manifest.webmanifest", media_type="application/manifest+json")
 
 
 @app.get("/api/health")
@@ -431,6 +431,7 @@ async def libraries():
         remember_libraries(load_config(), items)
         return {"items": items}
     except Exception as err:
+        APP_LOGGER.exception("读取媒体库失败: %s", err)
         raise HTTPException(status_code=500, detail=str(err)) from err
 
 

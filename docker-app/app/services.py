@@ -10,6 +10,7 @@ from .config import DATA_DIR, load_config, resolve_data_path, save_config
 from .cover import CoverRenderer
 from .media_client import MediaLibrary, MediaServerClient, configured_clients
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
+from .run_logs import APP_LOGGER
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -368,6 +369,13 @@ class CoverService:
     def selected_generation_libraries(self, libraries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         selected_servers = {str(item) for item in (self.config.get("selected_servers") or []) if str(item)}
         selected_libraries = {str(item) for item in (self.config.get("include_libraries") or []) if str(item)}
+        available_values = {
+            str(library.get("value") or f"{library.get('server_id') or library.get('server')}:{library.get('id')}")
+            for library in libraries
+        }
+        missing = selected_libraries - available_values
+        if missing:
+            APP_LOGGER.warning("已忽略不存在的媒体库范围: %s", ", ".join(sorted(missing)))
         return [
             library for library in libraries
             if (not selected_servers or str(library.get("server_id") or library.get("server") or "") in selected_servers)
@@ -384,7 +392,23 @@ class CoverService:
     async def generate(self, library_name: str | None = None, style: str | None = None) -> list[dict[str, Any]]:
         if self.local_mode():
             if library_name:
-                return [await self.generate_local_library(library_name, style)]
+                local_libraries = self.local_libraries()
+                selected = self.selected_generation_libraries(local_libraries)
+                target = next(
+                    (
+                        library for library in local_libraries
+                        if str(library.get("value")) == str(library_name)
+                        or str(library.get("id")) == str(library_name)
+                        or str(library.get("name")) == str(library_name)
+                    ),
+                    None,
+                )
+                if target is None:
+                    raise ValueError(f"本地媒体库不存在: {library_name}")
+                has_explicit_scope = bool(self.config.get("include_libraries"))
+                if has_explicit_scope and str(target.get("value")) not in {str(item.get("value")) for item in selected}:
+                    raise ValueError(f"本地媒体库不在当前生成范围内: {target.get('name')}")
+                return [await self.generate_local_library(str(target["name"]), style)]
             libraries = self.selected_generation_libraries(self.local_libraries())
             if libraries:
                 return [await self.generate_local_library(str(library["name"]), style) for library in libraries]
@@ -437,7 +461,8 @@ class CoverService:
                 path = media_cache_dir / f"{index:02d}.jpg"
                 try:
                     downloaded = await client.download_image(image_url, path)
-                except Exception:
+                except Exception as error:
+                    APP_LOGGER.warning("图片下载失败 library=%s item=%s: %s", library.name, item.get("Id") or item.get("Name") or index, error)
                     continue
                 resolved = downloaded.resolve()
                 if resolved in used_paths:
@@ -459,6 +484,7 @@ class CoverService:
                 uploaded = bool(result.get("uploaded", True))
             except Exception as exc:
                 upload_error = str(exc)
+                APP_LOGGER.warning("媒体库封面更新失败 server=%s library=%s: %s", client.server_name, library.name, exc)
         record_history_item({
             "path": str(output_path),
             "library": library.name,
