@@ -518,6 +518,15 @@
                       hint="留空关闭定时备份；填写正确 5 位 cron 表达式则开启"
                     />
                   </div>
+                  <div>
+                    <BlueprintField
+                      v-model.number="config.log_retention_days"
+                      type="number"
+                      label="日志保留天数"
+                      placeholder="7"
+                      hint="保留 1～365 天的独立任务日志"
+                    />
+                  </div>
                   <div class="mcr-config-backup-grid__actions">
                     <div class="mcr-config-backup-actions">
                       <v-btn
@@ -835,6 +844,7 @@ const defaults: MediaCoverGeneratorConfig = {
   backup_enabled: false,
   backup_cron: '',
   backup_path: '',
+  log_retention_days: 7,
   page_tab: 'generate-tab',
   style_naming_v2: true,
   custom_static_layout: null,
@@ -970,6 +980,7 @@ let configAutoSaveTimer: number | null = null
 let configSaveMessageTimer: number | null = null
 let suppressConfigAutoSave = true
 let configAutoSavePending = false
+let configSaveQueued = false
 const loadedConfigFontUrls = new Map<string, Promise<void>>()
 
 function normalizeMediaServers(source: Partial<MediaCoverGeneratorConfig> | Record<string, any>): MediaServerConfig[] {
@@ -1557,12 +1568,17 @@ const subtitleFontItems = computed(() => {
 
 const libraryItems = computed(() => {
   const all = (config.value as any).all_libraries as
-    | { name: string; value: string }[]
+    | { name: string; value: string; server?: string; server_id?: string }[]
     | undefined
   if (!Array.isArray(all)) return []
-  return all.map((lib) => ({
-    title: lib.name,
-    value: lib.value,
+  const selected = new Set((config.value.selected_servers || []).map(String))
+  const visible = selected.size
+    ? all.filter((lib) => selected.has(String(lib.server_id || lib.server || '')))
+    : all
+  const showServer = selected.size !== 1
+  return visible.map((lib) => ({
+    title: showServer && lib.server ? `${lib.server} - ${lib.name}` : lib.name,
+    value: String(lib.value || `${lib.server_id || lib.server || 'local'}:${lib.name}`),
   }))
 })
 
@@ -1572,7 +1588,7 @@ const serverItems = computed(() => {
   const sourceServers = normalizedMediaServers.value.length
     ? normalizedMediaServers.value
       .filter((server) => server.enabled !== false && String(server.name || '').trim())
-      .map((server) => ({ title: server.name, value: server.name }))
+      .map((server) => ({ title: server.name, value: server.id }))
     : (Array.isArray((config.value as any).all_servers) ? (config.value as any).all_servers : [])
   for (const item of sourceServers) {
     if (typeof item === 'object' && item !== null) {
@@ -1598,6 +1614,7 @@ const serverItems = computed(() => {
 })
 
 const selectedServerValues = computed(() => new Set(serverItems.value.map((item) => item.value)))
+const selectedLibraryValues = computed(() => new Set(libraryItems.value.map((item) => item.value)))
 
 watch(
   [serverItems, () => config.value.selected_servers],
@@ -1607,6 +1624,18 @@ watch(
     const filtered = config.value.selected_servers.filter((item) => allowed.has(String(item)))
     if (filtered.length !== config.value.selected_servers.length) {
       config.value.selected_servers = filtered
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
+  [libraryItems, () => config.value.include_libraries],
+  () => {
+    if (!Array.isArray(config.value.include_libraries)) return
+    const filtered = config.value.include_libraries.filter((item) => selectedLibraryValues.value.has(String(item)))
+    if (filtered.length !== config.value.include_libraries.length) {
+      config.value.include_libraries = filtered
     }
   },
   { deep: true, immediate: true },
@@ -1985,7 +2014,11 @@ function showConfigSaveMessage(message: string) {
 }
 
 async function saveConfig(options: { auto?: boolean } = {}) {
-  if (configSaving.value) return false
+  if (configSaving.value) {
+    configSaveQueued = true
+    configAutoSavePending = true
+    return false
+  }
   configSaving.value = true
   if (configAutoSaveTimer !== null && typeof window !== 'undefined') {
     window.clearTimeout(configAutoSaveTimer)
@@ -2011,6 +2044,9 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       backup_enabled: Boolean(String(config.value.backup_cron || '').trim()),
       selected_servers: Array.isArray(config.value.selected_servers)
         ? config.value.selected_servers.filter((item) => selectedServerValues.value.has(String(item)))
+        : [],
+      include_libraries: Array.isArray(config.value.include_libraries)
+        ? config.value.include_libraries.filter((item) => selectedLibraryValues.value.has(String(item)))
         : [],
     }
     const servers = normalizeMediaServers(payload)
@@ -2057,6 +2093,11 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       suppressConfigAutoSave = previousSuppressAutoSave
     }
     configSaving.value = false
+    if (configSaveQueued || configAutoSavePending) {
+      configSaveQueued = false
+      configAutoSavePending = false
+      void saveConfig({ auto: Boolean(config.value.auto_save_config) })
+    }
   }
 }
 

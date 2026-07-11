@@ -359,13 +359,25 @@ class CoverService:
         result: list[dict[str, Any]] = []
         for client in self.clients():
             for library in await client.get_libraries():
-                result.append(library.__dict__)
+                item = library.__dict__.copy()
+                item["server_id"] = client.server_id
+                item["value"] = f"{client.server_id}:{library.id}"
+                result.append(item)
         return result
+
+    def selected_generation_libraries(self, libraries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        selected_servers = {str(item) for item in (self.config.get("selected_servers") or []) if str(item)}
+        selected_libraries = {str(item) for item in (self.config.get("include_libraries") or []) if str(item)}
+        return [
+            library for library in libraries
+            if (not selected_servers or str(library.get("server_id") or library.get("server") or "") in selected_servers)
+            and (not selected_libraries or str(library.get("value") or f"{library.get('server_id') or library.get('server')}:{library.get('id')}") in selected_libraries)
+        ]
 
     async def find_library(self, library_name: str) -> tuple[MediaServerClient, MediaLibrary]:
         for client in self.clients():
             for library in await client.get_libraries():
-                if library.name == library_name or library.id == library_name:
+                if library.name == library_name or library.id == library_name or f"{client.server_id}:{library.id}" == library_name:
                     return client, library
         raise ValueError(f"Library not found: {library_name}")
 
@@ -373,7 +385,7 @@ class CoverService:
         if self.local_mode():
             if library_name:
                 return [await self.generate_local_library(library_name, style)]
-            libraries = self.local_libraries()
+            libraries = self.selected_generation_libraries(self.local_libraries())
             if libraries:
                 return [await self.generate_local_library(str(library["name"]), style) for library in libraries]
             return [await self.generate_from_local(style)]
@@ -390,11 +402,11 @@ class CoverService:
             client, library = await self.find_library(library_name)
             return [await self.generate_library(client, library, style)]
 
-        libraries = await self.libraries()
+        libraries = self.selected_generation_libraries(await self.libraries())
         if libraries:
             output = []
             for library_info in libraries:
-                client, library = await self.find_library(library_info["name"])
+                client, library = await self.find_library(str(library_info.get("value") or library_info["name"]))
                 output.append(await self.generate_library(client, library, style))
             return output
 
@@ -578,7 +590,9 @@ class CoverService:
                     "id": slugify(child.name),
                     "name": child.name,
                     "server": "local",
+                    "server_id": "local",
                     "type": "local",
+                    "value": f"local:{slugify(child.name)}",
                     "image_count": len(images),
                 })
         root_images = [
@@ -591,7 +605,9 @@ class CoverService:
                 "id": "local",
                 "name": "本地封面",
                 "server": "local",
+                "server_id": "local",
                 "type": "local",
+                "value": "local:local",
                 "image_count": len(root_images),
             })
         return libraries

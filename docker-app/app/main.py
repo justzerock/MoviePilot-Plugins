@@ -29,6 +29,7 @@ from .media_client import configured_clients
 from .services import library_title_payload, read_history_index, remove_history_item, slugify, title_for_library
 from .services import CoverService
 from . import storage
+from .run_logs import APP_LOGGER, RunLog, clean_expired_logs, iter_logs, safe_log_path
 
 
 class GenerateRequest(BaseModel):
@@ -147,6 +148,7 @@ class GenerationManager:
         self.label = ""
         self.items: list[dict[str, Any]] = []
         self.error = ""
+        self.run_log: RunLog | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -158,7 +160,7 @@ class GenerationManager:
             "generation_items": self.items,
         }
 
-    async def start(self, style: str = "", library_name: str | None = None) -> dict[str, Any]:
+    async def start(self, style: str = "", library_name: str | None = None, trigger: str = "manual") -> dict[str, Any]:
         if self.task and not self.task.done():
             return self.snapshot()
         self.is_generating = True
@@ -168,6 +170,8 @@ class GenerationManager:
         self.label = "准备生成"
         self.items = []
         self.error = ""
+        self.run_log = RunLog(trigger)
+        self.run_log.info("任务开始 trigger=%s style=%s library=%s mode=%s", trigger, style or "default", library_name or "all", "local" if self.service.local_mode() else "server")
         self.task = asyncio.create_task(self._run(style, library_name))
         await asyncio.sleep(0)
         return self.snapshot()
@@ -189,10 +193,11 @@ class GenerationManager:
                 self.total = 1
                 self.label = f"正在生成 {library_name}"
                 self.items.extend(await self.service.generate(library_name, style_name))
+                self.run_log and self.run_log.info("媒体库完成 library=%s result=%s", library_name, self.items[-1] if self.items else {})
                 self.current = 1
                 self.label = "生成完成"
                 return
-            libraries = await self.service.libraries()
+            libraries = self.service.selected_generation_libraries(await self.service.libraries())
             if not libraries:
                 self.total = 1
                 self.label = "正在生成本地封面"
@@ -210,7 +215,8 @@ class GenerationManager:
                     self.current += 1
                     continue
                 self.label = f"正在生成 {library_name}"
-                self.items.extend(await self.service.generate(library_name, style_name))
+                self.items.extend(await self.service.generate(str(library.get("value") or library_name), style_name))
+                self.run_log and self.run_log.info("媒体库完成 library=%s", library_name)
                 self.current += 1
                 await asyncio.sleep(0)
             if not self.stop_requested:
@@ -218,7 +224,19 @@ class GenerationManager:
         except Exception as err:
             self.error = str(err)
             self.label = "生成失败"
+            if self.run_log:
+                self.run_log.exception("任务失败: %s", err)
         finally:
+            if self.run_log:
+                succeeded = sum(1 for item in self.items if not item.get("upload_error"))
+                failed = sum(1 for item in self.items if item.get("upload_error"))
+                self.run_log.info("任务结束 status=%s success=%s failed=%s skipped=%s", self.label, succeeded, failed, max(0, self.total - self.current))
+                self.run_log.close()
+                self.run_log = None
+            try:
+                clean_expired_logs(int(self.service.config.get("log_retention_days") or 7))
+            except Exception as cleanup_error:
+                APP_LOGGER.warning("任务后清理日志失败: %s", cleanup_error)
             self.is_generating = False
             self.stop_requested = False
 
@@ -271,7 +289,7 @@ class ScheduleManager:
         if bool(config.get("enabled", True)) and cron_expr and cron_matches(cron_expr, now) and self.last_generation_key != key:
             self.last_generation_key = key
             style = str(config.get("style_config", {}).get("style") or "")
-            await generation_manager.start(style)
+            await generation_manager.start(style, trigger="schedule")
             actions.append("generation")
 
         backup_expr = str(config.get("backup_cron") or "").strip()
@@ -295,6 +313,10 @@ scheduler = ScheduleManager()
 
 @app.on_event("startup")
 async def startup_scheduler():
+    try:
+        clean_expired_logs(int(load_config().get("log_retention_days") or 7))
+    except Exception as error:
+        APP_LOGGER.warning("启动时清理日志失败: %s", error)
     scheduler.start()
 
 
@@ -356,7 +378,50 @@ async def get_config():
 
 @app.post("/api/config")
 async def post_config(config: dict[str, Any]):
-    return service.save(config)
+    try:
+        return service.save(config)
+    except Exception as error:
+        APP_LOGGER.exception("配置保存失败: %s", error)
+        raise HTTPException(status_code=500, detail=f"配置保存失败: {error}") from error
+
+
+@app.get("/api/logs")
+async def list_logs():
+    items = []
+    for path in iter_logs():
+        stat = path.stat()
+        items.append({"name": str(path.relative_to(DATA_DIR / "logs")), "size": stat.st_size, "modified": stat.st_mtime})
+    return {"items": items}
+
+
+@app.get("/api/logs/content/{name:path}")
+async def read_log(name: str):
+    path = safe_log_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="日志不存在")
+    return {"name": name, "content": path.read_text(encoding="utf-8", errors="replace")[-200_000:]}
+
+
+@app.get("/api/logs/download/{name:path}")
+async def download_log(name: str):
+    path = safe_log_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="日志不存在")
+    return FileResponse(path, media_type="text/plain; charset=utf-8", filename=path.name)
+
+
+@app.delete("/api/logs/{name:path}")
+async def delete_log(name: str):
+    path = safe_log_path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="日志不存在")
+    path.unlink()
+    return {"ok": True}
+
+
+@app.post("/api/logs/cleanup")
+async def cleanup_logs():
+    return {"removed": clean_expired_logs(int(load_config().get("log_retention_days") or 7))}
 
 
 @app.get("/api/libraries")
@@ -1238,7 +1303,7 @@ def cron_token_matches(token: str, value: int, minimum: int, maximum: int, sunda
 async def delayed_generation_start(delay_seconds: int, style: str, library_name: str) -> None:
     if delay_seconds > 0:
         await asyncio.sleep(delay_seconds)
-    await generation_manager.start(style, library_name)
+    await generation_manager.start(style, library_name, trigger="monitor")
 
 
 async def parse_webhook_request(request: Request) -> dict[str, Any]:
@@ -1489,7 +1554,12 @@ def remember_libraries(config: dict[str, Any], libraries: list[dict[str, Any]]) 
     if not libraries or config.get("mock_enabled", True):
         return
     entries = [
-        {"name": str(item.get("name") or item.get("id") or ""), "value": str(item.get("name") or item.get("id") or "")}
+        {
+            "name": str(item.get("name") or item.get("id") or ""),
+            "value": str(item.get("value") or f"{item.get('server_id') or item.get('server')}:{item.get('id') or item.get('name')}"),
+            "server": str(item.get("server") or ""),
+            "server_id": str(item.get("server_id") or item.get("server") or ""),
+        }
         for item in libraries
         if str(item.get("name") or item.get("id") or "").strip()
     ]
@@ -1497,7 +1567,7 @@ def remember_libraries(config: dict[str, Any], libraries: list[dict[str, Any]]) 
         return
     config["all_libraries"] = entries
     config["all_servers"] = sorted({
-        str(item.get("server") or "").strip()
+        str(item.get("server_id") or item.get("server") or "").strip()
         for item in libraries
         if str(item.get("server") or "").strip()
     })
@@ -1862,6 +1932,7 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "backup_enabled": bool(config.get("backup_enabled", False)),
         "backup_cron": str(config.get("backup_cron") or ""),
         "backup_path": str(config.get("backup_path") or ""),
+        "log_retention_days": int(config.get("log_retention_days") or 7),
         "page_tab": str(config.get("page_tab") or "generate-tab"),
         "style_naming_v2": bool(config.get("style_naming_v2", True)),
         "custom_static_layout": config.get("custom_static_layout"),
@@ -1921,6 +1992,7 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         "backup_enabled",
         "backup_cron",
         "backup_path",
+        "log_retention_days",
         "page_tab",
         "style_naming_v2",
         "custom_width",
@@ -1984,11 +2056,11 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
     mock = bool(config.get("mock_enabled", True)) and not local_mode
     local_libraries = service.local_libraries() if local_mode else []
     libraries = (
-        [{"name": item["name"], "value": item["name"]} for item in MOCK_LIBRARIES]
+        [{"name": item["name"], "value": f"mock:{item.get('id') or item['name']}", "server": "mock", "server_id": "mock"} for item in MOCK_LIBRARIES]
         if mock
-        else ([{"name": item["name"], "value": item["name"]} for item in local_libraries] if local_mode else (config.get("all_libraries") or []))
+        else (local_libraries if local_mode else (config.get("all_libraries") or []))
     )
-    all_servers = ["local"] if local_mode else (["mock"] if mock else [client.server_name for client in configured_clients(config)])
+    all_servers = ["local"] if local_mode else (["mock"] if mock else [client.server_id for client in configured_clients(config)])
     allowed_servers = set(all_servers)
     selected_servers = [
         str(item)
@@ -2007,7 +2079,7 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
         "generation_total": 0,
         "generation_label": "",
         "all_servers": all_servers,
-        "selected_servers": selected_servers or ([] if mock else all_servers),
+        "selected_servers": selected_servers,
         "include_libraries": config.get("include_libraries") or [],
         "all_libraries": libraries,
         "monitor_source": str(config.get("monitor_source") or "webhook") if str(config.get("monitor_source") or "webhook") in {"webhook", "emby", "jellyfin"} else "webhook",

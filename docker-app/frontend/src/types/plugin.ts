@@ -67,6 +67,7 @@ export interface MediaCoverGeneratorConfig {
   backup_enabled: boolean
   backup_cron: string
   backup_path: string
+  log_retention_days: number
   page_tab: 'generate-tab' | 'custom-tab' | 'history-tab' | 'clean-tab'
   style_naming_v2: boolean
   custom_static_layout?: CustomStaticLayout | null

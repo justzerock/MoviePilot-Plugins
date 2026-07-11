@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import tempfile
 from typing import Any
 
 import yaml
@@ -71,6 +72,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "backup_path": "",
     "page_tab": "generate-tab",
     "style_naming_v2": True,
+    "log_retention_days": 7,
     "custom_static_layout": None,
     "custom_static_layouts": None,
     "custom_static_active_id": None,
@@ -101,6 +103,7 @@ def ensure_data_dirs() -> None:
         DATA_DIR / "stickers",
         DATA_DIR / "backups",
         DATA_DIR / "tmp",
+        DATA_DIR / "logs",
     ):
         path.mkdir(parents=True, exist_ok=True)
 
@@ -173,10 +176,27 @@ def save_config(config: dict[str, Any]) -> dict[str, Any]:
     ensure_data_dirs()
     incoming = infer_local_mode(config or {}) if isinstance(config, dict) else {}
     normalized = normalize_config(deep_merge(DEFAULT_CONFIG, incoming))
-    CONFIG_PATH.write_text(
-        yaml.safe_dump(normalized, allow_unicode=True, sort_keys=False),
-        encoding="utf-8",
-    )
+    payload = yaml.safe_dump(normalized, allow_unicode=True, sort_keys=False)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=DATA_DIR, delete=False) as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+            temp_path = Path(handle.name)
+        temp_path.replace(CONFIG_PATH)
+        # Read back once: a successful HTTP response now means the volume has
+        # a valid, parseable configuration rather than merely an open handle.
+        saved = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+        if not isinstance(saved, dict):
+            raise ValueError("配置文件写入后无法解析")
+    except Exception:
+        try:
+            if temp_path:
+                temp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        raise
     return normalized
 
 
@@ -187,6 +207,10 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
     config["monitor_source"] = monitor_source
     if not str(config.get("api_token") or "").strip():
         config["api_token"] = secrets.token_urlsafe(24)
+    try:
+        config["log_retention_days"] = max(1, min(365, int(config.get("log_retention_days") or 7)))
+    except (TypeError, ValueError):
+        config["log_retention_days"] = 7
     if config.get("local_mode") is True:
         config["mock_enabled"] = False
         config["upload_after_generate"] = False

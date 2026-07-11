@@ -23,12 +23,13 @@ class MediaLibrary:
 
 
 class MediaServerClient:
-    def __init__(self, base_url: str, api_key: str, kind: ServerKind = "emby", timeout: float = 30, name: str = ""):
+    def __init__(self, base_url: str, api_key: str, kind: ServerKind = "emby", timeout: float = 30, name: str = "", server_id: str = ""):
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key or ""
         self.kind = kind
         self.timeout = timeout
         self.name = (name or kind).strip() or kind
+        self.server_id = (server_id or self.name).strip() or self.name
         if not self.base_url or not self.api_key:
             raise ValueError(f"{kind} url/api_key is not configured")
 
@@ -215,7 +216,7 @@ def configured_clients(config: dict[str, Any]) -> list[MediaServerClient]:
         if key in seen:
             continue
         seen.add(key)
-        clients.append(MediaServerClient(url, api_key, kind, name=name))
+        clients.append(MediaServerClient(url, api_key, kind, name=name, server_id=str(raw.get("id") or name)))
     if not clients and config.get("emby_url") and config.get("emby_api_key"):
         clients.append(MediaServerClient(config["emby_url"], config["emby_api_key"], "emby", name="emby"))
     if not config.get("media_servers") and config.get("jellyfin_url") and config.get("jellyfin_api_key"):
