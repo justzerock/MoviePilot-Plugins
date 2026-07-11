@@ -56,7 +56,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件版本
     plugin_version = "0.9.6"
     # 插件作者
-    plugin_author = "justzerock"
+    plugin_author = "呀哈哈"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀

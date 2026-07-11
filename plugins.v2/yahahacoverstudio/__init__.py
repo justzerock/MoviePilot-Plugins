@@ -110,13 +110,13 @@ class YahahaCoverStudio(_PluginBase):
     # 插件名称
     plugin_name = "呀哈哈封面工坊"
     # 插件描述
-    plugin_desc = "Yahaha Cover Studio，生成媒体库动态/静态封面，支持 Emby/Jellyfin"
+    plugin_desc = "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控"
     # 插件图标
-    plugin_icon = "/api/v1/plugin/YahahaCoverStudio/plugin_asset?file=yahaha-cover-studio.png"
+    plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
     plugin_version = "2.0.0"
     # 插件作者
-    plugin_author = "Yahaha"
+    plugin_author = "呀哈哈"
     # 作者主页
     author_url = "https://github.com/justzerock/MoviePilot-Plugins"
     # 插件配置项ID前缀

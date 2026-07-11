@@ -180,19 +180,7 @@ plugins.v2/**/__pycache__/
 plugins.v2/**/*.pyc
 
 # Local runtime data and secrets
-docker-app/data/config.yaml
-docker-app/data/input/**
-docker-app/data/output/**
-docker-app/data/fonts/**
-docker-app/data/stickers/**
-docker-app/data/backups/**
-docker-app/data/tmp/**
-!docker-app/data/input/.gitkeep
-!docker-app/data/output/.gitkeep
-!docker-app/data/fonts/.gitkeep
-!docker-app/data/stickers/.gitkeep
-!docker-app/data/backups/.gitkeep
-!docker-app/data/tmp/.gitkeep
+docker-app/data
 
 # Local AI assistant / agent session files
 .codex/

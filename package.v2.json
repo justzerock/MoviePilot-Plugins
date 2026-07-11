@@ -2,10 +2,10 @@
     "MediaCoverGenerator": {
         "name": "Emby媒体库封面生成",
         "description": "生成媒体库动态/静态封面，支持 Emby/Jellyfin",
-        "labels": "Emby,动态封面,媒体库",
+        "labels": "Emby,Jellyfin,海报,封面,动态,媒体库",
         "version": "0.9.6",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png",
-        "author": "justzerock",
+        "author": "呀哈哈",
         "level": 1,
         "history": {
             "v0.9.6": "修复生成封面没有文字的问题，优化依赖版本兼容性（感谢 @zoffyultraman、@AriadusTT）",
@@ -33,11 +33,11 @@
     },
     "YahahaCoverStudio": {
         "name": "呀哈哈封面工坊",
-        "description": "Yahaha Cover Studio，新版媒体库封面工坊，支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
-        "labels": "Yahaha Cover Studio,媒体库封面,Emby,Jellyfin,动态封面,可编辑画布,Webhook",
+        "description": "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
+        "labels": "海报,可编辑画布,封面,Emby,Jellyfin,动态",
         "version": "2.0.0",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png",
-        "author": "justzerock",
+        "author": "呀哈哈",
         "level": 1,
         "history": {
             "v2.0.0": "更名为呀哈哈封面工坊 / Yahaha Cover Studio，作为新版插件发布；新增 Vue 前端、可编辑布局、方案管理、历史封面、Webhook 入库监控。旧版媒体库封面生成已保留在 legacy-media-cover-generator 分支和 v1-legacy-media-cover-generator tag。"
