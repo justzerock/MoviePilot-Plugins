@@ -386,8 +386,11 @@ class CoverRenderer:
     def _draw_text(self, canvas: Image.Image, title: str, subtitle: str, box: tuple[int, int, int, int], config: dict[str, Any], align="center") -> None:
         draw = ImageDraw.Draw(canvas)
         scale = canvas.height / 1080
-        main_font = self._font(int(config.get("main_font_size", 170) * scale), str(config.get("font") or ""))
-        sub_font = self._font(int(config.get("subtitle_font_size", 76) * scale), str(config.get("font") or ""))
+        font_paths = config.get("font_paths") if isinstance(config.get("font_paths"), dict) else {}
+        main_preferred = str(font_paths.get("main_title") or config.get("font") or "")
+        subtitle_preferred = str(font_paths.get("subtitle") or main_preferred)
+        main_font = self._font(int(config.get("main_font_size", 170) * scale), main_preferred)
+        sub_font = self._font(int(config.get("subtitle_font_size", 76) * scale), subtitle_preferred)
         x, y, w, _ = box
         shadow = (0, 0, 0, 90)
         fill = (255, 255, 255, 245)

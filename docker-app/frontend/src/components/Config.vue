@@ -529,15 +529,6 @@
                       hint="留空关闭定时备份；填写正确 5 位 cron 表达式则开启"
                     />
                   </div>
-                  <div>
-                    <BlueprintField
-                      v-model.number="config.log_retention_days"
-                      type="number"
-                      label="日志保留天数"
-                      placeholder="7"
-                      hint="保留 1～365 天的独立任务日志"
-                    />
-                  </div>
                   <div class="mcr-config-backup-grid__actions">
                     <div class="mcr-config-backup-actions">
                       <v-btn
@@ -672,6 +663,15 @@
                     >清理过期日志</v-btn>
                   </div>
                 </header>
+                <div class="mcr-run-log-retention">
+                  <BlueprintField
+                    v-model.number="config.log_retention_days"
+                    type="number"
+                    label="日志保留天数"
+                    placeholder="7"
+                    hint="保留 1～365 天的独立任务日志"
+                  />
+                </div>
                 <div v-if="runLogsLoading" class="mcr-font-library__empty">正在读取运行日志...</div>
                 <div v-else-if="!normalizedRunLogs.length" class="mcr-font-library__empty">暂无运行日志</div>
                 <div v-else class="mcr-run-log-list">
@@ -1350,7 +1350,7 @@ async function loadDynamicLibraryOptions() {
     )
     if (!resp || resp.code !== 0 || !resp.data) return
 
-    if (Array.isArray(resp.data.all_libraries) && resp.data.all_libraries.length) {
+    if (Array.isArray(resp.data.all_libraries)) {
       config.value.all_libraries = resp.data.all_libraries
     }
     if (Array.isArray(resp.data.all_servers)) {
@@ -1377,6 +1377,21 @@ async function loadDynamicLibraryOptions() {
     console.error('loadDynamicLibraryOptions failed', e)
   } finally {
     optionsLoading.value = false
+  }
+}
+
+async function loadLibrariesForSelectedServers() {
+  if (config.value.local_mode) return
+  const selected = (config.value.selected_servers || []).map(String).filter(Boolean).join(',')
+  try {
+    const response = await props.api.get<{ code?: number; data?: any[] }>(
+      `plugin/MediaCoverGenerator/libraries?servers=${encodeURIComponent(selected)}`,
+    )
+    if (response?.code === 0 && Array.isArray(response.data)) {
+      config.value.all_libraries = response.data
+    }
+  } catch (error) {
+    console.warn('load libraries for selected servers failed', error)
   }
 }
 
@@ -1799,6 +1814,12 @@ watch(
     }
   },
   { deep: true, immediate: true },
+)
+
+watch(
+  () => [...(config.value.selected_servers || [])].map(String),
+  () => { void loadLibrariesForSelectedServers() },
+  { deep: true },
 )
 
 const titleConfigReference = `媒体库名称:
@@ -3742,7 +3763,7 @@ async function deleteBackupItem(item: BackupItem) {
 .mcr-config-shell :deep(.v-switch__track) {
   width: 42px;
   height: 24px;
-  background-color: var(--mcr-color-on-surface) !important;
+  background-color: var(--mcr-color-surface-container-highest) !important;
   opacity: 1;
   border: 1px solid rgba(var(--mcr-rgb-outline-variant), 0.7);
   transition: background-color 180ms ease, border-color 180ms ease;
@@ -3934,7 +3955,7 @@ html.dark .mcr-config-shell :deep(.mcr-button--ghost),
 
 html.dark .mcr-config-shell :deep(.v-switch__track),
 .v-theme--dark .mcr-config-shell :deep(.v-switch__track) {
-  background-color: var(--mcr-color-on-surface) !important;
+  background-color: var(--mcr-color-surface-container-highest) !important;
   border-color: var(--mcr-color-outline-variant) !important;
 }
 
@@ -5675,11 +5696,29 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 }
 
 .mcr-server-card {
+  position: relative;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   padding: 16px;
+}
+
+.mcr-server-card::before {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mcr-color-success, #36d399);
+  box-shadow: 0 0 0 3px rgba(54, 211, 153, 0.16), 0 0 14px rgba(54, 211, 153, 0.72);
+  content: '';
+}
+
+.mcr-server-card--disabled::before {
+  background: var(--mcr-color-muted, #8a96b8);
+  box-shadow: 0 0 0 3px rgba(138, 150, 184, 0.14), 0 0 10px rgba(138, 150, 184, 0.3);
 }
 
 .mcr-server-card--disabled {

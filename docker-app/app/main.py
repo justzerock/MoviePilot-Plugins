@@ -630,6 +630,17 @@ async def plugin_status():
     return ok(payload)
 
 
+@app.get("/api/plugin/MediaCoverGenerator/libraries")
+async def plugin_libraries(servers: str = ""):
+    previous = service.config.get("selected_servers")
+    if servers.strip():
+        service.config["selected_servers"] = [item for item in servers.split(",") if item.strip()]
+    try:
+        return ok(await service.libraries())
+    finally:
+        service.config["selected_servers"] = previous
+
+
 @app.get("/api/plugin/MediaCoverGenerator/history")
 async def plugin_history():
     store = HistoryStore(DATA_DIR)
