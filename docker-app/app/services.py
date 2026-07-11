@@ -76,11 +76,19 @@ def slugify(value: str) -> str:
     return safe or "library"
 
 
-def library_title_payload(config: dict[str, Any], library_name: str) -> tuple[str, str, dict[str, str]]:
+def library_title_payload(config: dict[str, Any], library_name: str, server_name: str = "") -> tuple[str, str, dict[str, str]]:
     title_config = config.get("title_config") or {}
     if isinstance(title_config, str):
         title_config = {}
     raw = title_config.get(library_name) or {}
+    if bool(config.get("distinguish_same_name_libraries", False)) and server_name:
+        normalized_server = re.sub(r"[^\w\u4e00-\u9fff]+", "", server_name, flags=re.UNICODE).casefold()
+        normalized_library = re.sub(r"[^\w\u4e00-\u9fff]+", "", library_name, flags=re.UNICODE).casefold()
+        for key, value in title_config.items():
+            normalized_key = re.sub(r"[^\w\u4e00-\u9fff]+", "", str(key), flags=re.UNICODE).casefold()
+            if normalized_server in normalized_key and normalized_library in normalized_key:
+                raw = value
+                break
     if isinstance(raw, list):
         texts = raw[2] if len(raw) > 2 and isinstance(raw[2], dict) else {}
         return str(raw[0] if raw else library_name), str(raw[1] if len(raw) > 1 else ""), {str(k): str(v) for k, v in texts.items()}
@@ -322,7 +330,7 @@ class CoverService:
                 font_paths[key] = resolved
         return {key: value for key, value in font_paths.items() if value}
 
-    def render_config(self, style_config: dict[str, Any], library_name: str, style_name: str) -> dict[str, Any]:
+    def render_config(self, style_config: dict[str, Any], library_name: str, style_name: str, server_name: str = "") -> dict[str, Any]:
         config = dict(style_config)
         if style_name.startswith("animated_"):
             animated_settings = self.config.get("animated_settings") if isinstance(self.config.get("animated_settings"), dict) else {}
@@ -353,7 +361,7 @@ class CoverService:
                 config["blur"] = config["blur_size"]
             if "main_title_font_size" in config:
                 config["main_font_size"] = config["main_title_font_size"]
-        _title, _subtitle, custom_texts = library_title_payload(self.config, library_name)
+        _title, _subtitle, custom_texts = library_title_payload(self.config, library_name, server_name)
         config["custom_texts"] = custom_texts
         config["font_paths"] = self.build_font_paths()
         config.setdefault("font", config["font_paths"].get("main_title", ""))
@@ -413,6 +421,7 @@ class CoverService:
             for library in libraries:
                 item = library.__dict__.copy()
                 item["server_id"] = client.server_id
+                item["server_name"] = client.server_name
                 item["value"] = f"{client.server_id}:{library.id}"
                 result.append(item)
         return result
@@ -540,8 +549,8 @@ class CoverService:
         if not image_paths:
             raise ValueError(f"No image sources available for {library.name}")
 
-        title, subtitle = title_for_library(self.config, library.name)
-        render_config = self.render_config(style_config, library.name, style_name)
+        title, subtitle, _texts = library_title_payload(self.config, library.name, client.server_name)
+        render_config = self.render_config(style_config, library.name, style_name, client.server_name)
         output_path = output_dir / f"{slugify(library.name)}_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
         uploaded = False

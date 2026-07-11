@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.0"
+    plugin_version = "2.0.1"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -168,6 +168,7 @@ class YahahaCoverStudio(_PluginBase):
     _custom_text_font_path = ''
     _title_config = ''
     _title_config_strict = False
+    _distinguish_same_name_libraries = False
     _current_config = {}
     _cover_style = 'static_1'
     _cover_style_base = 'static_1'
@@ -217,6 +218,7 @@ class YahahaCoverStudio(_PluginBase):
     _save_recent_covers = True
     _covers_history_limit_per_library = 10
     _covers_page_history_limit = 50
+    _history_retention_batches = 30
     _page_tab = "generate-tab"
     _custom_static_layout = None
     _custom_static_layouts: List[Dict[str, Any]] = []
@@ -271,6 +273,7 @@ class YahahaCoverStudio(_PluginBase):
             # self._title_config = self.get_data('title_config')
             self._title_config = config.get("title_config")
             self._title_config_strict = bool(config.get("title_config_strict", False))
+            self._distinguish_same_name_libraries = bool(config.get("distinguish_same_name_libraries", False))
             self._main_title_font_url = get_compat_value("main_title_font_url", "zh_font_url", "")
             self._subtitle_font_url = get_compat_value("subtitle_font_url", "en_font_url", "")
             self._custom_text_font_url = config.get("custom_text_font_url", self._subtitle_font_url)
@@ -377,6 +380,7 @@ class YahahaCoverStudio(_PluginBase):
                 "covers_page_history_limit[init_plugin]",
                 int,
             )
+            self._history_retention_batches = self.__clamp_value(config.get("history_retention_batches", 30), 1, 1000, 30, "history_retention_batches[init]", int)
             self._page_tab = config.get("page_tab", "generate-tab")
 
             raw_layout = config.get("custom_static_layout")
@@ -844,6 +848,7 @@ class YahahaCoverStudio(_PluginBase):
             if history_store and self._history_batch:
                 try:
                     history_store.finalize(self._history_batch, "success")
+                    history_store.cleanup(self._history_retention_batches)
                 except Exception as history_err:
                     logger.error(f"【YahahaCoverStudio】历史批次归档失败: {history_err}", exc_info=True)
                 self._history_batch = None
@@ -1031,6 +1036,7 @@ class YahahaCoverStudio(_PluginBase):
             "covers_input": self._covers_input,
             "title_config": self._title_config,
             "title_config_strict": self._title_config_strict,
+            "distinguish_same_name_libraries": self._distinguish_same_name_libraries,
             "main_title_font_url": str(self._main_title_font_url),
             "subtitle_font_url": str(self._subtitle_font_url),
             "custom_text_font_url": str(self._custom_text_font_url),
@@ -1092,6 +1098,7 @@ class YahahaCoverStudio(_PluginBase):
             "save_recent_covers": self._save_recent_covers,
             "covers_history_limit_per_library": self._covers_history_limit_per_library,
             "covers_page_history_limit": self._covers_page_history_limit,
+            "history_retention_batches": self._history_retention_batches,
             "custom_static_layout": json.dumps(self._custom_static_layout, ensure_ascii=False)
             if self._custom_static_layout is not None
             else "",
@@ -1169,6 +1176,7 @@ class YahahaCoverStudio(_PluginBase):
                     "backup_path",
                     "title_config",
                     "title_config_strict",
+                    "distinguish_same_name_libraries",
                     "strict",
                     "yaml",
                     "content",
@@ -2346,6 +2354,10 @@ class YahahaCoverStudio(_PluginBase):
             self._covers_input = str(raw.get("covers_input") or "")
             self._title_config = title_config
             self._title_config_strict = strict
+            self._distinguish_same_name_libraries = as_bool(
+                raw.get("distinguish_same_name_libraries"),
+                bool(self._distinguish_same_name_libraries),
+            )
             self._main_title_font_preset = str(raw.get("main_title_font_preset") or self._main_title_font_preset or "chaohei")
             self._subtitle_font_preset = str(raw.get("subtitle_font_preset") or self._subtitle_font_preset or "EmblemaOne")
             self._custom_text_font_preset = str(raw.get("custom_text_font_preset") or self._custom_text_font_preset or self._subtitle_font_preset or "EmblemaOne")
@@ -2372,6 +2384,7 @@ class YahahaCoverStudio(_PluginBase):
                 "covers_page_history_limit[save_config]",
                 int,
             )
+            self._history_retention_batches = self.__clamp_value(raw.get("history_retention_batches", self._history_retention_batches), 1, 1000, 30, "history_retention_batches[save]", int)
             self.__update_config()
             logger.info("【YahahaCoverStudio】Vue 设置页配置已保存")
             return {"code": 0, "msg": "配置已保存", "data": {"config": raw}}
@@ -2413,6 +2426,8 @@ class YahahaCoverStudio(_PluginBase):
             if strict_raw is None:
                 strict_raw = raw.get("title_config_strict")
             strict = bool(strict_raw) if not isinstance(strict_raw, str) else strict_raw.lower() in ("1", "true", "yes", "on")
+            distinguish_raw = raw.get("distinguish_same_name_libraries", self._distinguish_same_name_libraries)
+            distinguish_same_name = bool(distinguish_raw) if not isinstance(distinguish_raw, str) else distinguish_raw.lower() in ("1", "true", "yes", "on")
             parsed, errors, processed_yaml = self.__parse_title_config(yaml_text, strict=strict)
             if errors:
                 return {
@@ -2446,40 +2461,42 @@ class YahahaCoverStudio(_PluginBase):
                 return keys
 
             _, libraries = self.__refresh_media_server_context(force=True)
-            library_names: List[str] = []
+            library_names: List[Tuple[str, str]] = []
             seen_libraries = set()
             for item in libraries or []:
                 raw_name = str(item.get("name") or item.get("title") or item.get("label") or "").strip()
+                server_name = ""
                 if ":" in raw_name:
-                    raw_name = raw_name.split(":", 1)[1].strip()
+                    server_name, raw_name = (part.strip() for part in raw_name.split(":", 1))
                 if not raw_name:
                     raw_name = str(item.get("library") or item.get("value") or "").strip()
                 if not raw_name:
                     continue
-                key = normalize_template_key(raw_name)
+                template_name = f"{server_name}_{raw_name}" if distinguish_same_name and server_name else raw_name
+                key = normalize_template_key(template_name)
                 if key in seen_libraries:
                     continue
                 seen_libraries.add(key)
-                library_names.append(raw_name)
+                library_names.append((template_name, raw_name))
 
             existing_keys = {normalize_template_key(key) for key in (parsed or {}).keys() if normalize_template_key(key)}
             existing_keys.update(collect_raw_top_level_keys(yaml_text))
-            missing = [name for name in library_names if normalize_template_key(name) not in existing_keys]
+            missing = [item for item in library_names if normalize_template_key(item[0]) not in existing_keys]
 
             def quote_yaml_value(value: str) -> str:
                 return json.dumps(str(value or ""), ensure_ascii=False)
 
             blocks = [
                 "\n".join([
-                    f"{name}:",
-                    f"  title: {quote_yaml_value(name)}",
+                    f"{template_name}:",
+                    f"  title: {quote_yaml_value(library_name)}",
                     "  subtitle: \"\"",
                     "  background: \"\"",
                     "  texts:",
                     "    slogan: \"\"",
                     "    note: \"\"",
                 ])
-                for name in missing
+                for template_name, library_name in missing
             ]
             reference = "\n".join([
                 "媒体库名称:",
@@ -2499,9 +2516,9 @@ class YahahaCoverStudio(_PluginBase):
                 "msg": "已生成媒体库标题模板",
                 "data": {
                     "valid": True,
-                    "libraries": library_names,
+                    "libraries": [name for name, _library_name in library_names],
                     "existing": sorted(existing_keys),
-                    "missing": missing,
+                    "missing": [name for name, _library_name in missing],
                     "yaml": "\n\n".join(blocks),
                     "reference": reference,
                     "processed_yaml": processed_yaml,
@@ -3829,6 +3846,8 @@ class YahahaCoverStudio(_PluginBase):
                 "methods": ["GET"],
                 "summary": "查询最近生成的封面列表(兼容无前导斜杠)",
             },
+            {"path": "/restore_history_batch", "endpoint": self.api_restore_history_batch, "auth": "bear", "methods": ["POST"], "summary": "恢复历史批次封面"},
+            {"path": "restore_history_batch", "endpoint": self.api_restore_history_batch, "auth": "bear", "methods": ["POST"], "summary": "恢复历史批次封面(兼容)"},
             {
                 "path": "/status",
                 "endpoint": self.api_status,
@@ -3876,8 +3895,15 @@ class YahahaCoverStudio(_PluginBase):
     def api_history(self):
         """查询最近生成的封面列表，供前端历史封面页签使用"""
         try:
-            limit = self._covers_page_history_limit or 50
-            covers = self.__get_recent_generated_covers(limit=limit)
+            store = HistoryStore(self.get_data_path(), self.plugin_version)
+            covers = []
+            for summary in store.list_batches()[:1000]:
+                manifest = store.get_batch(str(summary.get("batch_id") or "")) or {}
+                for item in manifest.get("items") or []:
+                    path = store.file_path(str(manifest.get("batch_id") or ""), str(item.get("file") or ""))
+                    if not path:
+                        continue
+                    covers.append({"name": path.name, "size": item.get("size", 0), "src": f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?path={quote(str(path))}", "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "batch_id": manifest.get("batch_id", "")})
             return {
                 "code": 0,
                 "data": [
@@ -3892,6 +3918,7 @@ class YahahaCoverStudio(_PluginBase):
                         "date_label": item.get("date_label", ""),
                         "mtime": item.get("mtime", ""),
                         "mtime_ts": item.get("mtime_ts", 0),
+                        "batch_id": item.get("batch_id", ""),
                     }
                     for item in covers
                 ],
@@ -3899,6 +3926,35 @@ class YahahaCoverStudio(_PluginBase):
         except Exception as e:
             logger.error(f"【YahahaCoverStudio】获取历史封面失败: {e}", exc_info=True)
             return {"code": 1, "msg": f"获取历史封面失败: {e}"}
+
+    async def api_restore_history_batch(self, request: Request, data: Optional[Dict[str, Any]] = Body(default=None), kwargs: Optional[Any] = Body(default=None)):
+        try:
+            raw = await self.__read_api_payload(request=request, data=data, kwargs=kwargs)
+            batch_id = str(raw.get("batch_id") or "")
+            store = HistoryStore(self.get_data_path(), self.plugin_version)
+            manifest = store.get_batch(batch_id)
+            if not manifest:
+                return {"code": 1, "msg": "历史批次不存在"}
+            self.__refresh_media_server_context(force=True)
+            restored = skipped = failed = 0
+            for item in manifest.get("items") or []:
+                path = store.file_path(batch_id, str(item.get("file") or ""))
+                service = next((value for value in (self._servers or {}).values() if value and value.name == item.get("server_name")), None)
+                if not path or not service:
+                    skipped += 1
+                    continue
+                library = next((value for value in self.__get_server_libraries(service) if value.get("Name") == item.get("library_name")), None)
+                if not library:
+                    skipped += 1
+                    continue
+                try:
+                    restored += 1 if self.__set_library_image(service, library, base64.b64encode(path.read_bytes()).decode("ascii")) else 0
+                except Exception:
+                    failed += 1
+            return {"code": 0, "data": {"batch_id": batch_id, "restored": restored, "skipped": skipped, "failed": failed}}
+        except Exception as e:
+            logger.error(f"恢复历史批次失败: {e}", exc_info=True)
+            return {"code": 1, "msg": f"恢复历史批次失败: {e}"}
 
     def api_status(self):
         """返回封面生成相关的状态与初始化告警(供前端 setupWarnings 使用)"""
@@ -3922,6 +3978,7 @@ class YahahaCoverStudio(_PluginBase):
                 "data": {
                     "warnings": warnings,
                     "enabled": bool(self._enabled),
+                    "plugin_version": self.plugin_version,
                     "auto_save_config": bool(self._auto_save_config),
                     "has_selected_servers": bool(self._selected_servers),
                     "servers_ready": bool(self._servers),
@@ -3990,7 +4047,7 @@ class YahahaCoverStudio(_PluginBase):
                 library_name = preview_target["library_name"]
                 title = preview_target["title"]
                 config_bg_color = preview_target["config_bg_color"]
-                custom_texts = self.__get_custom_texts_from_config(library_name)
+                custom_texts = self.__get_custom_texts_from_config(library_name, service.name)
                 source_mode, images = self.__resolve_preview_source_images(
                     preview_target,
                     required_items=self.__get_preview_required_items(required_items),
@@ -4056,7 +4113,7 @@ class YahahaCoverStudio(_PluginBase):
                     continue
 
                 library_name = library.get("Name") or ""
-                title_result = self.__get_title_from_config(library_name)
+                title_result = self.__get_title_from_config(library_name, service.name)
                 if len(title_result) == 3:
                     title = (title_result[0], title_result[1])
                     config_bg_color = title_result[2]
@@ -6538,6 +6595,7 @@ class YahahaCoverStudio(_PluginBase):
 #
 ''',
             "title_config_strict": False,
+            "distinguish_same_name_libraries": False,
             "tab": "style-tab",
             "cover_style": "static_1",
             "cover_style_base": "static_1",
@@ -6581,6 +6639,7 @@ class YahahaCoverStudio(_PluginBase):
             "save_recent_covers": True,
             "covers_history_limit_per_library": 10,
             "covers_page_history_limit": 50,
+            "history_retention_batches": 30,
             "page_tab": "generate-tab",
             "style_naming_v2": True,
         }
@@ -7607,7 +7666,7 @@ class YahahaCoverStudio(_PluginBase):
         # 自定义图像路径
         image_path = self.__check_custom_image(library_name)
         # 从配置获取标题和背景颜色
-        title_result = self.__get_title_from_config(library_name)
+        title_result = self.__get_title_from_config(library_name, service.name)
         if len(title_result) == 3:
             title = (title_result[0], title_result[1])
             config_bg_color = title_result[2]
@@ -7750,7 +7809,7 @@ class YahahaCoverStudio(_PluginBase):
             str(subtitle_render_font_path or self._subtitle_font_path),
             str(custom_text_render_font_path or self._custom_text_font_path or self._subtitle_font_path),
         )
-        custom_texts = self.__get_custom_texts_from_config(library_name)
+        custom_texts = self.__get_custom_texts_from_config(library_name, server)
         static_preset_layout = self.__get_static_preset_layout_config(self._cover_style)
         if static_preset_layout:
             static_preset_layout = self.__layout_with_resolved_custom_texts(static_preset_layout, custom_texts)
@@ -8333,7 +8392,7 @@ class YahahaCoverStudio(_PluginBase):
             return False
         updated_item_id = self.__get_item_id(item)
         # 从配置获取背景颜色
-        title_result = self.__get_title_from_config(library['Name'])
+        title_result = self.__get_title_from_config(library['Name'], service.name)
         config_bg_color = title_result[2] if len(title_result) == 3 else None
         image_data = self.__generate_image_from_path(service.name, library['Name'], title, image_path, config_bg_color)
             
@@ -8410,7 +8469,7 @@ class YahahaCoverStudio(_PluginBase):
 
         # 生成多图封面
         # 从配置获取背景颜色
-        title_result = self.__get_title_from_config(library['Name'])
+        title_result = self.__get_title_from_config(library['Name'], service.name)
         config_bg_color = title_result[2] if len(title_result) == 3 else None
         image_input = image_paths if (
             self._cover_style == 'static_custom'
@@ -8620,7 +8679,30 @@ class YahahaCoverStudio(_PluginBase):
             logger.warning(f"标题配置错误: {error}")
         return parsed
 
-    def __get_title_from_config(self, library_name):
+    def __find_title_config_values(self, library_name: Any, server_name: Any = "") -> Optional[List[Any]]:
+        raw_library_name = str(library_name or "").strip()
+        title_config = self._current_config or (self.__load_title_config(self._title_config) if self._title_config else {})
+        if not raw_library_name or not isinstance(title_config, dict):
+            return None
+
+        def compact(value: Any) -> str:
+            return re.sub(r"[^\w\u4e00-\u9fff]+", "", str(value or ""), flags=re.UNICODE).casefold()
+
+        if self._distinguish_same_name_libraries and str(server_name or "").strip():
+            server_key = compact(server_name)
+            library_key = compact(raw_library_name)
+            for config_key, config_values in title_config.items():
+                candidate = compact(config_key)
+                if server_key and library_key and server_key in candidate and library_key in candidate:
+                    return config_values if isinstance(config_values, list) else None
+
+        library_key = compact(raw_library_name)
+        for config_key, config_values in title_config.items():
+            if compact(config_key) == library_key:
+                return config_values if isinstance(config_values, list) else None
+        return None
+
+    def __get_title_from_config(self, library_name, server_name: Any = ""):
         """
         从 yaml 配置中获取媒体库的主副标题和背景颜色
         """
@@ -8643,38 +8725,17 @@ class YahahaCoverStudio(_PluginBase):
             logger.debug("媒体库名称为空，使用空标题")
             return (zh_title, en_title, bg_color)
 
-        for lib_name, config_values in title_config.items():
-            raw_key = str(lib_name)
-            normalized_key = str(lib_name).strip()
-            # 策略1: 直接字符串比较
-            if raw_key == raw_library_name:
-                zh_title = config_values[0]
-                en_title = config_values[1] if len(config_values) > 1 else ''
-                bg_color = config_values[2] if len(config_values) > 2 and isinstance(config_values[2], str) else None
-                logger.debug(f"找到匹配的配置(直接匹配): {raw_key} -> {zh_title}, {en_title}, {bg_color}")
-                break
-
-            # 策略2: 去除空格后比较
-            if normalized_key == normalized_library_name:
-                zh_title = config_values[0]
-                en_title = config_values[1] if len(config_values) > 1 else ''
-                bg_color = config_values[2] if len(config_values) > 2 and isinstance(config_values[2], str) else None
-                logger.debug(f"找到匹配的配置(去空格匹配): {normalized_key} -> {zh_title}, {en_title}, {bg_color}")
-                break
-
-            # 策略3: 忽略大小写比较
-            if normalized_key.lower() == normalized_library_name.lower():
-                zh_title = config_values[0]
-                en_title = config_values[1] if len(config_values) > 1 else ''
-                bg_color = config_values[2] if len(config_values) > 2 and isinstance(config_values[2], str) else None
-                logger.debug(f"找到匹配的配置(忽略大小写匹配): {normalized_key} -> {zh_title}, {en_title}, {bg_color}")
-                break
+        config_values = self.__find_title_config_values(normalized_library_name, server_name)
+        if isinstance(config_values, list):
+            zh_title = config_values[0] if config_values else normalized_library_name
+            en_title = config_values[1] if len(config_values) > 1 else ''
+            bg_color = config_values[2] if len(config_values) > 2 and isinstance(config_values[2], str) else None
         else:
             logger.debug(f"未找到媒体库 '{normalized_library_name}' 的配置，回退为媒体库名")
 
         return (zh_title, en_title, bg_color)
 
-    def __get_custom_texts_from_config(self, library_name) -> Dict[str, str]:
+    def __get_custom_texts_from_config(self, library_name, server_name: Any = "") -> Dict[str, str]:
         raw_library_name = str(library_name or "")
         normalized_library_name = raw_library_name.strip()
         title_config = {}
@@ -8683,17 +8744,7 @@ class YahahaCoverStudio(_PluginBase):
         elif self._title_config:
             title_config = self.__load_title_config(self._title_config)
 
-        matched_values = None
-        for lib_name, config_values in title_config.items():
-            raw_key = str(lib_name)
-            normalized_key = str(lib_name).strip()
-            if (
-                raw_key == raw_library_name
-                or normalized_key == normalized_library_name
-                or normalized_key.lower() == normalized_library_name.lower()
-            ):
-                matched_values = config_values
-                break
+        matched_values = self.__find_title_config_values(normalized_library_name, server_name)
         if not isinstance(matched_values, list):
             return {}
 

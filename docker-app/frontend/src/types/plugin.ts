@@ -30,6 +30,7 @@ export interface MediaCoverGeneratorConfig {
   covers_page_history_limit: number
   title_config: string
   title_config_strict: boolean
+  distinguish_same_name_libraries?: boolean
   cover_style_base: string
   cover_style_variant: 'static' | 'animated'
   main_title_font_preset: string

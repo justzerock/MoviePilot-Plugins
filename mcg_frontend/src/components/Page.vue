@@ -110,6 +110,7 @@
                   </v-btn>
                 </div>
                 <div class="yh-preview-chips" aria-label="当前参数">
+                  <span :class="{ 'is-disabled': !pluginEnabled }">插件{{ pluginEnabled ? '已启用' : '已停用' }}</span>
                   <span>{{ currentStyleLabel }}</span>
                   <span>{{ currentVariantLabel }}</span>
                   <span>{{ sourceModeLabel }}</span>
@@ -665,29 +666,7 @@
                 </div>
                 <Transition name="mcr-heading-tools">
                   <div v-if="!historyListCollapsed" class="mcr-history-toolbar" @click.stop @keydown.stop>
-                    <v-btn-toggle
-                      v-model="historyGroupMode"
-                      mandatory
-                      divided
-                      density="compact"
-                      class="mcr-toggle mcr-history-toggle"
-                      :disabled="controlsLocked"
-                    >
-                      <v-btn
-                        value="library"
-                        class="mcr-button mcr-button--ghost mcr-history-mode-button"
-                        :class="{ 'mcr-history-mode-button--active': historyGroupMode === 'library' }"
-                      >
-                        媒体库
-                      </v-btn>
-                      <v-btn
-                        value="date"
-                        class="mcr-button mcr-button--ghost mcr-history-mode-button"
-                        :class="{ 'mcr-history-mode-button--active': historyGroupMode === 'date' }"
-                      >
-                        日期
-                      </v-btn>
-                    </v-btn-toggle>
+                    <span class="mcr-history-timemachine-label"><v-icon icon="mdi-history" size="18" /> 时光机 · 按批次</span>
                     <BlueprintSelect
                       v-model="historySortMode"
                       :items="historySortItems"
@@ -772,6 +751,7 @@
                     >
                       {{ isHistoryGroupSelected(group) ? '取消本组' : '选择本组' }}
                     </v-btn>
+                    <v-btn size="x-small" class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === group.key" :disabled="controlsLocked" @click="restoreHistoryBatch(group.key)">回到此时</v-btn>
                   </div>
                   <v-row>
                     <v-col
@@ -805,7 +785,7 @@
                           >
                             <span class="mcr-history-card__check-mark" aria-hidden="true" />
                           </button>
-                          <div v-if="historyGroupMode !== 'library'" class="mcr-history-card__title">
+                          <div class="mcr-history-card__title">
                             {{ item.library || item.name }}
                           </div>
                           <div class="mcr-history-card__actions">
@@ -1277,6 +1257,7 @@ const DONATION_LEGACY_ACK_STORAGE_KEY = 'mcr-donation-acknowledged'
 const DONATION_AVATAR_STORAGE_KEY = 'yahaha_avatar_source'
 const DONATION_RUN_COUNT_STORAGE_KEY = 'yahaha_generation_run_count'
 const setupWarnings = ref<string[]>([])
+const pluginEnabled = ref(false)
 const styleVariant = ref<CoverStyleVariant>('static')
 const coverStyleBase = ref<CoverStyleBase>('static_1')
 const previewMode = ref<PreviewMode>('frontend')
@@ -1379,10 +1360,12 @@ interface HistoryItem {
   date_label?: string
   mtime?: string
   mtime_ts?: number
+  batch_id?: string
 }
 
 const history = ref<HistoryItem[]>([])
-const historyGroupMode = ref<'library' | 'date'>('date')
+const historyGroupMode = ref<'batch'>('batch')
+const restoringBatchId = ref('')
 const historySortMode = ref<'newest' | 'oldest' | 'name'>('newest')
 const selectedHistoryPaths = ref<string[]>([])
 const donationAvatarIcon = computed(() =>
@@ -2266,6 +2249,7 @@ async function saveRenderOptions() {
       throw new Error(resp.msg || 'save render options failed')
     }
     syncRenderOptions(resp?.data || payload)
+    showEditorSaveStatus('已自动保存')
     backendPreview.value = null
     await loadPreviewSources()
     if (previewMode.value === 'backend') {
@@ -2486,12 +2470,8 @@ const sortedHistory = computed(() => {
 const groupedHistory = computed(() => {
   const groups = new Map<string, { key: string; title: string; items: HistoryItem[] }>()
   for (const item of sortedHistory.value) {
-    const key = historyGroupMode.value === 'date'
-      ? (item.date || 'unknown-date')
-      : (item.library || '未识别媒体库')
-    const title = historyGroupMode.value === 'date'
-      ? (item.date || '未知日期')
-      : (item.library || '未识别媒体库')
+    const key = item.batch_id || item.date || 'legacy'
+    const title = item.date_label ? `批次 ${item.date_label}` : `批次 ${key}`
     if (!groups.has(key)) {
       groups.set(key, { key, title, items: [] })
     }
@@ -2499,6 +2479,20 @@ const groupedHistory = computed(() => {
   }
   return Array.from(groups.values())
 })
+
+async function restoreHistoryBatch(batchId: string) {
+  if (!batchId || restoringBatchId.value) return
+  restoringBatchId.value = batchId
+  try {
+    const resp = await props.api.post<{ code: number; data?: { restored?: number; skipped?: number }; msg?: string }>('plugin/YahahaCoverStudio/restore_history_batch', { batch_id: batchId })
+    if (!resp || resp.code !== 0) throw new Error(resp?.msg || '恢复失败')
+    showEditorSaveStatus(`已恢复 ${resp.data?.restored || 0} 个，跳过 ${resp.data?.skipped || 0} 个`)
+  } catch (error) {
+    showEditorSaveStatus(error instanceof Error ? error.message : '恢复失败')
+  } finally {
+    restoringBatchId.value = ''
+  }
+}
 const allHistorySelected = computed(() =>
   history.value.length > 0 && selectedHistoryPaths.value.length === history.value.length,
 )
@@ -2947,6 +2941,7 @@ async function loadStatusInner(): Promise<boolean> {
       const wasGenerating = isGenerating.value
       const nextIsGenerating = Boolean(data.is_generating)
       setupWarnings.value = Array.isArray(data.warnings) ? data.warnings : []
+      pluginEnabled.value = Boolean(data.enabled)
       isGenerating.value = nextIsGenerating
       generationCurrent.value = Number(data.generation_current || 0)
       generationTotal.value = Number(data.generation_total || 0)
@@ -3149,6 +3144,7 @@ async function setCoverStyle(targetBase: CoverStyleBase, targetVariant: CoverSty
       await props.api.post(`plugin/YahahaCoverStudio/set_cover_style?style=${style}`)
     }
 
+    showEditorSaveStatus('已自动保存')
     backendPreview.value = null
     hydrateEditorForCurrentStyle()
   } catch (e) {
@@ -3172,6 +3168,7 @@ async function toggleStyleVariant() {
     await persistCurrentEditorState()
     styleVariant.value = nextVariant
     await props.api.post('plugin/YahahaCoverStudio/toggle_style_variant')
+    showEditorSaveStatus('已自动保存')
     backendPreview.value = null
     hydrateEditorForCurrentStyle()
   } catch (e) {
@@ -9189,6 +9186,18 @@ onBeforeUnmount(() => {
   font-weight: 800;
   line-height: 1;
   box-shadow: 0 4px 12px rgba(28, 77, 160, 0.06);
+}
+
+.mcr-page-shell .yh-preview-chips > span:first-child {
+  border-color: rgba(var(--mcr-rgb-success), 0.3);
+  background: rgba(var(--mcr-rgb-success), 0.12);
+  color: var(--mcr-color-success);
+}
+
+.mcr-page-shell .yh-preview-chips > span:first-child.is-disabled {
+  border-color: var(--color-border);
+  background: var(--color-surface-soft);
+  color: var(--color-text-muted);
 }
 
 .mcr-page-shell .mcr-page-tabs-shell {

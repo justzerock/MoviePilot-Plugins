@@ -128,7 +128,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="0.1.0")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -658,6 +658,39 @@ async def plugin_history():
     return ok(items)
 
 
+@app.post("/api/plugin/MediaCoverGenerator/restore_history_batch")
+async def plugin_restore_history_batch(payload: dict[str, Any] | None = None):
+    batch_id = str((payload or {}).get("batch_id") or "").strip()
+    store = HistoryStore(DATA_DIR, app_version=app.version)
+    manifest = store.get_history_batch(batch_id)
+    if not manifest:
+        return {"code": 1, "msg": "历史批次不存在"}
+    restored = skipped = failed = 0
+    clients = service.clients()
+    library_cache: dict[str, list[Any]] = {}
+    for item in manifest.get("items") or []:
+        server_name = str(item.get("server_name") or "")
+        library_name = str(item.get("library_name") or "")
+        path = store.safe_file(batch_id, str(item.get("file") or ""))
+        client = next((value for value in clients if value.server_name == server_name), None)
+        if not client or not path:
+            skipped += 1
+            continue
+        try:
+            if client.server_id not in library_cache:
+                library_cache[client.server_id] = await client.get_libraries()
+            library = next((value for value in library_cache[client.server_id] if value.name == library_name), None)
+            if not library:
+                skipped += 1
+                continue
+            await client.upload_library_cover(library.id, path)
+            restored += 1
+        except Exception as error:
+            APP_LOGGER.warning("恢复历史封面失败 server=%s library=%s: %s", server_name, library_name, error)
+            failed += 1
+    return ok({"batch_id": batch_id, "restored": restored, "skipped": skipped, "failed": failed})
+
+
 @app.get("/api/plugin/MediaCoverGenerator/preview_sources")
 async def plugin_preview_sources(required_items: int = Query(9)):
     config = load_config()
@@ -910,6 +943,7 @@ async def plugin_title_config_template(payload: dict[str, Any] | None = None):
     payload = payload or {}
     raw = str(payload.get("title_config") or payload.get("yaml") or payload.get("content") or "")
     strict = parse_bool(payload.get("strict", payload.get("title_config_strict", False)))
+    distinguish_same_name = parse_bool(payload.get("distinguish_same_name_libraries", False))
     current, errors, processed_yaml = parse_title_config(raw, strict=strict)
     if errors:
         return {
@@ -919,6 +953,7 @@ async def plugin_title_config_template(payload: dict[str, Any] | None = None):
         }
     existing_keys = {normalize_template_key(key) for key in current.keys() if normalize_template_key(key)}
     existing_keys.update(collect_raw_top_level_keys(raw))
+    generated_keys: set[str] = set()
     missing = []
     blocks = []
     libraries = await service.libraries()
@@ -926,10 +961,14 @@ async def plugin_title_config_template(payload: dict[str, Any] | None = None):
         libraries = list(load_config().get("all_libraries") or [])
     for item in libraries:
         name = item.get("name") or ""
-        if name and normalize_template_key(name) not in existing_keys:
-            missing.append(name)
+        server_name = str(item.get("server_name") or item.get("server") or "").strip()
+        template_name = f"{server_name}_{name}" if distinguish_same_name and server_name else name
+        normalized_template_name = normalize_template_key(template_name)
+        if template_name and normalized_template_name not in existing_keys and normalized_template_name not in generated_keys:
+            generated_keys.add(normalized_template_name)
+            missing.append(template_name)
             blocks.append("\n".join([
-                f"{name}:",
+                f"{template_name}:",
                 f"  title: {quote_yaml_value(name)}",
                 "  subtitle: \"副标题\"",
                 "  background: \"#5f7185\"",
@@ -1947,6 +1986,7 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "covers_page_history_limit": int(config.get("covers_page_history_limit") or 50),
         "title_config": title_yaml,
         "title_config_strict": bool(config.get("title_config_strict", False)),
+        "distinguish_same_name_libraries": bool(config.get("distinguish_same_name_libraries", False)),
         "main_title_font_preset": str(config.get("main_title_font_preset") or style_config.get("font") or "chaohei"),
         "subtitle_font_preset": str(config.get("subtitle_font_preset") or "EmblemaOne"),
         "custom_text_font_preset": str(config.get("custom_text_font_preset") or "EmblemaOne"),
@@ -2023,6 +2063,7 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         "covers_history_limit_per_library",
         "covers_page_history_limit",
         "title_config_strict",
+        "distinguish_same_name_libraries",
         "main_title_font_preset",
         "subtitle_font_preset",
         "custom_text_font_preset",

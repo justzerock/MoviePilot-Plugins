@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -83,3 +84,45 @@ class HistoryStore:
             except Exception:
                 continue
         _write(self.index, {"schema_version": 1, "batches": sorted(records, key=lambda item: item["created_at"], reverse=True)})
+
+    def list_batches(self) -> list[dict[str, Any]]:
+        try:
+            value = json.loads(self.index.read_text(encoding="utf-8"))
+        except Exception:
+            self.rebuild_index()
+            try:
+                value = json.loads(self.index.read_text(encoding="utf-8"))
+            except Exception:
+                return []
+        return value.get("batches", []) if isinstance(value, dict) else []
+
+    def get_batch(self, batch_id: str) -> dict[str, Any] | None:
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", str(batch_id or "")):
+            return None
+        try:
+            value = json.loads((self.batches / batch_id / "manifest.json").read_text(encoding="utf-8"))
+            return value if isinstance(value, dict) else None
+        except Exception:
+            return None
+
+    def file_path(self, batch_id: str, relative: str) -> Path | None:
+        manifest = self.get_batch(batch_id)
+        allowed = {str(item.get("file") or "") for item in (manifest or {}).get("items", [])}
+        if not manifest or relative not in allowed:
+            return None
+        path = (self.batches / batch_id / relative).resolve()
+        try:
+            path.relative_to((self.batches / batch_id).resolve())
+        except ValueError:
+            return None
+        return path if path.is_file() else None
+
+    def cleanup(self, retention: int) -> int:
+        retention = max(1, min(1000, int(retention or 30)))
+        records = [(directory, self.get_batch(directory.name)) for directory in self.batches.iterdir() if directory.is_dir()]
+        records = [row for row in records if row[1]]
+        records.sort(key=lambda row: str(row[1].get("created_at") or ""), reverse=True)
+        for directory, _manifest in records[retention:]:
+            shutil.rmtree(directory, ignore_errors=True)
+        self.rebuild_index()
+        return max(0, len(records) - retention)

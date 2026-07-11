@@ -35,7 +35,7 @@
         "name": "呀哈哈封面工坊",
         "description": "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
         "labels": "海报,可编辑画布,封面,Emby,Jellyfin,动态",
-        "version": "2.0.0",
+        "version": "2.0.1",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png",
         "author": "呀哈哈",
         "level": 1,

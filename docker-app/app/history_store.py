@@ -214,35 +214,13 @@ class HistoryStore:
 
     def cleanup_history(self, retention: int) -> int:
         retention = max(1, min(1000, int(retention or 30)))
-        manifests = [(directory, self.get_history_batch(directory.name)) for directory in self.batches.iterdir() if directory.is_dir()]
-        grouped: dict[str, list[tuple[Path, dict[str, Any], dict[str, Any]]]] = {}
-        for directory, manifest in manifests:
-            if not manifest:
-                continue
-            for item in manifest.get("items") or []:
-                grouped.setdefault(str(item.get("library_key") or ""), []).append((directory, manifest, item))
+        batches = [(directory, self.get_history_batch(directory.name)) for directory in self.batches.iterdir() if directory.is_dir()]
+        batches = [row for row in batches if row[1]]
+        batches.sort(key=lambda row: str(row[1].get("created_at") or ""), reverse=True)
         removed = 0
-        for records in grouped.values():
-            records.sort(key=lambda row: str(row[1].get("created_at") or ""), reverse=True)
-            for directory, manifest, item in records[retention:]:
-                if item not in manifest.get("items", []):
-                    continue
-                for relative in (item.get("file"), item.get("thumbnail")):
-                    if relative:
-                        path = self.safe_file(directory.name, str(relative))
-                        if path:
-                            path.unlink(missing_ok=True)
-                manifest["items"].remove(item)
-                summary = manifest.setdefault("summary", {})
-                summary["total"] = len(manifest["items"])
-                summary["success"] = sum(1 for entry in manifest["items"] if entry.get("status") == "success")
-                summary["failed"] = sum(1 for entry in manifest["items"] if entry.get("status") == "failed")
-                atomic_json(directory / "manifest.json", manifest)
-                removed += 1
-        for directory, manifest in manifests:
-            current = self.get_history_batch(directory.name)
-            if current is not None and not current.get("items"):
-                shutil.rmtree(directory, ignore_errors=True)
+        for directory, _manifest in batches[retention:]:
+            shutil.rmtree(directory, ignore_errors=True)
+            removed += 1
         self.rebuild_history_index()
         return removed
 

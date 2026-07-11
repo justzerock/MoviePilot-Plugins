@@ -113,10 +113,16 @@
             </aside>
 
             <main class="mcr-config-main">
+              <SettingsAnchorNav
+                v-if="tab === 'basic-tab'"
+                :sections="settingsAnchorSections"
+                :top-offset="96"
+                :theme="isDark ? 'dark' : 'light'"
+              />
               <v-window v-model="tab">
           <v-window-item value="basic-tab">
             <v-card-text class="mcr-panel__body mcr-config-tabbody mcr-config-section-stack">
-              <section class="mcr-config-section-card">
+              <section id="settings-runtime" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">运行与定时</div>
@@ -150,7 +156,7 @@
                 </v-row>
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-monitoring" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">入库监控</div>
@@ -203,7 +209,7 @@
                 </p>
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-libraries" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">媒体库范围</div>
@@ -234,7 +240,7 @@
                 </v-row>
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-images" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">自定义图片目录</div>
@@ -248,11 +254,11 @@
                 />
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-history" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">历史封面</div>
-                    <p class="mcr-config-section-card__copy">保存生成记录，并控制历史页展示数量。</p>
+                    <p class="mcr-config-section-card__copy">按生成批次保留封面，用于时光机恢复。</p>
                   </div>
                 </header>
                 <v-row class="mcr-form-grid mcr-form-grid--center" align="center">
@@ -265,31 +271,16 @@
                   </v-col>
                   <v-col cols="12" md="5">
                     <BlueprintField
-                      v-model="config.covers_output"
-                      label="历史封面目录"
-                      hint="留空时保存到插件数据目录"
-                    />
-                  </v-col>
-                  <v-col cols="12" md="2">
-                    <BlueprintField
-                      v-model.number="config.covers_history_limit_per_library"
+                      v-model.number="config.history_retention_batches"
                       type="number"
-                      label="单库上限"
-                      hint="默认 10"
-                    />
-                  </v-col>
-                  <v-col cols="12" md="2">
-                    <BlueprintField
-                      v-model.number="config.covers_page_history_limit"
-                      type="number"
-                      label="显示数量"
-                      hint="默认 50"
+                      label="所有批次的上限"
+                      hint="默认保留最近 30 个完整批次"
                     />
                   </v-col>
                 </v-row>
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-fonts" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">字体库</div>
@@ -415,7 +406,7 @@
                 </div>
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-backup" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">备份还原</div>
@@ -516,7 +507,7 @@
                 </div>
               </section>
 
-              <section class="mcr-config-section-card">
+              <section id="settings-cache" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
                     <div class="mcr-config-section-card__title">清理缓存</div>
@@ -562,12 +553,25 @@
           <v-window-item value="title-tab">
             <v-card-text class="mcr-panel__body mcr-config-tabbody">
               <div class="mcr-panel__eyebrow">Titles</div>
-              <div class="mcr-panel__title">主副标题配置</div>
+              <div class="mcr-title-config-heading">
+                <div class="mcr-panel__title">主副标题配置</div>
+                <v-btn size="small" class="mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-title-config-template-btn" prepend-icon="mdi-format-list-bulleted-square" :loading="titleTemplateLoading" @click="appendMissingTitleTemplates">补全媒体库模板</v-btn>
+              </div>
               <p class="mcr-panel__copy mcr-config-copy">
                 严格模式按标准 YAML 校验；宽容模式会兼容中文冒号、冒号后无空格和部分缩进问题。
               </p>
 
               <div class="mcr-title-config-toolbar">
+                <v-switch
+                  v-model="config.distinguish_same_name_libraries"
+                  color="primary"
+                  hide-details
+                  density="comfortable"
+                  label="区分同名媒体库"
+                />
+                <span class="mcr-title-config-mode">
+                  开启后自动补全使用「服务器名_媒体库名」；仅使用媒体库名时，同名库共用同一配置
+                </span>
                 <v-switch
                   v-model="config.title_config_strict"
                   color="primary"
@@ -578,15 +582,6 @@
                 <span class="mcr-title-config-mode">
                   {{ config.title_config_strict ? '必须使用标准 YAML 语法' : '允许常见中文符号和空格容错' }}
                 </span>
-                <v-btn
-                  size="small"
-                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-title-config-template-btn"
-                  prepend-icon="mdi-format-list-bulleted-square"
-                  :loading="titleTemplateLoading"
-                  @click="appendMissingTitleTemplates"
-                >
-                  补全媒体库模板
-                </v-btn>
               </div>
 
               <div
@@ -614,7 +609,7 @@
           </v-window-item>
 
               </v-window>
-              <div class="yh-ui-rev">UI Rev {{ UI_REV }}</div>
+              <div class="yh-ui-rev">前端 UI {{ UI_REV }} · 主程序 v{{ PROGRAM_VERSION }}</div>
             </main>
           </div>
         </div>
@@ -627,7 +622,7 @@
 
 <script setup lang="ts">
 import '../styles/figmaTheme.css'
-import { UI_REV } from '../constants/ui'
+import { PROGRAM_VERSION, UI_REV } from '../constants/ui'
 import { MCR_CONTROL_DEFAULTS } from '../constants/uiDefaults'
 import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
@@ -636,6 +631,7 @@ import BlueprintField from './BlueprintField.vue'
 import ViewportSaveToast from './ViewportSaveToast.vue'
 import AsyncStatusDots from './AsyncStatusDots.vue'
 import BlueprintSelect from './BlueprintSelect.vue'
+import SettingsAnchorNav from './SettingsAnchorNav.vue'
 import type {
   YahahaCoverStudioConfig,
   PluginApi,
@@ -662,6 +658,16 @@ const emit = defineEmits<{
 }>()
 
 const controlDefaults = MCR_CONTROL_DEFAULTS
+const settingsAnchorSections = [
+  { id: 'settings-runtime', label: '运行与定时' },
+  { id: 'settings-monitoring', label: '入库监控' },
+  { id: 'settings-libraries', label: '媒体库范围' },
+  { id: 'settings-images', label: '自定义图片目录' },
+  { id: 'settings-history', label: '历史封面' },
+  { id: 'settings-fonts', label: '字体库' },
+  { id: 'settings-backup', label: '备份还原' },
+  { id: 'settings-cache', label: '清理缓存' },
+]
 
 const defaults: YahahaCoverStudioConfig = {
   enabled: true,
@@ -679,9 +685,11 @@ const defaults: YahahaCoverStudioConfig = {
   sort_by: 'Random',
   title_config: '',
   title_config_strict: false,
+  distinguish_same_name_libraries: false,
   covers_input: '',
   covers_output: '',
   save_recent_covers: true,
+  history_retention_batches: 30,
   covers_history_limit_per_library: 10,
   covers_page_history_limit: 50,
   cover_style_base: 'static_1',
@@ -846,6 +854,7 @@ function normalizeConfigInput(input?: Partial<YahahaCoverStudioConfig> | Record<
     main_title_font_offset: raw.main_title_font_offset ?? raw.zh_font_offset ?? defaults.main_title_font_offset,
     subtitle_line_spacing: raw.subtitle_line_spacing ?? raw.en_line_spacing ?? defaults.subtitle_line_spacing,
     title_config_strict: Boolean(raw.title_config_strict ?? defaults.title_config_strict),
+    distinguish_same_name_libraries: Boolean(raw.distinguish_same_name_libraries ?? defaults.distinguish_same_name_libraries),
     backup_enabled: Boolean(raw.backup_enabled ?? defaults.backup_enabled),
     backup_cron: raw.backup_cron ?? defaults.backup_cron,
     backup_path: raw.backup_path ?? defaults.backup_path,
@@ -891,6 +900,7 @@ async function validateTitleConfig(showSuccess = false) {
     }>('plugin/YahahaCoverStudio/validate_title_config', {
       title_config: titleConfig,
       strict: config.value.title_config_strict,
+      distinguish_same_name_libraries: Boolean(config.value.distinguish_same_name_libraries),
     })
     const errors = Array.isArray(resp?.data?.errors) ? resp.data.errors : []
     const valid = Boolean(resp && resp.code === 0 && resp.data?.valid !== false && !errors.length)
@@ -927,6 +937,7 @@ async function appendMissingTitleTemplates() {
     }>('plugin/YahahaCoverStudio/title_config_template', {
       title_config: config.value.title_config || '',
       strict: config.value.title_config_strict,
+      distinguish_same_name_libraries: Boolean(config.value.distinguish_same_name_libraries),
     })
     const errors = Array.isArray(resp?.data?.errors) ? resp.data.errors : []
     if (!resp || resp.code !== 0 || resp.data?.valid === false || errors.length) {
@@ -1723,7 +1734,7 @@ async function saveConfig(options: { auto?: boolean } = {}) {
         suppressConfigAutoSave = false
       })
     }
-    showConfigSaveMessage(options.auto ? '已自动保存' : '配置已保存')
+    showConfigSaveMessage(options.auto ? '已自动保存' : '已保存')
     return true
   } catch (error) {
     console.warn('save config failed', error)
@@ -2049,6 +2060,7 @@ async function deleteBackupItem(item: BackupItem) {
 }
 
 .mcr-config-section-card {
+  scroll-margin-top: 96px;
   position: relative;
   width: 100%;
   min-width: 0;
@@ -2350,11 +2362,28 @@ async function deleteBackupItem(item: BackupItem) {
 }
 
 .mcr-title-config-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
   align-items: center;
   gap: 10px 14px;
   margin: 8px 0 12px;
+}
+
+.mcr-title-config-heading {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mcr-title-config-toolbar :deep(.v-switch) {
+  width: 190px;
+  min-width: 190px;
+}
+
+.mcr-title-config-toolbar .mcr-title-config-mode {
+  min-width: 240px;
 }
 
 .mcr-title-config-mode {
@@ -4929,5 +4958,9 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   .mcr-config-shell[data-mcr-theme="dark"] .yh-settings-zh {
     color: #f4f7fb !important;
   }
+
+  .mcr-title-config-heading { align-items: flex-start; }
+  .mcr-title-config-toolbar { grid-template-columns: 1fr; }
+  .mcr-title-config-toolbar .mcr-title-config-mode { min-width: 0; }
 }
 </style>

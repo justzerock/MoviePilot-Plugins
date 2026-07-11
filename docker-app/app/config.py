@@ -46,6 +46,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "covers_page_history_limit": 50,
     "title_config": {},
     "title_config_strict": False,
+    "distinguish_same_name_libraries": False,
     "main_title_font_preset": "chaohei",
     "subtitle_font_preset": "EmblemaOne",
     "custom_text_font_preset": "EmblemaOne",
