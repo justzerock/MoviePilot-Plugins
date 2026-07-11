@@ -795,6 +795,7 @@ import '../styles/figmaTheme.css'
 import { PROGRAM_VERSION, UI_REV } from '../constants/ui'
 import { MCR_CONTROL_DEFAULTS } from '../constants/uiDefaults'
 import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
+import { formatDateTime } from '../utils/dateTime'
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { PropType } from 'vue'
 import BlueprintField from './BlueprintField.vue'
@@ -1484,8 +1485,7 @@ function formatLogSize(size: number) {
 }
 
 function formatLogDate(timestamp: number) {
-  const date = new Date(Number(timestamp || 0) * 1000)
-  return Number.isNaN(date.getTime()) ? '未知时间' : date.toLocaleString('zh-CN', { hour12: false })
+  return formatDateTime(Number(timestamp || 0))
 }
 
 const normalizedRunLogs = computed(() => runLogs.value.map((item) => ({

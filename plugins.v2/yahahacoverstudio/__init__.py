@@ -3903,7 +3903,7 @@ class YahahaCoverStudio(_PluginBase):
                     path = store.file_path(str(manifest.get("batch_id") or ""), str(item.get("file") or ""))
                     if not path:
                         continue
-                    covers.append({"name": path.name, "size": item.get("size", 0), "src": f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?path={quote(str(path))}", "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "batch_id": manifest.get("batch_id", "")})
+                    covers.append({"name": path.name, "size": item.get("size", 0), "src": f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?path={quote(str(path))}", "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "created_at": manifest.get("created_at", ""), "batch_id": manifest.get("batch_id", "")})
             return {
                 "code": 0,
                 "data": [
@@ -3919,6 +3919,7 @@ class YahahaCoverStudio(_PluginBase):
                         "mtime": item.get("mtime", ""),
                         "mtime_ts": item.get("mtime_ts", 0),
                         "batch_id": item.get("batch_id", ""),
+                        "created_at": item.get("created_at", ""),
                     }
                     for item in covers
                 ],
@@ -3941,6 +3942,11 @@ class YahahaCoverStudio(_PluginBase):
                 path = store.file_path(batch_id, str(item.get("file") or ""))
                 service = next((value for value in (self._servers or {}).values() if value and value.name == item.get("server_name")), None)
                 if not path or not service:
+                    skipped += 1
+                    continue
+                expected_hash = str(item.get("sha256") or "")
+                if expected_hash and hashlib.sha256(path.read_bytes()).hexdigest() != expected_hash:
+                    logger.warning(f"跳过校验失败的历史封面: {item.get('server_name')} / {item.get('library_name')}")
                     skipped += 1
                     continue
                 library = next((value for value in self.__get_server_libraries(service) if value.get("Name") == item.get("library_name")), None)

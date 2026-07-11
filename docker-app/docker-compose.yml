@@ -6,6 +6,8 @@ services:
     platform: linux/arm64
     ports:
       - "8899:8080"
+    environment:
+      TZ: Asia/Shanghai
     volumes:
       - ./data:/app/data
     restart: unless-stopped

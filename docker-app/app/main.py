@@ -28,8 +28,9 @@ from .config import DATA_DIR, ensure_data_dirs, load_config, resolve_data_path, 
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .media_client import configured_clients
 from .services import library_title_payload, remove_history_item, slugify, title_for_library
+from .time_utils import localize, now_local
 from .services import CoverService
-from .history_store import HistoryStore
+from .history_store import HistoryStore, sha256
 from . import storage
 from .run_logs import APP_LOGGER, RunLog, clean_expired_logs, iter_logs, safe_log_path
 
@@ -291,7 +292,7 @@ class ScheduleManager:
                 pass
 
     async def tick(self, now: datetime | None = None) -> dict[str, Any]:
-        now = now or datetime.now()
+        now = now or now_local(str(load_config().get("timezone") or "Asia/Shanghai"))
         key = now.strftime("%Y%m%d%H%M")
         config = load_config()
         actions: list[str] = []
@@ -652,7 +653,7 @@ async def plugin_history():
             path = store.safe_file(str(manifest.get("batch_id") or ""), relative)
             if not path:
                 continue
-            created_dt = datetime.fromisoformat(str(manifest.get("created_at") or "").replace("Z", "+00:00"))
+            created_dt = localize(str(manifest.get("created_at") or ""), str(load_config().get("timezone") or "Asia/Shanghai"))
             url = f"/data/history/batches/{manifest['batch_id']}/{relative}"
             items.append({"path": str(path), "name": path.name, "library": item.get("library_name"), "server": item.get("server_name"), "style": item.get("template_id"), "created_at": created_dt.timestamp(), "created_label": created_dt.strftime("%Y-%m-%d %H:%M"), "date": created_dt.strftime("%Y-%m-%d"), "date_label": created_dt.strftime("%m-%d %H:%M"), "size": item.get("size", 0), "uploaded": item.get("upload_status") == "success", "upload_error": item.get("error") or "", "url": url, "src": url, "batch_id": manifest.get("batch_id")})
     return ok(items)
@@ -673,7 +674,12 @@ async def plugin_restore_history_batch(payload: dict[str, Any] | None = None):
         library_name = str(item.get("library_name") or "")
         path = store.safe_file(batch_id, str(item.get("file") or ""))
         client = next((value for value in clients if value.server_name == server_name), None)
+        expected_hash = str(item.get("sha256") or "")
         if not client or not path:
+            skipped += 1
+            continue
+        if expected_hash and sha256(path) != expected_hash:
+            APP_LOGGER.warning("跳过校验失败的历史封面 server=%s library=%s", server_name, library_name)
             skipped += 1
             continue
         try:
@@ -2394,7 +2400,7 @@ def history_style_name(stem: str) -> str:
 
 
 def timestamp_label() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
+    return now_local(str(load_config().get("timezone") or "Asia/Shanghai")).strftime("%Y%m%d_%H%M%S")
 
 
 def default_avatar_data_url() -> str:

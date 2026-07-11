@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from .time_utils import now_local
 from pathlib import Path
 from typing import Iterator
 
@@ -18,7 +19,7 @@ if not APP_LOGGER.handlers:
 
 class RunLog:
     def __init__(self, trigger: str) -> None:
-        now = datetime.now()
+        now = now_local()
         self.started_at = now
         self.trigger = trigger or "manual"
         self.task_id = now.strftime("%Y%m%d_%H%M%S_%f")
@@ -48,13 +49,13 @@ class RunLog:
 
 def clean_expired_logs(retention_days: int) -> int:
     logs_dir = DATA_DIR / "logs"
-    cutoff = datetime.now() - timedelta(days=max(1, retention_days))
+    cutoff = now_local() - timedelta(days=max(1, retention_days))
     removed = 0
     if not logs_dir.exists():
         return removed
     for path in logs_dir.rglob("*.log"):
         try:
-            if datetime.fromtimestamp(path.stat().st_mtime) < cutoff:
+            if datetime.fromtimestamp(path.stat().st_mtime, tz=cutoff.tzinfo) < cutoff:
                 path.unlink()
                 removed += 1
         except OSError as error:

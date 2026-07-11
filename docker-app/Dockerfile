@@ -13,16 +13,20 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    YAHAA_DATA_DIR=/app/data
+    YAHAA_DATA_DIR=/app/data \
+    TZ=Asia/Shanghai
 
 WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       curl \
+      tzdata \
       fonts-dejavu-core \
       fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
+
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt

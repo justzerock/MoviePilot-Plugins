@@ -13,6 +13,8 @@ from typing import Any
 
 from PIL import Image
 
+from .time_utils import now_local
+
 HISTORY_SCHEMA_VERSION = 1
 HISTORY_ROOT_NAME = "history"
 VALID_TRIGGERS = {"manual", "schedule", "monitor", "api"}
@@ -84,7 +86,7 @@ class HistoryBatch:
             "schema_version": HISTORY_SCHEMA_VERSION,
             "batch_id": self.batch_id,
             "created_at": self.created_at,
-            "created_at_local": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "created_at_local": now_local().isoformat(timespec="seconds"),
             "trigger": self.trigger,
             "mode": self.mode,
             "app_version": self.store.app_version,

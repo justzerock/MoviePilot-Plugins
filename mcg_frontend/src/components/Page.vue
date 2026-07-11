@@ -666,7 +666,10 @@
                 </div>
                 <Transition name="mcr-heading-tools">
                   <div v-if="!historyListCollapsed" class="mcr-history-toolbar" @click.stop @keydown.stop>
-                    <span class="mcr-history-timemachine-label"><v-icon icon="mdi-history" size="18" /> 时光机 · 按批次</span>
+                    <v-btn-toggle v-model="historyGroupMode" mandatory divided density="compact" class="mcr-toggle mcr-history-toggle" :disabled="controlsLocked">
+                      <v-btn value="library" class="mcr-button mcr-button--ghost mcr-history-mode-button" :class="{ 'mcr-history-mode-button--active': historyGroupMode === 'library' }">媒体库</v-btn>
+                      <v-btn value="time-machine" class="mcr-button mcr-button--ghost mcr-history-mode-button" :class="{ 'mcr-history-mode-button--active': historyGroupMode === 'time-machine' }">时光机</v-btn>
+                    </v-btn-toggle>
                     <BlueprintSelect
                       v-model="historySortMode"
                       :items="historySortItems"
@@ -676,6 +679,14 @@
                   </div>
                 </Transition>
               </div>
+
+              <Teleport to="body">
+                <nav v-if="pageTab === 'history-tab' && historyGroupMode === 'time-machine' && groupedHistory.length" class="mcr-time-machine-timeline" :data-mcr-theme="isDark ? 'dark' : 'light'" aria-label="历史时间轴">
+                  <button v-for="group in groupedHistory" :key="group.key" type="button" class="mcr-time-machine-node" :class="{ 'is-active': activeTimeRecordId === group.key }" @click="scrollToTimeRecord(group.key)">
+                    <span v-if="activeTimeRecordId === group.key" class="mcr-time-machine-restore" @click.stop="restoreHistoryBatch(group.key, group.title)">回到此时</span><i aria-hidden="true" /><span>{{ group.title }}</span>
+                  </button>
+                </nav>
+              </Teleport>
 
               <Teleport to="body">
                 <div
@@ -737,6 +748,8 @@
                       v-for="group in groupedHistory"
                       :key="group.key"
                       class="mcr-history-group"
+                      :class="{ 'mcr-history-group--time-machine': historyGroupMode === 'time-machine', 'is-active': activeTimeRecordId === group.key }"
+                      :id="`time-record-${group.key}`"
                     >
                   <div class="mcr-history-group__heading">
                     <div class="mcr-history-group__title">
@@ -751,11 +764,10 @@
                     >
                       {{ isHistoryGroupSelected(group) ? '取消本组' : '选择本组' }}
                     </v-btn>
-                    <v-btn size="x-small" class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === group.key" :disabled="controlsLocked" @click="restoreHistoryBatch(group.key)">回到此时</v-btn>
                   </div>
                   <v-row>
                     <v-col
-                      v-for="item in group.items"
+                      v-for="item in (historyGroupMode === 'time-machine' ? group.items.slice(0, 6) : group.items)"
                       :key="item.path"
                       cols="12"
                       sm="6"
@@ -817,9 +829,10 @@
                       </v-card>
                     </v-col>
                   </v-row>
+                  <div v-if="historyGroupMode === 'time-machine' && group.items.length > 6" class="mcr-time-machine-more">+{{ group.items.length - 6 }}</div>
                     </section>
                   </div>
-                  <div v-else class="mcr-history-empty">暂无历史封面</div>
+                  <div v-else class="mcr-history-empty">还没有可以回到的时间<br><small>生成并保存封面后，历史记录会显示在这里。</small></div>
                 </div>
               </Transition>
             </v-window-item>
@@ -1190,6 +1203,7 @@ import GeneratePreviewSimulation from './GeneratePreviewSimulation.vue'
 import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
+import { formatTimelineTime } from '../utils/dateTime'
 import { images } from '../assets/base64/images.js'
 import {
   cloneLayout,
@@ -1361,11 +1375,13 @@ interface HistoryItem {
   mtime?: string
   mtime_ts?: number
   batch_id?: string
+  created_at?: string | number
 }
 
 const history = ref<HistoryItem[]>([])
-const historyGroupMode = ref<'batch'>('batch')
+const historyGroupMode = ref<'library' | 'time-machine'>('library')
 const restoringBatchId = ref('')
+const activeTimeRecordId = ref('')
 const historySortMode = ref<'newest' | 'oldest' | 'name'>('newest')
 const selectedHistoryPaths = ref<string[]>([])
 const donationAvatarIcon = computed(() =>
@@ -2470,8 +2486,8 @@ const sortedHistory = computed(() => {
 const groupedHistory = computed(() => {
   const groups = new Map<string, { key: string; title: string; items: HistoryItem[] }>()
   for (const item of sortedHistory.value) {
-    const key = item.batch_id || item.date || 'legacy'
-    const title = item.date_label ? `批次 ${item.date_label}` : `批次 ${key}`
+    const key = historyGroupMode.value === 'library' ? (item.library || '未识别媒体库') : (item.batch_id || item.date || 'legacy')
+    const title = historyGroupMode.value === 'library' ? (item.library || '未识别媒体库') : formatTimelineTime(item.created_at || item.mtime || item.date || '')
     if (!groups.has(key)) {
       groups.set(key, { key, title, items: [] })
     }
@@ -2479,14 +2495,41 @@ const groupedHistory = computed(() => {
   }
   return Array.from(groups.values())
 })
+let timeRecordObserver: IntersectionObserver | null = null
+let timeRecordClickLockUntil = 0
+function observeTimeRecords() {
+  timeRecordObserver?.disconnect()
+  if (historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
+  const elements = groupedHistory.value.map((group) => document.getElementById(`time-record-${group.key}`)).filter((item): item is HTMLElement => Boolean(item))
+  if (!elements.length) return
+  activeTimeRecordId.value ||= groupedHistory.value[0]?.key || ''
+  timeRecordObserver = new IntersectionObserver((entries) => {
+    if (Date.now() < timeRecordClickLockUntil) return
+    if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 3) {
+      activeTimeRecordId.value = groupedHistory.value.at(-1)?.key || activeTimeRecordId.value
+      return
+    }
+    const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => Math.abs(a.boundingClientRect.top - 140) - Math.abs(b.boundingClientRect.top - 140))
+    if (visible[0]?.target.id) activeTimeRecordId.value = visible[0].target.id.replace('time-record-', '')
+  }, { rootMargin: '-110px 0px -55% 0px', threshold: [0, 0.1, 0.4] })
+  elements.forEach((element) => timeRecordObserver?.observe(element))
+}
+watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(observeTimeRecords))
 
-async function restoreHistoryBatch(batchId: string) {
+function scrollToTimeRecord(id: string) {
+  timeRecordClickLockUntil = Date.now() + 1200
+  activeTimeRecordId.value = id
+  document.getElementById(`time-record-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function restoreHistoryBatch(batchId: string, label = '') {
   if (!batchId || restoringBatchId.value) return
+  if (!window.confirm(`确定回到此时吗？\n\n${label}\n将把此时保存的封面重新应用到对应服务器媒体库。当前封面会被替换，但历史记录不会删除。`)) return
   restoringBatchId.value = batchId
   try {
     const resp = await props.api.post<{ code: number; data?: { restored?: number; skipped?: number }; msg?: string }>('plugin/YahahaCoverStudio/restore_history_batch', { batch_id: batchId })
     if (!resp || resp.code !== 0) throw new Error(resp?.msg || '恢复失败')
-    showEditorSaveStatus(`已恢复 ${resp.data?.restored || 0} 个，跳过 ${resp.data?.skipped || 0} 个`)
+    showEditorSaveStatus(`已回到此时：成功 ${resp.data?.restored || 0} 个，跳过 ${resp.data?.skipped || 0} 个`)
   } catch (error) {
     showEditorSaveStatus(error instanceof Error ? error.message : '恢复失败')
   } finally {
@@ -3732,6 +3775,7 @@ onMounted(async () => {
 	})
 
 onBeforeUnmount(() => {
+  timeRecordObserver?.disconnect()
   componentActive = false
   if (typeof window !== 'undefined') {
     pageThemeMediaQuery?.removeEventListener?.('change', syncSystemTheme)
@@ -9102,6 +9146,20 @@ onBeforeUnmount(() => {
     margin-left: 0 !important;
   }
 }
+
+.mcr-time-machine-timeline { position: fixed; top: 50%; right: 18px; z-index: 26; display: grid; gap: 6px; max-height: 68vh; padding: 10px 0; overflow-y: auto; border: 0; background: transparent; box-shadow: none; transform: translateY(-50%); }
+.mcr-time-machine-node { position: relative; min-height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 11px; cursor: pointer; }
+.mcr-time-machine-node i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; transition: transform 180ms ease, background-color 180ms ease; }
+.mcr-time-machine-node.is-active { color: var(--color-primary); font-weight: 800; }
+.mcr-time-machine-node.is-active i { transform: scale(1.55); }
+.mcr-time-machine-restore { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-primary); box-shadow: 0 6px 16px var(--color-shadow); }
+.mcr-history-group--time-machine { scroll-margin-top: 110px; transition: opacity 180ms ease, transform 180ms ease; }
+.mcr-history-group--time-machine:not(.is-active) { opacity: .72; transform: scale(.985); }
+.mcr-history-group--time-machine .v-row { flex-wrap: nowrap; min-height: 190px; padding-right: 120px; overflow: hidden; }
+.mcr-history-group--time-machine .v-col { flex: 0 0 220px; max-width: 220px; margin-right: -150px; transition: margin 180ms ease, transform 180ms ease; }
+.mcr-history-group--time-machine:hover .v-col { margin-right: -105px; }
+.mcr-time-machine-more { margin: -34px 20px 0 auto; width: max-content; padding: 6px 9px; border-radius: 999px; background: var(--color-primary); color: white; font-weight: 800; }
+@media (max-width: 768px) { .mcr-time-machine-timeline { right: 4px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { position: fixed; right: 30px; bottom: 24px; } .mcr-history-group--time-machine .v-col { flex-basis: 180px; max-width: 180px; margin-right: -125px; } }
 
 @media (max-width: 600px) {
   .mcr-page-shell .yh-brand-title {

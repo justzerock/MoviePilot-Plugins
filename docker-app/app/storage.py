@@ -5,6 +5,7 @@ import json
 import mimetypes
 import re
 from datetime import datetime, timezone
+from .time_utils import app_zone
 from pathlib import Path
 from typing import Any
 
@@ -123,7 +124,7 @@ def backup_item(path: Path) -> dict[str, Any]:
         "path": str(path),
         "size": stat.st_size,
         "mtime": stat.st_mtime,
-        "mtime_label": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        "mtime_label": datetime.fromtimestamp(stat.st_mtime, tz=app_zone()).strftime("%Y-%m-%d %H:%M:%S"),
         "exported_at": exported_at,
         "version": version,
         "schema": schema,

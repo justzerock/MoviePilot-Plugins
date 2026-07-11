@@ -17,6 +17,7 @@ CONFIG_PATH = DATA_DIR / "config.yaml"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "enabled": True,
+    "timezone": "Asia/Shanghai",
     "auto_save_config": False,
     "transfer_monitor": False,
     "monitor_source": "webhook",
