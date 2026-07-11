@@ -333,7 +333,7 @@
                 <v-row class="mcr-form-grid mcr-form-grid--center" align="center">
                   <v-col cols="12" md="3" class="mcr-config-switch-col">
                     <v-switch
-                      v-model="config.save_recent_covers"
+                      v-model="config.history_enabled"
                       label="保存历史封面"
                       hide-details
                     />
@@ -347,10 +347,18 @@
                   </v-col>
                   <v-col cols="12" md="2">
                     <BlueprintField
+                      v-model.number="config.history_retention_batches"
+                      type="number"
+                      label="历史批次上限"
+                      hint="每个媒体库默认保留 30 个批次"
+                    />
+                  </v-col>
+                  <v-col cols="12" md="2">
+                    <BlueprintField
                       v-model.number="config.covers_history_limit_per_library"
                       type="number"
-                      label="单库上限"
-                      hint="默认 10"
+                      label="兼容旧记录上限"
+                      hint="旧版平铺文件迁移后可忽略"
                     />
                   </v-col>
                   <v-col cols="12" md="2">
@@ -863,6 +871,8 @@ const defaults: MediaCoverGeneratorConfig = {
   covers_input: '',
   covers_output: '',
   save_recent_covers: true,
+  history_enabled: true,
+  history_retention_batches: 30,
   covers_history_limit_per_library: 10,
   covers_page_history_limit: 50,
   cover_style_base: 'static_1',

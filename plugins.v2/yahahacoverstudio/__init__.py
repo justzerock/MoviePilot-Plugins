@@ -50,6 +50,7 @@ from app.plugins.yahahacoverstudio.style.style_animated_2 import create_style_an
 from app.plugins.yahahacoverstudio.style.style_animated_3 import create_style_animated_3
 from app.plugins.yahahacoverstudio.style.style_animated_4 import create_style_animated_4
 from app.plugins.yahahacoverstudio.utils.image_manager import ResolutionConfig, ImageResourceManager
+from app.plugins.yahahacoverstudio.history_store import HistoryStore
 try:
     from app.plugins.yahahacoverstudio.utils.network_helper import NetworkHelper, validate_font_file
 except Exception as import_err:
@@ -148,6 +149,7 @@ class YahahaCoverStudio(_PluginBase):
     _monitor_sort = ''
     _current_updating_items = set()
     _generation_thread = None
+    _history_batch = None
     _generation_run_lock = threading.Lock()
     _generation_state_lock = threading.Lock()
     _is_generating = False
@@ -829,6 +831,8 @@ class YahahaCoverStudio(_PluginBase):
 
     def __run_background_generation(self, target_style: Optional[str] = None):
         old_style = self._cover_style
+        history_store = HistoryStore(self.get_data_path()) if self._save_recent_covers else None
+        self._history_batch = history_store.create("manual", "remote") if history_store else None
         try:
             if target_style:
                 self._cover_style = target_style
@@ -837,6 +841,12 @@ class YahahaCoverStudio(_PluginBase):
         except Exception as e:
             logger.error(f"【YahahaCoverStudio】后台封面生成异常: {e}", exc_info=True)
         finally:
+            if history_store and self._history_batch:
+                try:
+                    history_store.finalize(self._history_batch, "success")
+                except Exception as history_err:
+                    logger.error(f"【YahahaCoverStudio】历史批次归档失败: {history_err}", exc_info=True)
+                self._history_batch = None
             self._cover_style = old_style
             with self._generation_state_lock:
                 if self._generation_thread is threading.current_thread():
@@ -9054,11 +9064,10 @@ class YahahaCoverStudio(_PluginBase):
                 content_type = "image/jpeg"
                 extension = "jpg"
 
-            # 在发送前保存一份图片到本地
+            image_bytes = None
             if self._save_recent_covers:
                 try:
                     image_bytes = base64.b64decode(image_base64)
-                    self.__save_image_to_local(image_bytes, service.name, library['Name'], extension)
                 except Exception as save_err:
                     logger.error(f"保存发送前图片失败: {str(save_err)}")
             
@@ -9070,7 +9079,16 @@ class YahahaCoverStudio(_PluginBase):
                 }
             )
             
-            if res and res.status_code in [200, 204]:
+            uploaded = bool(res and res.status_code in [200, 204])
+            if image_bytes:
+                self.__save_image_to_local(image_bytes, service.name, library['Name'], extension)
+                if self._history_batch:
+                    try:
+                        library_id = library.get("Id") if service.type == "emby" else library.get("ItemId")
+                        HistoryStore(self.get_data_path()).add_bytes(self._history_batch, image_bytes, service.name, service.name, str(library_id or library["Name"]), library["Name"], self._cover_style, extension, uploaded)
+                    except Exception as history_err:
+                        logger.error(f"【YahahaCoverStudio】记录历史批次失败: {history_err}", exc_info=True)
+            if uploaded:
                 return True
             else:
                 logger.error(f"设置「{library['Name']}」封面失败，错误码：{res.status_code if res else 'No response'}")

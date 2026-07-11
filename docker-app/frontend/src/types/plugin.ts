@@ -24,6 +24,8 @@ export interface MediaCoverGeneratorConfig {
   covers_input: string
   covers_output: string
   save_recent_covers: boolean
+  history_enabled?: boolean
+  history_retention_batches?: number
   covers_history_limit_per_library: number
   covers_page_history_limit: number
   title_config: string

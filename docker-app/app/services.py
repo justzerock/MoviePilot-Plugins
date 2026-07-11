@@ -11,6 +11,7 @@ from .cover import CoverRenderer
 from .media_client import MediaLibrary, MediaServerClient, configured_clients
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .run_logs import APP_LOGGER
+from .history_store import HistoryBatch, HistoryStore
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -191,6 +192,7 @@ def remove_history_item(path: Path) -> None:
 class CoverService:
     def __init__(self) -> None:
         self.config = load_config()
+        self.history_batch: HistoryBatch | None = None
 
     def reload(self) -> dict[str, Any]:
         self.config = load_config()
@@ -211,6 +213,29 @@ class CoverService:
 
     def renderer(self) -> CoverRenderer:
         return CoverRenderer(DATA_DIR / "fonts")
+
+    def begin_history_batch(self, trigger: str) -> HistoryBatch | None:
+        if not bool(self.config.get("history_enabled", True)):
+            return None
+        store = HistoryStore(DATA_DIR)
+        store.migrate_legacy(resolve_data_path(self.config.get("covers_output"), "/app/data/output"))
+        self.history_batch = store.create_history_batch(trigger, "local" if self.local_mode() else ("mock" if self.mock_enabled() else "remote"))
+        return self.history_batch
+
+    def finalize_history_batch(self, status: str) -> dict[str, Any] | None:
+        batch, self.history_batch = self.history_batch, None
+        if not batch:
+            return None
+        store = HistoryStore(DATA_DIR)
+        manifest = store.finalize_history_batch(batch, status)
+        store.cleanup_history(int(self.config.get("history_retention_batches") or 30))
+        return manifest
+
+    def record_batch_result(self, result: dict[str, Any], server_id: str, server_name: str, server_type: str, library_id: str, library_name: str) -> None:
+        if self.history_batch:
+            item = self.history_batch.add_result(result, server_id=server_id, server_name=server_name, server_type=server_type, library_id=library_id, library_name=library_name)
+            result["history_batch_id"] = self.history_batch.batch_id
+            result["history_file"] = item.get("file")
 
     def font_library_index(self) -> dict[str, str]:
         fonts_dir = DATA_DIR / "fonts"
@@ -485,19 +510,7 @@ class CoverService:
             except Exception as exc:
                 upload_error = str(exc)
                 APP_LOGGER.warning("媒体库封面更新失败 server=%s library=%s: %s", client.server_name, library.name, exc)
-        record_history_item({
-            "path": str(output_path),
-            "library": library.name,
-            "library_id": library.id,
-            "server": client.server_name,
-            "style": style_name,
-            "uploaded": uploaded,
-            "upload_error": upload_error,
-            "source_count": len(image_paths),
-            "created_at": output_path.stat().st_mtime,
-            "size": output_path.stat().st_size,
-        })
-        return {
+        result = {
             "library": library.name,
             "library_id": library.id,
             "server": client.server_name,
@@ -508,6 +521,8 @@ class CoverService:
             "uploaded": uploaded,
             "upload_error": upload_error,
         }
+        self.record_batch_result(result, client.server_id, client.server_name, client.kind, library.id, library.name)
+        return result
 
     async def generate_from_local(self, style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
@@ -519,18 +534,7 @@ class CoverService:
         render_config = self.render_config(style_config, "本地封面", style_name)
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
-        record_history_item({
-            "path": str(output_path),
-            "library": "本地封面",
-            "library_id": "",
-            "server": "local",
-            "style": style_name,
-            "uploaded": False,
-            "source_count": len(image_paths),
-            "created_at": output_path.stat().st_mtime,
-            "size": output_path.stat().st_size,
-        })
-        return {
+        result = {
             "library": "local",
             "library_id": "",
             "server": "local",
@@ -540,6 +544,8 @@ class CoverService:
             "source_count": len(image_paths),
             "uploaded": False,
         }
+        self.record_batch_result(result, "local", "本地", "local", "local", "本地封面")
+        return result
 
     async def generate_local_library(self, library_name: str, style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
@@ -553,18 +559,7 @@ class CoverService:
         render_config = self.render_config(style_config, library_name, style_name)
         output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
-        record_history_item({
-            "path": str(output_path),
-            "library": library_name,
-            "library_id": slugify(library_name),
-            "server": "local",
-            "style": style_name,
-            "uploaded": False,
-            "source_count": len(image_paths),
-            "created_at": output_path.stat().st_mtime,
-            "size": output_path.stat().st_size,
-        })
-        return {
+        result = {
             "library": library_name,
             "library_id": slugify(library_name),
             "server": "local",
@@ -574,6 +569,8 @@ class CoverService:
             "source_count": len(image_paths),
             "uploaded": False,
         }
+        self.record_batch_result(result, "local", "本地", "local", slugify(library_name), library_name)
+        return result
 
     def local_images(self, library_name: str = "", limit: int = 9, include_mock: bool = True) -> list[Path]:
         input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
@@ -690,18 +687,7 @@ class CoverService:
         render_config = self.render_config(style_config, library["name"], style_name)
         output_path = output_dir / f"{slugify(library['name'])}_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
-        record_history_item({
-            "path": str(output_path),
-            "library": library["name"],
-            "library_id": library["id"],
-            "server": "mock",
-            "style": style_name,
-            "uploaded": False,
-            "source_count": len(image_paths),
-            "created_at": output_path.stat().st_mtime,
-            "size": output_path.stat().st_size,
-        })
-        return {
+        result = {
             "library": library["name"],
             "library_id": library["id"],
             "server": "mock",
@@ -711,3 +697,5 @@ class CoverService:
             "source_count": len(image_paths),
             "uploaded": False,
         }
+        self.record_batch_result(result, "mock", "测试模式", "mock", library["id"], library["name"])
+        return result

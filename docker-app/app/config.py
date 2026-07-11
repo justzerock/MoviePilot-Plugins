@@ -40,6 +40,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "covers_input": "/app/data/input",
     "covers_output": "/app/data/output",
     "save_recent_covers": True,
+    "history_enabled": True,
+    "history_retention_batches": 30,
     "covers_history_limit_per_library": 10,
     "covers_page_history_limit": 50,
     "title_config": {
@@ -104,6 +106,7 @@ def ensure_data_dirs() -> None:
         DATA_DIR / "backups",
         DATA_DIR / "tmp",
         DATA_DIR / "logs",
+        DATA_DIR / "history",
     ):
         path.mkdir(parents=True, exist_ok=True)
 
@@ -211,6 +214,11 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
         config["log_retention_days"] = max(1, min(365, int(config.get("log_retention_days") or 7)))
     except (TypeError, ValueError):
         config["log_retention_days"] = 7
+    config["history_enabled"] = bool(config.get("history_enabled", config.get("save_recent_covers", True)))
+    try:
+        config["history_retention_batches"] = max(1, min(1000, int(config.get("history_retention_batches") or 30)))
+    except (TypeError, ValueError):
+        config["history_retention_batches"] = 30
     if config.get("local_mode") is True:
         config["mock_enabled"] = False
         config["upload_after_generate"] = False

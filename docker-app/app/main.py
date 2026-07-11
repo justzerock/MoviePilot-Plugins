@@ -9,6 +9,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -26,8 +27,9 @@ from pydantic import BaseModel
 from .config import DATA_DIR, ensure_data_dirs, load_config, resolve_data_path, save_config
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .media_client import configured_clients
-from .services import library_title_payload, read_history_index, remove_history_item, slugify, title_for_library
+from .services import library_title_payload, remove_history_item, slugify, title_for_library
 from .services import CoverService
+from .history_store import HistoryStore
 from . import storage
 from .run_logs import APP_LOGGER, RunLog, clean_expired_logs, iter_logs, safe_log_path
 
@@ -171,6 +173,10 @@ class GenerationManager:
         self.items = []
         self.error = ""
         self.run_log = RunLog(trigger)
+        self.service.reload()
+        batch = self.service.begin_history_batch(trigger)
+        if batch:
+            self.run_log.info("历史批次开始 batch_id=%s", batch.batch_id)
         self.run_log.info("任务开始 trigger=%s style=%s library=%s mode=%s", trigger, style or "default", library_name or "all", "local" if self.service.local_mode() else "server")
         self.task = asyncio.create_task(self._run(style, library_name))
         await asyncio.sleep(0)
@@ -187,7 +193,6 @@ class GenerationManager:
 
     async def _run(self, style: str = "", library_name: str | None = None) -> None:
         try:
-            self.service.reload()
             style_name = normalize_style(style)
             if library_name:
                 self.total = 1
@@ -227,6 +232,12 @@ class GenerationManager:
             if self.run_log:
                 self.run_log.exception("任务失败: %s", err)
         finally:
+            try:
+                manifest = self.service.finalize_history_batch("cancelled" if self.stop_requested else ("failed" if self.error else "success"))
+                if manifest and self.run_log:
+                    self.run_log.info("历史批次完成 batch_id=%s status=%s", manifest.get("batch_id"), manifest.get("status"))
+            except Exception as history_error:
+                APP_LOGGER.exception("历史批次归档失败: %s", history_error)
             if self.run_log:
                 succeeded = sum(1 for item in self.items if not item.get("upload_error"))
                 failed = sum(1 for item in self.items if item.get("upload_error"))
@@ -435,11 +446,48 @@ async def libraries():
         raise HTTPException(status_code=500, detail=str(err)) from err
 
 
+@app.get("/api/history/batches")
+async def history_batches(page: int = 1, page_size: int = 50, trigger: str = "", status: str = ""):
+    return HistoryStore(DATA_DIR).list_history_batches(page=page, page_size=page_size, trigger=trigger, status=status)
+
+
+@app.get("/api/history/batches/{batch_id}")
+async def history_batch(batch_id: str):
+    manifest = HistoryStore(DATA_DIR).get_history_batch(batch_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="历史批次不存在")
+    return manifest
+
+
+@app.post("/api/history/rebuild-index")
+async def rebuild_history_index():
+    return HistoryStore(DATA_DIR).rebuild_history_index()
+
+
+@app.delete("/api/history/batches/{batch_id}")
+async def delete_history_batch(batch_id: str):
+    store = HistoryStore(DATA_DIR)
+    manifest = store.get_history_batch(batch_id)
+    if not manifest:
+        raise HTTPException(status_code=404, detail="历史批次不存在")
+    shutil.rmtree(store.batches / batch_id)
+    store.rebuild_history_index()
+    return {"ok": True}
+
+
 @app.post("/api/generate")
 async def generate(payload: GenerateRequest | None = None):
     payload = payload or GenerateRequest()
     try:
-        return {"items": await service.generate(payload.library_name, payload.style)}
+        service.reload()
+        service.begin_history_batch("api")
+        try:
+            items = await service.generate(payload.library_name, payload.style)
+            manifest = service.finalize_history_batch("success")
+        except Exception:
+            service.finalize_history_batch("failed")
+            raise
+        return {"items": items, "batch_id": (manifest or {}).get("batch_id")}
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
 
@@ -447,7 +495,7 @@ async def generate(payload: GenerateRequest | None = None):
 @app.post("/api/generate/{library_name}")
 async def generate_library(library_name: str, payload: GenerateRequest | None = None):
     try:
-        return {"items": await service.generate(library_name, payload.style if payload else None)}
+        return await generate(GenerateRequest(library_name=library_name, style=payload.style if payload else None))
     except Exception as err:
         raise HTTPException(status_code=500, detail=str(err)) from err
 
@@ -584,37 +632,18 @@ async def plugin_status():
 
 @app.get("/api/plugin/MediaCoverGenerator/history")
 async def plugin_history():
-    output_dir = Path(load_config().get("covers_output") or "/app/data/output")
-    if not output_dir.is_absolute():
-        output_dir = DATA_DIR / output_dir
-    history_index = read_history_index()
+    store = HistoryStore(DATA_DIR)
     items = []
-    for path in sorted(output_dir.glob("*.*"), key=lambda item: item.stat().st_mtime, reverse=True):
-        if path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
-            continue
-        stat = path.stat()
-        name = path.stem
-        meta = history_index.get(str(path.resolve())) or history_index.get(path.name) or {}
-        library = str(meta.get("library") or history_library_name(name))
-        created_at = float(meta.get("created_at") or stat.st_mtime)
-        created_dt = datetime.fromtimestamp(created_at)
-        url = data_file_url(path)
-        items.append({
-            "path": str(path),
-            "name": path.name,
-            "library": library,
-            "server": str(meta.get("server") or "local"),
-            "style": str(meta.get("style") or history_style_name(name)),
-            "created_at": created_at,
-            "created_label": created_dt.strftime("%Y-%m-%d %H:%M"),
-            "date": created_dt.strftime("%Y-%m-%d"),
-            "date_label": created_dt.strftime("%m-%d %H:%M"),
-            "size": int(meta.get("size") or stat.st_size),
-            "uploaded": bool(meta.get("uploaded", False)),
-            "upload_error": str(meta.get("upload_error") or ""),
-            "url": url,
-            "src": url,
-        })
+    for summary in store.list_history_batches(page_size=1000).get("items", []):
+        manifest = store.get_history_batch(str(summary.get("batch_id") or "")) or {}
+        for item in manifest.get("items") or []:
+            relative = str(item.get("file") or "")
+            path = store.safe_file(str(manifest.get("batch_id") or ""), relative)
+            if not path:
+                continue
+            created_dt = datetime.fromisoformat(str(manifest.get("created_at") or "").replace("Z", "+00:00"))
+            url = f"/data/history/batches/{manifest['batch_id']}/{relative}"
+            items.append({"path": str(path), "name": path.name, "library": item.get("library_name"), "server": item.get("server_name"), "style": item.get("template_id"), "created_at": created_dt.timestamp(), "created_label": created_dt.strftime("%Y-%m-%d %H:%M"), "date": created_dt.strftime("%Y-%m-%d"), "date_label": created_dt.strftime("%m-%d %H:%M"), "size": item.get("size", 0), "uploaded": item.get("upload_status") == "success", "upload_error": item.get("error") or "", "url": url, "src": url, "batch_id": manifest.get("batch_id")})
     return ok(items)
 
 
@@ -1895,6 +1924,8 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "covers_input": str(config.get("covers_input") or "/app/data/input"),
         "covers_output": str(config.get("covers_output") or "/app/data/output"),
         "save_recent_covers": bool(config.get("save_recent_covers", True)),
+        "history_enabled": bool(config.get("history_enabled", True)),
+        "history_retention_batches": int(config.get("history_retention_batches") or 30),
         "covers_history_limit_per_library": int(config.get("covers_history_limit_per_library") or 10),
         "covers_page_history_limit": int(config.get("covers_page_history_limit") or 50),
         "title_config": title_yaml,
@@ -1970,6 +2001,8 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         "covers_input",
         "covers_output",
         "save_recent_covers",
+        "history_enabled",
+        "history_retention_batches",
         "covers_history_limit_per_library",
         "covers_page_history_limit",
         "title_config_strict",
