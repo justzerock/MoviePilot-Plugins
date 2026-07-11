@@ -1270,8 +1270,6 @@ async function validateTitleConfig(showSuccess = false) {
     titleConfigValidationValid.value = valid
     if (!valid) {
       titleConfigValidationMessage.value = errors[0] || resp?.msg || '标题配置 YAML 格式不正确'
-    } else if (showSuccess) {
-      titleConfigValidationMessage.value = '标题配置格式正确'
     }
     return valid
   } catch (error) {
@@ -3400,7 +3398,7 @@ async function deleteBackupItem(item: BackupItem) {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 4;
+  z-index: 99999;
   max-width: 150px;
   padding: 4px 8px;
   overflow: hidden;

@@ -921,18 +921,22 @@ async def plugin_title_config_template(payload: dict[str, Any] | None = None):
     existing_keys.update(collect_raw_top_level_keys(raw))
     missing = []
     blocks = []
-    for item in await service.libraries():
+    libraries = await service.libraries()
+    if not libraries:
+        libraries = list(load_config().get("all_libraries") or [])
+    for item in libraries:
         name = item.get("name") or ""
         if name and normalize_template_key(name) not in existing_keys:
             missing.append(name)
             blocks.append("\n".join([
                 f"{name}:",
                 f"  title: {quote_yaml_value(name)}",
-                "  subtitle: \"\"",
-                "  background: \"\"",
+                "  subtitle: \"副标题\"",
+                "  background: \"#5f7185\"",
                 "  texts:",
-                "    slogan: \"\"",
-                "    note: \"\"",
+                "    slogan: \"自定义文本\"",
+                "    note: \"备注文本\"",
+                "    any_key: \"任意自定义文本\"",
             ]))
     reference = "\n".join([
         "媒体库名称:",
@@ -949,7 +953,7 @@ async def plugin_title_config_template(payload: dict[str, Any] | None = None):
     ])
     return ok({
         "valid": True,
-        "libraries": [str(item.get("name") or "") for item in await service.libraries()],
+        "libraries": [str(item.get("name") or "") for item in libraries],
         "existing": sorted(existing_keys),
         "missing": missing,
         "yaml": "\n\n".join(blocks),
@@ -1721,6 +1725,8 @@ def parse_title_config(yaml_text: str, strict: bool = False) -> tuple[dict[str, 
         else:
             processed_yaml = preprocess_lenient_title_yaml(raw_yaml)
         title_config = yaml.safe_load(processed_yaml) or {}
+        if title_config == {}:
+            return {}, [], processed_yaml
         if not isinstance(title_config, dict):
             return {}, ["标题配置根节点必须是 YAML 对象。"], processed_yaml
         filtered: dict[str, Any] = {}

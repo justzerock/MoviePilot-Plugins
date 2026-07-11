@@ -44,13 +44,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "history_retention_batches": 30,
     "covers_history_limit_per_library": 10,
     "covers_page_history_limit": 50,
-    "title_config": {
-        "示例媒体库": {
-            "title": "示例媒体库",
-            "subtitle": "Library",
-            "texts": {},
-        },
-    },
+    "title_config": {},
     "title_config_strict": False,
     "main_title_font_preset": "chaohei",
     "subtitle_font_preset": "EmblemaOne",
