@@ -56,9 +56,6 @@
                 </v-btn>
               </div>
               <span v-if="configSaveMessage" class="mcr-config-save-message mcr-config-save-message--floating">{{ configSaveMessage }}</span>
-              <span class="mcr-config-save-state" :class="{ 'is-dirty': configDirty, 'is-failed': configSaveFailed, 'is-saving': configSaving }">
-                {{ configSaving ? '保存中' : configSaveFailed ? '保存失败' : configDirty ? '有未保存修改' : '已保存' }}
-              </span>
               <div class="mcr-config-tags yh-header-chips" aria-label="配置摘要">
                 <span class="mcr-config-tag">
                   <span>状态</span>
@@ -1060,6 +1057,7 @@ let suppressConfigAutoSave = true
 let configAutoSavePending = false
 let configSaveQueued = false
 let configRevision = 0
+let applyingProgrammaticConfig = false
 const loadedConfigFontUrls = new Map<string, Promise<void>>()
 
 function normalizeMediaServers(source: Partial<MediaCoverGeneratorConfig> | Record<string, any>): MediaServerConfig[] {
@@ -1236,7 +1234,12 @@ watch(
 watch(
   config,
   () => {
-    if (suppressConfigAutoSave) return
+    if (suppressConfigAutoSave || applyingProgrammaticConfig) return
+    if (configSaving.value) {
+      configSaveQueued = true
+      configAutoSavePending = Boolean(config.value.auto_save_config)
+      return
+    }
     configRevision += 1
     configDirty.value = true
     configSaveFailed.value = false
@@ -1344,6 +1347,7 @@ watch(
 
 async function loadDynamicLibraryOptions() {
   optionsLoading.value = true
+  applyingProgrammaticConfig = true
   try {
     const resp = await props.api.get<{ code: number; data?: StatusPayload; msg?: string }>(
       'plugin/MediaCoverGenerator/status',
@@ -1376,6 +1380,7 @@ async function loadDynamicLibraryOptions() {
   } catch (e) {
     console.error('loadDynamicLibraryOptions failed', e)
   } finally {
+    applyingProgrammaticConfig = false
     optionsLoading.value = false
   }
 }
@@ -1383,6 +1388,7 @@ async function loadDynamicLibraryOptions() {
 async function loadLibrariesForSelectedServers() {
   if (config.value.local_mode) return
   const selected = (config.value.selected_servers || []).map(String).filter(Boolean).join(',')
+  applyingProgrammaticConfig = true
   try {
     const response = await props.api.get<{ code?: number; data?: any[] }>(
       `plugin/MediaCoverGenerator/libraries?servers=${encodeURIComponent(selected)}`,
@@ -1392,6 +1398,8 @@ async function loadLibrariesForSelectedServers() {
     }
   } catch (error) {
     console.warn('load libraries for selected servers failed', error)
+  } finally {
+    applyingProgrammaticConfig = false
   }
 }
 
@@ -5031,9 +5039,9 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 }
 
 .mcr-config-shell .mcr-config-save-message--floating {
-  position: absolute;
-  top: 60px;
-  right: 16px;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
   z-index: 4;
   max-width: min(260px, calc(100% - 32px));
   padding: 7px 10px;
@@ -5047,6 +5055,17 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   white-space: nowrap;
   box-shadow: 0 10px 24px rgba(28, 77, 160, 0.12);
   pointer-events: none;
+  animation: mcr-save-toast-in 180ms ease-out, mcr-save-toast-out 420ms ease-in 2.1s forwards;
+}
+
+@keyframes mcr-save-toast-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes mcr-save-toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(0.98); }
 }
 
 .mcr-config-shell .mcr-config-save-state {
@@ -5236,8 +5255,8 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   }
 
   .mcr-config-shell .mcr-config-save-message--floating {
-    top: 54px;
     right: 12px;
+    bottom: 16px;
   }
 }
 
