@@ -2102,6 +2102,11 @@ async function startGeneration() {
   generatingNow.value = true
   try {
     config.value.update_now = false
+    // The preview page persists its active layout before starting. Mirror that
+    // contract here so this button never renders with a stale server-side
+    // layout, font, background, or selected style.
+    const saved = await saveConfig()
+    if (!saved) return
     const style = resolveRequestedCoverStyle()
     const resp = await props.api.post<{ code: number; msg?: string }>(
       `plugin/MediaCoverGenerator/start_generation?style=${encodeURIComponent(style)}`,
