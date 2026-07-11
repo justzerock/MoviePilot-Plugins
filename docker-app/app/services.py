@@ -17,6 +17,7 @@ from .history_store import HistoryBatch, HistoryStore
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 OUTPUT_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 FONT_EXTENSIONS = {".ttf", ".ttc", ".otf", ".woff", ".woff2"}
+BUNDLED_FONTS_DIR = Path(__file__).parent / "bundled_fonts"
 HISTORY_INDEX_FILE = DATA_DIR / "output" / ".history.json"
 LEGACY_HISTORY_INDEX_FILE = DATA_DIR / "history.json"
 BUILTIN_FONT_URLS = {
@@ -240,8 +241,10 @@ class CoverService:
     def font_library_index(self) -> dict[str, str]:
         fonts_dir = DATA_DIR / "fonts"
         index: dict[str, str] = {}
-        if fonts_dir.exists():
-            for path in fonts_dir.iterdir():
+        for source_dir in (BUNDLED_FONTS_DIR, fonts_dir):
+            if not source_dir.exists():
+                continue
+            for path in source_dir.iterdir():
                 if not path.is_file() or path.suffix.lower() not in FONT_EXTENSIONS:
                     continue
                 resolved = str(path.resolve())
@@ -274,6 +277,10 @@ class CoverService:
         for key in (raw, normalize_font_key(raw), Path(raw).name, Path(raw).stem, normalize_font_key(Path(raw).stem)):
             resolved = font_index.get(str(key))
             if resolved:
+                if Path(resolved).suffix.lower() in {".woff", ".woff2"}:
+                    converted = download_builtin_font(normalize_font_key(raw))
+                    if converted:
+                        return converted
                 return resolved
         normalized = normalize_font_key(raw)
         return (

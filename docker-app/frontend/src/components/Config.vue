@@ -55,7 +55,6 @@
                   <v-icon icon="mdi-image-multiple-outline" size="22" />
                 </v-btn>
               </div>
-              <span v-if="configSaveMessage" class="mcr-config-save-message mcr-config-save-message--floating">{{ configSaveMessage }}</span>
               <div class="mcr-config-tags yh-header-chips" aria-label="配置摘要">
                 <span class="mcr-config-tag">
                   <span>状态</span>
@@ -797,6 +796,13 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
+        <Teleport to="body">
+          <span
+            v-if="configSaveMessage"
+            class="mcr-config-save-message--viewport"
+            :data-mcr-theme="isDark ? 'dark' : 'light'"
+          >{{ configSaveMessage }}</span>
+        </Teleport>
       </v-defaults-provider>
 
     </v-card>
@@ -856,7 +862,7 @@ const defaults: MediaCoverGeneratorConfig = {
   media_servers: [],
   local_mode: true,
   mock_enabled: false,
-  upload_after_generate: false,
+  upload_after_generate: true,
   api_token: '',
   selected_servers: [],
   all_servers: [],
@@ -1193,9 +1199,9 @@ function normalizeConfigInput(input?: Partial<MediaCoverGeneratorConfig> | Recor
     mock_enabled: localMode
       ? false
       : Boolean(raw.mock_enabled ?? defaults.mock_enabled),
-    upload_after_generate: localMode
+    upload_after_generate: localMode || Boolean(raw.mock_enabled)
       ? false
-      : Boolean(raw.upload_after_generate ?? defaults.upload_after_generate),
+      : true,
     media_servers: mediaServers,
     emby_url: mediaServers.find((server) => server.type === 'emby')?.url ?? raw.emby_url ?? defaults.emby_url,
     emby_api_key: mediaServers.find((server) => server.type === 'emby')?.api_key ?? raw.emby_api_key ?? defaults.emby_api_key,
@@ -1231,8 +1237,18 @@ watch(
   },
 )
 
+const configPersistenceFingerprint = computed(() => {
+  const {
+    all_libraries: _allLibraries,
+    all_servers: _allServers,
+    update_now: _updateNow,
+    ...persisted
+  } = config.value
+  return JSON.stringify(persisted)
+})
+
 watch(
-  config,
+  configPersistenceFingerprint,
   () => {
     if (suppressConfigAutoSave || applyingProgrammaticConfig) return
     if (configSaving.value) {
@@ -1245,7 +1261,7 @@ watch(
     configSaveFailed.value = false
     scheduleConfigAutoSave()
   },
-  { deep: true },
+  { flush: 'sync' },
 )
 
 async function validateTitleConfig(showSuccess = false) {
@@ -2255,6 +2271,10 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       payload.mock_enabled = false
       payload.upload_after_generate = false
       payload.selected_servers = []
+    } else if (payload.mock_enabled) {
+      payload.upload_after_generate = false
+    } else {
+      payload.upload_after_generate = true
     }
     const resp = await props.api.post<{ code: number; data?: { config?: Partial<MediaCoverGeneratorConfig> }; msg?: string }>(
       'plugin/MediaCoverGenerator/save_config',
@@ -5054,6 +5074,37 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   box-shadow: 0 10px 24px rgba(28, 77, 160, 0.12);
   pointer-events: none;
   animation: mcr-save-toast-in 180ms ease-out, mcr-save-toast-out 420ms ease-in 2.1s forwards;
+}
+
+.mcr-config-save-message--viewport {
+  position: fixed;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 2147483000;
+  display: block;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 10px 14px;
+  overflow: hidden;
+  border: 1px solid var(--yahaha-border, #dfe8f6);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #53627d;
+  box-shadow: 0 14px 36px rgba(28, 77, 160, 0.18);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(14px);
+  animation: mcr-save-toast-in 180ms ease-out, mcr-save-toast-out 420ms ease-in 2.1s forwards;
+}
+
+.mcr-config-save-message--viewport[data-mcr-theme="dark"] {
+  border-color: rgba(230, 236, 245, 0.14);
+  background: rgba(30, 42, 66, 0.96);
+  color: #dbe4f5;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.34);
 }
 
 @keyframes mcr-save-toast-in {

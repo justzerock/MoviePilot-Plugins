@@ -28,6 +28,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY app /app/app
+COPY bundled-fonts /app/app/bundled_fonts
 COPY --from=frontend-build /app/app/static /app/app/static
 RUN mkdir -p /app/data/fonts /app/data/input /app/data/output
 

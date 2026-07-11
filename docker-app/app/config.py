@@ -30,7 +30,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "media_servers": [],
     "local_mode": True,
     "mock_enabled": False,
-    "upload_after_generate": False,
+    "upload_after_generate": True,
     "api_token": "",
     "selected_servers": [],
     "all_servers": [],
@@ -216,6 +216,10 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
     if config.get("local_mode") is True:
         config["mock_enabled"] = False
         config["upload_after_generate"] = False
+    elif config.get("mock_enabled") is True:
+        config["upload_after_generate"] = False
+    else:
+        config["upload_after_generate"] = True
     return config
 
 
