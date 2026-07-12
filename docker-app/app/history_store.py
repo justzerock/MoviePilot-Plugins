@@ -145,7 +145,7 @@ class HistoryBatch:
 
 
 class HistoryStore:
-    def __init__(self, data_dir: Path, app_version: str = "2.0.0") -> None:
+    def __init__(self, data_dir: Path, app_version: str = "2.0.3") -> None:
         self.root = data_dir / HISTORY_ROOT_NAME
         self.batches = self.root / "batches"
         self.tmp = self.root / ".tmp"

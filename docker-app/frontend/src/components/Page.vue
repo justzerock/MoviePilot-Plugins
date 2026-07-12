@@ -164,6 +164,13 @@
                       <div class="mcr-panel__eyebrow">{{ isEditingLayout ? 'Editor' : 'Canvas' }}</div>
                       <div class="mcr-panel__title">{{ isEditingLayout ? '画布编辑' : previewModeLabel }}</div>
                     </div>
+                    <v-tooltip v-if="!isEditingLayout" text="重新获取海报">
+                      <template #activator="{ props: tooltipProps }">
+                        <button v-bind="tooltipProps" type="button" class="mcr-preview-refresh" :class="{ 'is-loading': refreshingPreview }" aria-label="重新获取海报" :disabled="refreshingPreview || controlsLocked" @click="refreshCurrentPreview">
+                          <v-icon icon="mdi-refresh" size="22" />
+                        </button>
+                      </template>
+                    </v-tooltip>
                   </div>
 
                   <CustomLayoutEditor
@@ -747,14 +754,6 @@
                       <span>{{ group.title }}</span>
                       <strong>{{ group.items.length }}</strong>
                     </div>
-                    <v-btn
-                      size="x-small"
-                      class="mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-history-group__select"
-                      :disabled="controlsLocked"
-                      @click="toggleHistoryGroupSelection(group)"
-                    >
-                      {{ isHistoryGroupSelected(group) ? '取消本组' : '选择本组' }}
-                    </v-btn>
                   </div>
                   <button
                     v-if="historyGroupMode === 'time-machine'"
@@ -763,7 +762,7 @@
                     :aria-label="`查看 ${group.title} 的全部封面`"
                     @click="openHistorySnapshot(group)"
                   >
-                    <span v-for="item in group.items.slice(0, historyStackLimit)" :key="item.path" class="mcr-time-machine-stack__cover">
+                    <span v-for="(item, index) in group.items.slice(0, historyStackLimit)" :key="item.path" class="mcr-time-machine-stack__cover" :style="timeMachineCoverStyle(group.key, index)">
                       <img :src="item.src || item.url || ''" :alt="item.library || item.name" loading="lazy">
                       <span>{{ item.library || item.name }}</span>
                     </span>
@@ -804,31 +803,9 @@
                           <div class="mcr-history-card__title">
                             {{ item.library || item.name }}
                           </div>
-                          <div class="mcr-history-card__actions">
-                            <v-btn
-                              size="small"
-                              class="mcr-button mcr-button--ghost mcr-history-card__action mcr-history-card__action--download"
-                              prepend-icon="mdi-download-outline"
-                              :disabled="controlsLocked"
-                              @click="downloadCover(item)"
-                            >
-                              下载
-                            </v-btn>
-                            <v-btn
-                              size="small"
-                              class="mcr-button mcr-button--danger mcr-history-card__action mcr-history-card__action--danger"
-                              prepend-icon="mdi-trash-can-outline"
-                              :disabled="controlsLocked"
-                              @click="deleteCover(item)"
-                            >
-                              删除
-                            </v-btn>
-                          </div>
                         </div>
                         <v-card-text class="mcr-panel__body mcr-panel__body--tight">
-                          <div class="mcr-history-card__meta">
-                            {{ item.server || 'Unknown' }} · {{ item.date_label || item.mtime || '--' }} · {{ item.size }}
-                          </div>
+                          <div class="mcr-history-card__meta"><span>{{ item.library || item.name }}</span><span>{{ item.server || 'Unknown' }}</span></div>
                         </v-card-text>
                       </v-card>
                     </v-col>
@@ -855,10 +832,10 @@
           <article v-for="item in selectedHistorySnapshot.items" :key="item.path" class="mcr-history-snapshot__item">
             <img :src="item.src || item.url || ''" :alt="item.library || item.name" loading="lazy">
             <div><strong>{{ item.library || item.name }}</strong><span>{{ item.server || '未知服务器' }}</span><small>{{ item.uploaded === false ? '上传失败' : '已生成并保存' }}</small></div>
-            <v-btn size="small" prepend-icon="mdi-download-outline" class="mcr-button mcr-button--ghost" @click="downloadCover(item)">下载</v-btn>
+            <button type="button" class="mcr-history-snapshot__check" :class="{ 'is-active': selectedHistoryPaths.includes(item.path) }" :aria-pressed="selectedHistoryPaths.includes(item.path)" @click="toggleHistorySelection(item)"><v-icon :icon="selectedHistoryPaths.includes(item.path) ? 'mdi-check' : 'mdi-plus'" size="16" /></button>
           </article>
         </div>
-        <footer class="mcr-history-snapshot__footer"><v-btn class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === selectedHistorySnapshot.key" @click="restoreHistoryBatch(selectedHistorySnapshot.key, selectedHistorySnapshot.title)">回到此时</v-btn></footer>
+        <footer v-if="selectedHistoryPaths.length" class="mcr-history-snapshot__footer"><span>已选择 {{ selectedHistoryPaths.length }} 项</span><v-btn class="mcr-button mcr-button--ghost" @click="downloadSelectedCoversDirect">下载</v-btn><v-btn class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === selectedHistorySnapshot.key" @click="restoreHistoryBatch(selectedHistorySnapshot.key, selectedHistorySnapshot.title)">应用到服务器</v-btn><v-btn class="mcr-button mcr-button--danger" @click="deleteSelectedCovers">删除</v-btn></footer>
       </v-card>
     </v-dialog>
 
@@ -1224,6 +1201,7 @@ import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
 import { formatDateTime, formatTimelineTime } from '../utils/dateTime'
+import { getHistoryCache, getPreviewCache, setHistoryCache, setPreviewCache, stableCacheSignature } from '../services/contentCache'
 import { images } from '../assets/base64/images.js'
 import {
   cloneLayout,
@@ -1306,10 +1284,16 @@ const refreshingPreview = ref(false)
 const previewSourcesLoading = ref(false)
 const statusLoading = ref(false)
 const historyLoading = ref(false)
+const historyUpdating = ref(false)
+const showingCachedHistory = ref(false)
 const backendPreviewLoading = ref(false)
 const styleUpdating = ref(false)
 const layoutPersisting = ref(false)
 const generatingNow = ref(false)
+const previewCacheContext = ref<Record<string, unknown>>({})
+let historyRequest: Promise<void> | null = null
+let previewSourceRequestId = 0
+const HISTORY_CACHE_KEY = 'all:newest'
 const isGenerating = ref(false)
 const statusLoaded = ref(false)
 const previewBayEl = ref<HTMLElement | null>(null)
@@ -2576,6 +2560,22 @@ function openHistorySnapshot(group: HistoryGroup) {
   historySnapshotDialog.value = true
 }
 
+function timeMachineCoverStyle(groupKey: string, index: number) {
+  let seed = 0
+  for (const char of groupKey) seed = (seed * 31 + char.charCodeAt(0)) >>> 0
+  const offsets = [0, 36, 76, 118, 160]
+  const rotations = [-1.4, 1.1, -0.6, 1.8, -1]
+  const vertical = [2, -5, 6, -2, 4]
+  const variant = (seed + index * 7) % 5
+  return {
+    '--mcr-stack-x': `${offsets[index] || offsets.at(-1)}px`,
+    '--mcr-stack-hover-x': `${Math.round((offsets[index] || offsets.at(-1) || 0) * 1.22)}px`,
+    '--mcr-stack-y': `${vertical[variant]}px`,
+    '--mcr-stack-r': `${rotations[variant]}deg`,
+    '--mcr-stack-z': String(20 - index),
+  }
+}
+
 async function restoreHistoryBatch(batchId: string, label = '') {
   if (!batchId || restoringBatchId.value) return
   pendingHistoryRestore.value = { batchId, label }
@@ -3049,6 +3049,12 @@ async function loadStatusInner(): Promise<boolean> {
     if (!componentActive) return false
     if (resp && resp.code === 0 && resp.data) {
       const data = resp.data
+      previewCacheContext.value = {
+        mode: (data as any).local_mode ? 'local' : 'server',
+        servers: (data as any).selected_servers || [],
+        libraries: (data as any).include_libraries || [],
+        coversInput: (data as any).covers_input || '',
+      }
       const wasGenerating = isGenerating.value
       const nextIsGenerating = Boolean(data.is_generating)
       setupWarnings.value = Array.isArray(data.warnings) ? data.warnings : []
@@ -3115,7 +3121,36 @@ async function loadStatusInner(): Promise<boolean> {
   return false
 }
 
+function normalizeHistoryItems(items: HistoryItem[]) {
+  return items.map((item) => ({ ...item, src: item.src || item.url || '' }))
+}
+
+function mergeHistoryItems(current: HistoryItem[], incoming: HistoryItem[]) {
+  const currentByPath = new Map(current.map((item) => [item.path, item]))
+  return incoming.map((item) => {
+    const previous = currentByPath.get(item.path)
+    return previous && previous.src === item.src && previous.mtime === item.mtime && previous.size === item.size ? previous : item
+  })
+}
+
+function previewRequestBaseKey() {
+  return stableCacheSignature({
+    ...previewCacheContext.value,
+    posterSource: posterSource.value,
+    sort: sourceSortBy.value,
+    imageCountMode: imageCountMode.value,
+  })
+}
+
 async function loadHistory() {
+  if (!history.value.length) {
+    const cached = await getHistoryCache<HistoryItem[]>(HISTORY_CACHE_KEY)
+    if (cached?.length) {
+      history.value = normalizeHistoryItems(cached)
+      showingCachedHistory.value = true
+    }
+  }
+  historyUpdating.value = true
   historyLoading.value = true
   try {
     const resp = await props.api.get<{ code: number; data?: HistoryItem[]; msg?: string }>('plugin/MediaCoverGenerator/history')
@@ -3124,6 +3159,8 @@ async function loadHistory() {
         ...item,
         src: item.src || item.url || '',
       }))
+      showingCachedHistory.value = false
+      await setHistoryCache(HISTORY_CACHE_KEY, history.value)
       selectedHistoryPaths.value = selectedHistoryPaths.value.filter((path) =>
         resp.data?.some((item) => item.path === path),
       )
@@ -3134,37 +3171,53 @@ async function loadHistory() {
     console.error('loadHistory failed', e)
   } finally {
     historyLoading.value = false
+    historyUpdating.value = false
   }
 }
 
-async function loadPreviewSources(requiredItems?: number) {
+async function loadPreviewSources(requiredItems?: number, forceRefresh = false) {
   if (!componentActive) return
   if (isGenerating.value) {
     previewSourcesLoading.value = false
     return
   }
-  previewSourcesLoading.value = true
+  const capacity = Math.max(1, Number(requiredItems) || 9)
+  const baseKey = previewRequestBaseKey()
+  const requestId = ++previewSourceRequestId
+  if (!forceRefresh) {
+    const cached = await getPreviewCache<PreviewSourcePayload>(baseKey, capacity)
+      if (cached?.images?.length) {
+        previewSource.value = cached
+      return
+    }
+  }
+  previewSourcesLoading.value = !previewSource.value?.images?.length
   try {
-    const suffix = requiredItems && requiredItems > 0 ? `?required_items=${encodeURIComponent(String(requiredItems))}` : ''
+    const query = new URLSearchParams({ required_items: String(capacity) })
+    if (forceRefresh) query.set('force_refresh', 'true')
+    const suffix = `?${query}`
     const resp = await props.api.get<{ code: number; data?: PreviewSourcePayload; msg?: string }>(`plugin/MediaCoverGenerator/preview_sources${suffix}`)
-    if (!componentActive) return
+    if (!componentActive || requestId !== previewSourceRequestId) return
     if (resp && resp.code === 0 && resp.data) {
       previewSource.value = {
         ...resp.data,
         custom_static_layout: resp.data.custom_static_layout ? cloneLayout(resp.data.custom_static_layout) : resp.data.custom_static_layout,
       }
+      if (requestId !== previewSourceRequestId) return
+      await setPreviewCache(baseKey, Math.max(capacity, previewSource.value.images.length), previewSource.value)
+      if (forceRefresh) showEditorSaveStatus('海报已刷新')
     } else {
-      previewSource.value = null
+      if (forceRefresh) showEditorSaveStatus('刷新失败，继续使用当前海报')
       if (resp && resp.code !== 0) {
         console.error('load preview sources failed', resp.msg || resp)
       }
     }
   } catch (e) {
-    previewSource.value = null
+    if (forceRefresh) showEditorSaveStatus('刷新失败，继续使用当前海报')
     console.error('loadPreviewSources failed', e)
   } finally {
     if (componentActive) {
-      previewSourcesLoading.value = false
+      if (requestId === previewSourceRequestId) previewSourcesLoading.value = false
     }
   }
 }
@@ -3206,7 +3259,7 @@ async function refreshCurrentPreview() {
   if (shouldBlockLockedAction()) return
   refreshingPreview.value = true
   try {
-    await loadPreviewSources()
+    await loadPreviewSources(undefined, true)
     if (previewMode.value === 'backend') {
       await loadBackendPreview()
     }
@@ -3377,6 +3430,7 @@ async function deleteCover(item: HistoryItem) {
     const url = `plugin/MediaCoverGenerator/delete_saved_cover?file=${encodeURIComponent(item.path)}`
     await props.api.post(url)
     history.value = history.value.filter((h) => h.path !== item.path)
+    void setHistoryCache(HISTORY_CACHE_KEY, history.value)
     selectedHistoryPaths.value = selectedHistoryPaths.value.filter((path) => path !== item.path)
   } catch (e) {
     console.error('delete_saved_cover failed', e)
@@ -3399,31 +3453,6 @@ function toggleSelectAllHistory() {
     : history.value.map((item) => item.path)
 }
 
-function getHistoryGroupPaths(group: { items: HistoryItem[] }) {
-  return group.items.map((item) => item.path).filter(Boolean)
-}
-
-function isHistoryGroupSelected(group: { items: HistoryItem[] }) {
-  const paths = getHistoryGroupPaths(group)
-  return paths.length > 0 && paths.every((path) => selectedHistoryPaths.value.includes(path))
-}
-
-function toggleHistoryGroupSelection(group: { items: HistoryItem[] }) {
-  if (shouldBlockLockedAction()) return
-  const paths = getHistoryGroupPaths(group)
-  if (!paths.length) return
-  const selected = new Set(selectedHistoryPaths.value)
-  const shouldRemove = paths.every((path) => selected.has(path))
-  paths.forEach((path) => {
-    if (shouldRemove) {
-      selected.delete(path)
-    } else {
-      selected.add(path)
-    }
-  })
-  selectedHistoryPaths.value = Array.from(selected)
-}
-
 async function deleteSelectedCovers() {
   if (shouldBlockLockedAction()) return
   const paths = [...selectedHistoryPaths.value]
@@ -3437,6 +3466,7 @@ async function deleteSelectedCovers() {
       throw new Error(resp.msg || 'delete selected covers failed')
     }
     history.value = history.value.filter((item) => !paths.includes(item.path))
+    void setHistoryCache(HISTORY_CACHE_KEY, history.value)
     selectedHistoryPaths.value = []
   } catch (e) {
     console.error('delete selected covers failed', e)
@@ -4211,6 +4241,28 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   margin-bottom: 14px;
 }
+
+.mcr-preview-refresh {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-soft);
+  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.mcr-preview-refresh:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.mcr-preview-refresh:disabled { opacity: 0.55; }
+.mcr-preview-refresh.is-loading .v-icon { animation: mcr-preview-refresh-spin 700ms linear infinite; }
+@keyframes mcr-preview-refresh-spin { to { transform: rotate(360deg); } }
 
 .blueprint-hero-actions {
   display: flex;
@@ -9232,17 +9284,18 @@ onBeforeUnmount(() => {
 .mcr-time-machine-restore { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-primary); box-shadow: 0 6px 16px var(--color-shadow); }
 .mcr-history-group--time-machine { scroll-margin-top: 110px; margin-bottom: -18px; opacity: var(--mcr-time-opacity, .82); transform: translateY(var(--mcr-time-shift, 0)) scale(var(--mcr-time-scale, .97)); transform-origin: center; transition: opacity 190ms ease, transform 190ms ease, filter 190ms ease; }
 .mcr-history-group--time-machine.is-active { opacity: 1; transform: translateY(0) scale(1); filter: drop-shadow(0 14px 22px color-mix(in srgb, var(--color-shadow) 70%, transparent)); }
-.mcr-time-machine-stack { position: relative; width: min(760px, calc(100% - 130px)); height: 250px; display: block; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateY(0); transition: transform 220ms ease, filter 220ms ease; }
+.mcr-history-groups:has(.mcr-history-group--time-machine) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 760px) minmax(96px, 13vw); }
+.mcr-history-group--time-machine { grid-column: 2; width: 100%; }
+.mcr-time-machine-stack { position: relative; width: min(760px, 100%); height: 250px; display: block; margin: 0 auto; padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateY(0); transition: transform 220ms ease, filter 220ms ease; }
 .mcr-time-machine-stack:hover { transform: translateY(-3px); filter: drop-shadow(0 12px 18px var(--color-shadow)); }
-.mcr-time-machine-stack__cover { position: absolute; inset: 0 auto auto 0; width: min(420px, 68vw); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 8px 20px var(--color-shadow); transition: left 220ms ease, transform 220ms ease, box-shadow 220ms ease; }
-.mcr-time-machine-stack__cover:nth-child(1) { z-index: 10; }.mcr-time-machine-stack__cover:nth-child(2) { left: 72px; z-index: 9; }.mcr-time-machine-stack__cover:nth-child(3) { left: 144px; z-index: 8; }.mcr-time-machine-stack__cover:nth-child(4) { left: 216px; z-index: 7; }.mcr-time-machine-stack__cover:nth-child(5) { left: 288px; z-index: 6; }
-.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(2) { left: 88px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(3) { left: 176px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(4) { left: 264px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(5) { left: 352px; }
+.mcr-time-machine-stack__cover { position: absolute; top: 0; left: var(--mcr-stack-x); z-index: var(--mcr-stack-z); width: min(420px, 68vw); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 8px 20px var(--color-shadow); transform: translateY(var(--mcr-stack-y)) rotate(var(--mcr-stack-r)); transition: left 220ms ease, transform 220ms ease, box-shadow 220ms ease; }
+.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover { left: var(--mcr-stack-hover-x); transform: translateY(var(--mcr-stack-y)) rotate(calc(var(--mcr-stack-r) * .55)); }
 .mcr-time-machine-stack__cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .mcr-time-machine-stack__cover > span { position: absolute; left: 12px; bottom: 10px; max-width: calc(100% - 24px); padding: 5px 8px; overflow: hidden; border-radius: 7px; background: rgba(10,16,24,.68); color: white; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .mcr-time-machine-stack__more { position: absolute; z-index: 20; top: 96px; right: 8px; padding: 8px 10px; border-radius: 999px; background: var(--color-primary); color: white; font-weight: 800; box-shadow: 0 6px 16px var(--color-shadow); }
 .mcr-history-restore-confirm { padding: 24px; border: 1px solid var(--color-border); border-radius: 20px !important; background: var(--color-surface) !important; color: var(--color-text-main) !important; }
 .mcr-history-restore-confirm h3 { margin: 0 0 12px; font-size: 24px; }.mcr-history-restore-confirm p { margin: 8px 0; color: var(--color-text-secondary); line-height: 1.65; }.mcr-history-restore-confirm footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-.mcr-history-snapshot { max-height: min(82vh, 900px); overflow: hidden; border: 1px solid var(--color-border); border-radius: 22px !important; background: var(--color-surface) !important; color: var(--color-text-main) !important; }
+.mcr-history-snapshot { max-height: min(82vh, 900px); overflow: hidden; border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent); border-radius: 22px !important; background: color-mix(in srgb, var(--color-surface) 84%, transparent) !important; color: var(--color-text-main) !important; box-shadow: 0 24px 72px var(--color-shadow); backdrop-filter: blur(24px) saturate(140%); }
 .mcr-history-snapshot__header { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 14px; border-bottom: 1px solid var(--color-border); }
 .mcr-history-snapshot__header span { color: var(--color-primary); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .mcr-history-snapshot__header h3 { margin: 2px 0 0; font-size: 26px; }
@@ -9253,9 +9306,10 @@ onBeforeUnmount(() => {
 .mcr-history-snapshot__item div { min-width: 0; display: grid; }
 .mcr-history-snapshot__item strong, .mcr-history-snapshot__item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mcr-history-snapshot__item span, .mcr-history-snapshot__item small { color: var(--color-text-muted); }
-.mcr-history-snapshot__footer { display: flex; justify-content: flex-end; padding: 14px 24px 20px; border-top: 1px solid var(--color-border); }
+.mcr-history-snapshot__check { width: 30px; height: 30px; display: grid; place-items: center; align-self: start; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text-muted); background: transparent; }.mcr-history-snapshot__check.is-active { color: white; background: var(--color-primary); border-color: var(--color-primary); }
+.mcr-history-snapshot__footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 24px 20px; border-top: 1px solid var(--color-border); }.mcr-history-snapshot__footer > span { margin-right: auto; color: var(--color-text-muted); font-size: 13px; }
 @media (max-width: 900px) { .mcr-history-snapshot__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 768px) { .mcr-time-machine-timeline { right: 4px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { position: fixed; right: 30px; bottom: 24px; } .mcr-time-machine-stack { width: calc(100% - 24px); height: 190px; } .mcr-time-machine-stack__cover { width: min(310px, 76vw); border-radius: 13px; } .mcr-time-machine-stack__cover:nth-child(2) { left: 42px; }.mcr-time-machine-stack__cover:nth-child(3) { left: 84px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(2) { left: 50px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(3) { left: 100px; } .mcr-history-snapshot__grid { grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; } .mcr-history-snapshot__item { grid-template-columns: 1fr; } }
+@media (max-width: 768px) { .mcr-history-groups:has(.mcr-history-group--time-machine) { display: block; } .mcr-time-machine-timeline { right: 4px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { position: fixed; right: 30px; bottom: 24px; } .mcr-time-machine-stack { width: calc(100% - 24px); height: 190px; } .mcr-time-machine-stack__cover { width: min(310px, 76vw); border-radius: 13px; } .mcr-history-snapshot__grid { grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; } .mcr-history-snapshot__item { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .mcr-history-snapshot__grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .mcr-history-group--time-machine, .mcr-time-machine-stack, .mcr-time-machine-stack__cover { transition: none; transform: none; } }
 

@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -59,6 +61,16 @@ class HistoryStore:
         file.write_bytes(content)
         digest = hashlib.sha256(content).hexdigest()
         item = {"server_id": server_key, "server_name": server_name, "server_type": "media_server", "library_id": library_key, "library_name": library_name, "library_key": f"{server_key}:{library_key}", "template_id": template_id, "status": "success", "upload_status": "success" if uploaded else "failed", "file": str(file.relative_to(batch["_directory"])), "thumbnail": None, "mime_type": f"image/{'jpeg' if ext == 'jpg' else ext}", "width": None, "height": None, "size": len(content), "sha256": digest, "generated_at": _now(), "error": None}
+        try:
+            with Image.open(file) as source:
+                item["width"], item["height"] = source.size
+                thumb = source.convert("RGB")
+                thumb.thumbnail((480, 270))
+                thumb_path = directory / "thumbnail.webp"
+                thumb.save(thumb_path, "WEBP", quality=78, method=4)
+                item["thumbnail"] = str(thumb_path.relative_to(batch["_directory"]))
+        except Exception:
+            pass
         batch["items"].append(item)
         self._save(batch)
 
@@ -107,7 +119,12 @@ class HistoryStore:
 
     def file_path(self, batch_id: str, relative: str) -> Path | None:
         manifest = self.get_batch(batch_id)
-        allowed = {str(item.get("file") or "") for item in (manifest or {}).get("items", [])}
+        allowed = {
+            str(value)
+            for item in (manifest or {}).get("items", [])
+            for value in (item.get("file"), item.get("thumbnail"))
+            if value
+        }
         if not manifest or relative not in allowed:
             return None
         path = (self.batches / batch_id / relative).resolve()

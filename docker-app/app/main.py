@@ -13,7 +13,7 @@ import shutil
 import zipfile
 from pathlib import Path
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, quote
 
 import httpx
@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.2")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -655,7 +655,10 @@ async def plugin_history():
                 continue
             created_dt = localize(str(manifest.get("created_at") or ""), str(load_config().get("timezone") or "Asia/Shanghai"))
             url = f"/data/history/batches/{manifest['batch_id']}/{relative}"
-            items.append({"path": str(path), "name": path.name, "library": item.get("library_name"), "server": item.get("server_name"), "style": item.get("template_id"), "created_at": created_dt.timestamp(), "created_label": created_dt.strftime("%Y-%m-%d %H:%M"), "date": created_dt.strftime("%Y-%m-%d"), "date_label": created_dt.strftime("%m-%d %H:%M"), "size": item.get("size", 0), "uploaded": item.get("upload_status") == "success", "upload_error": item.get("error") or "", "url": url, "src": url, "batch_id": manifest.get("batch_id")})
+            thumbnail = str(item.get("thumbnail") or "")
+            thumbnail_path = store.safe_file(str(manifest.get("batch_id") or ""), thumbnail) if thumbnail else None
+            thumbnail_url = f"/data/history/batches/{manifest['batch_id']}/{thumbnail}" if thumbnail_path else url
+            items.append({"path": str(path), "name": path.name, "library": item.get("library_name"), "server": item.get("server_name"), "style": item.get("template_id"), "created_at": created_dt.timestamp(), "created_label": created_dt.strftime("%Y-%m-%d %H:%M"), "date": created_dt.strftime("%Y-%m-%d"), "date_label": created_dt.strftime("%m-%d %H:%M"), "size": item.get("size", 0), "uploaded": item.get("upload_status") == "success", "upload_error": item.get("error") or "", "url": url, "src": thumbnail_url, "thumbnail": thumbnail_url, "batch_id": manifest.get("batch_id")})
     return ok(items)
 
 
@@ -698,10 +701,10 @@ async def plugin_restore_history_batch(payload: dict[str, Any] | None = None):
 
 
 @app.get("/api/plugin/MediaCoverGenerator/preview_sources")
-async def plugin_preview_sources(required_items: int = Query(9)):
+async def plugin_preview_sources(required_items: int = Query(9), force_refresh: bool = Query(False)):
     config = load_config()
     library = await first_library_name(config)
-    source = await ensure_preview_images(config, library, required_items)
+    source = await ensure_preview_images(config, library, required_items, force_refresh=force_refresh)
     return ok(source)
 
 
@@ -1274,7 +1277,8 @@ async def plugin_saved_cover_image(file: str = Query("")):
     path = safe_data_path(file)
     if not path or not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="file not found")
-    return FileResponse(path)
+    stat = path.stat()
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=86400", "ETag": f'\"{stat.st_mtime_ns}-{stat.st_size}\"'})
 
 
 def ok(data: Any = None, msg: str = "ok"):
@@ -2251,7 +2255,7 @@ async def first_library_name(config: dict[str, Any]) -> str:
     return "本地封面"
 
 
-async def ensure_preview_images(config: dict[str, Any], library: str, required_items: int) -> dict[str, Any]:
+async def ensure_preview_images(config: dict[str, Any], library: str, required_items: int, force_refresh: bool = False) -> dict[str, Any]:
     style_config = config.get("style_config") or {}
     input_dir = Path(config.get("covers_input") or "/app/data/input")
     if not input_dir.is_absolute():
@@ -2273,7 +2277,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         server = "mock"
         source_mode = "custom"
     else:
-        images = service.local_images(library, limit, include_mock=False)
+        images = [] if force_refresh and input_is_default else service.local_images(library, limit, include_mock=False)
         server = "local"
         source_mode = ("cache" if input_is_default else "custom") if images else "media_server"
         if not images:
@@ -2308,6 +2312,10 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
             images = service.local_images("", limit, include_mock=False)
             server = "local"
             source_mode = ("cache" if input_is_default else "custom") if images else "media_server"
+    if force_refresh and len(images) > 1:
+        offset = int(datetime.now(timezone.utc).timestamp() * 1000) % len(images)
+        images = images[offset:] + images[:offset]
+    preview_version = str(int(datetime.now(timezone.utc).timestamp() * 1000)) if force_refresh else ""
     title, subtitle, custom_texts = library_title_payload(config, library)
     base, variant = STYLE_TO_PLUGIN.get(str(style_config.get("style") or "single_1"), ("static_1", "static"))
     return {
@@ -2322,7 +2330,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         "images": [
             {
                 "slot": index + 1,
-                "src": data_file_url(path),
+                "src": data_file_url(path) + (f"?preview_version={preview_version}" if preview_version else ""),
                 "kind": source_mode,
                 "label": path.name,
             }

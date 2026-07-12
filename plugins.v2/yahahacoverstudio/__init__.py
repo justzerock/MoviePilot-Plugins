@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.2"
+    plugin_version = "2.0.3"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -3903,7 +3903,11 @@ class YahahaCoverStudio(_PluginBase):
                     path = store.file_path(str(manifest.get("batch_id") or ""), str(item.get("file") or ""))
                     if not path:
                         continue
-                    covers.append({"name": path.name, "size": item.get("size", 0), "src": f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?path={quote(str(path))}", "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "created_at": manifest.get("created_at", ""), "batch_id": manifest.get("batch_id", "")})
+                    thumbnail_path = store.file_path(str(manifest.get("batch_id") or ""), str(item.get("thumbnail") or "")) if item.get("thumbnail") else None
+                    version = str(item.get("sha256") or int(path.stat().st_mtime_ns))
+                    original_url = f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?file={quote(str(path))}&v={quote(version)}"
+                    thumbnail_url = f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?file={quote(str(thumbnail_path))}&v={quote(version)}" if thumbnail_path else original_url
+                    covers.append({"name": path.name, "size": item.get("size", 0), "src": thumbnail_url, "url": original_url, "thumbnail": thumbnail_url, "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "created_at": manifest.get("created_at", ""), "batch_id": manifest.get("batch_id", "")})
             return {
                 "code": 0,
                 "data": [
@@ -3911,6 +3915,8 @@ class YahahaCoverStudio(_PluginBase):
                         "name": item.get("name", ""),
                         "size": item.get("size", ""),
                         "src": item.get("src", ""),
+                        "url": item.get("url", ""),
+                        "thumbnail": item.get("thumbnail", ""),
                         "path": item.get("path", ""),
                         "server": item.get("server", ""),
                         "library": item.get("library", ""),
@@ -4040,7 +4046,7 @@ class YahahaCoverStudio(_PluginBase):
             logger.error(f"【YahahaCoverStudio】获取状态失败: {e}", exc_info=True)
             return {"code": 1, "msg": f"获取状态失败: {e}"}
 
-    def api_preview_sources(self, required_items: Optional[int] = None):
+    def api_preview_sources(self, required_items: Optional[int] = None, force_refresh: Optional[bool] = False):
         """返回前端模拟预览所需的真实素材信息，不执行后端合成"""
         try:
             preview_targets = self.__get_preview_targets()
@@ -4054,10 +4060,21 @@ class YahahaCoverStudio(_PluginBase):
                 title = preview_target["title"]
                 config_bg_color = preview_target["config_bg_color"]
                 custom_texts = self.__get_custom_texts_from_config(library_name, service.name)
+                force = str(force_refresh).strip().lower() in {"1", "true", "yes", "on"}
                 source_mode, images = self.__resolve_preview_source_images(
                     preview_target,
                     required_items=self.__get_preview_required_items(required_items),
+                    force_refresh=force,
                 )
+                if force and len(images) > 1:
+                    offset = int(time.time() * 1000) % len(images)
+                    images = images[offset:] + images[:offset]
+                if force:
+                    version = int(time.time() * 1000)
+                    for image in images:
+                        src = str(image.get("src") or "")
+                        if src:
+                            image["src"] = f"{src}{'&' if '?' in src else '?'}preview_version={version}"
                 if not images:
                     logger.info(f"媒体库 {service.name}：{library_name} 无可用预览素材，继续尝试下一个媒体库")
                     continue
@@ -4531,7 +4548,7 @@ class YahahaCoverStudio(_PluginBase):
             })
         return [image for image in images if image.get("src")]
 
-    def __resolve_preview_source_images(self, preview_target: Dict[str, Any], required_items: Optional[int] = None) -> Tuple[str, List[Dict[str, Any]]]:
+    def __resolve_preview_source_images(self, preview_target: Dict[str, Any], required_items: Optional[int] = None, force_refresh: bool = False) -> Tuple[str, List[Dict[str, Any]]]:
         required_items = required_items or self.__get_required_items()
         combined: List[Dict[str, Any]] = []
         seen = set()
@@ -4561,7 +4578,7 @@ class YahahaCoverStudio(_PluginBase):
             if len(combined) >= required_items:
                 return source_mode, combined
 
-        cache_images = preview_target.get("cache_images")
+        cache_images = None if force_refresh else preview_target.get("cache_images")
         if cache_images:
             images = self.__build_local_preview_source_images(cache_images, "cache", required_items=required_items)
             append_images(images)
@@ -5261,7 +5278,8 @@ class YahahaCoverStudio(_PluginBase):
             mime_type = "image/jpeg"
         try:
             from fastapi.responses import FileResponse
-            return FileResponse(path=str(target_file), media_type=mime_type)
+            stat = target_file.stat()
+            return FileResponse(path=str(target_file), media_type=mime_type, headers={"Cache-Control": "private, max-age=86400", "ETag": f'\"{stat.st_mtime_ns}-{stat.st_size}\"'})
         except Exception:
             try:
                 from starlette.responses import FileResponse
