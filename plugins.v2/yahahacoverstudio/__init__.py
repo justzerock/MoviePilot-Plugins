@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.1"
+    plugin_version = "2.0.2"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -8801,7 +8801,10 @@ class YahahaCoverStudio(_PluginBase):
                 if library['Name'] and library_id:
                     lib_item = {
                         "name": f"{server}: {library['Name']}",
-                        "value": f"{server}-{library_id}"
+                        "value": f"{server}-{library_id}",
+                        "server": str(server),
+                        "server_id": str(server),
+                        "library_id": str(library_id),
                     }
                     lib_items.append(lib_item)
             return lib_items

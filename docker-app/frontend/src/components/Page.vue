@@ -756,9 +756,22 @@
                       {{ isHistoryGroupSelected(group) ? '取消本组' : '选择本组' }}
                     </v-btn>
                   </div>
-                  <v-row>
+                  <button
+                    v-if="historyGroupMode === 'time-machine'"
+                    type="button"
+                    class="mcr-time-machine-stack"
+                    :aria-label="`查看 ${group.title} 的全部封面`"
+                    @click="openHistorySnapshot(group)"
+                  >
+                    <span v-for="item in group.items.slice(0, historyStackLimit)" :key="item.path" class="mcr-time-machine-stack__cover">
+                      <img :src="item.src || item.url || ''" :alt="item.library || item.name" loading="lazy">
+                      <span>{{ item.library || item.name }}</span>
+                    </span>
+                    <span v-if="group.items.length > historyStackLimit" class="mcr-time-machine-stack__more">+{{ group.items.length - historyStackLimit }}</span>
+                  </button>
+                  <v-row v-else>
                     <v-col
-                      v-for="item in (historyGroupMode === 'time-machine' ? group.items.slice(0, 6) : group.items)"
+                      v-for="item in group.items"
                       :key="item.path"
                       cols="12"
                       sm="6"
@@ -820,7 +833,6 @@
                       </v-card>
                     </v-col>
                   </v-row>
-                  <div v-if="historyGroupMode === 'time-machine' && group.items.length > 6" class="mcr-time-machine-more">+{{ group.items.length - 6 }}</div>
                     </section>
                   </div>
                   <div v-else class="mcr-history-empty">还没有可以回到的时间<br><small>生成并保存封面后，历史记录会显示在这里。</small></div>
@@ -832,6 +844,23 @@
       </v-defaults-provider>
 
     </v-card>
+
+    <v-dialog v-model="restoreConfirmDialog" max-width="520" :scrim="isDark ? 'rgba(0,0,0,.66)' : 'rgba(24,32,48,.34)'">
+      <v-card class="mcr-history-restore-confirm" :data-mcr-theme="isDark ? 'dark' : 'light'"><h3>确定回到此时吗？</h3><p>{{ pendingHistoryRestore?.label }}</p><p>将把该时间保存的封面重新应用到对应服务器媒体库。当前服务器上的封面会被替换，但历史记录不会被删除。</p><footer><v-btn class="mcr-button mcr-button--ghost" @click="restoreConfirmDialog = false">取消</v-btn><v-btn class="mcr-button mcr-button--primary" :loading="Boolean(restoringBatchId)" @click="executeHistoryRestore">回到此时</v-btn></footer></v-card>
+    </v-dialog>
+    <v-dialog v-model="historySnapshotDialog" max-width="1120" class="mcr-history-snapshot-dialog" :scrim="isDark ? 'rgba(0,0,0,.66)' : 'rgba(24,32,48,.34)'">
+      <v-card v-if="selectedHistorySnapshot" class="mcr-history-snapshot" :data-mcr-theme="isDark ? 'dark' : 'light'">
+        <header class="mcr-history-snapshot__header"><div><span>History</span><h3>此时的封面</h3><p>{{ selectedHistorySnapshot.fullTitle }}</p></div><v-btn icon="mdi-close" variant="text" aria-label="关闭" @click="historySnapshotDialog = false" /></header>
+        <div class="mcr-history-snapshot__grid">
+          <article v-for="item in selectedHistorySnapshot.items" :key="item.path" class="mcr-history-snapshot__item">
+            <img :src="item.src || item.url || ''" :alt="item.library || item.name" loading="lazy">
+            <div><strong>{{ item.library || item.name }}</strong><span>{{ item.server || '未知服务器' }}</span><small>{{ item.uploaded === false ? '上传失败' : '已生成并保存' }}</small></div>
+            <v-btn size="small" prepend-icon="mdi-download-outline" class="mcr-button mcr-button--ghost" @click="downloadCover(item)">下载</v-btn>
+          </article>
+        </div>
+        <footer class="mcr-history-snapshot__footer"><v-btn class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === selectedHistorySnapshot.key" @click="restoreHistoryBatch(selectedHistorySnapshot.key, selectedHistorySnapshot.title)">回到此时</v-btn></footer>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="donationDialog" max-width="460" class="mcr-donation-dialog" scrim="rgba(18, 24, 38, 0.42)">
       <v-card class="mcr-donation-card" :class="{ 'mcr-donation-card--dark': isDark }">
@@ -1194,7 +1223,7 @@ import GeneratePreviewSimulation from './GeneratePreviewSimulation.vue'
 import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
-import { formatTimelineTime } from '../utils/dateTime'
+import { formatDateTime, formatTimelineTime } from '../utils/dateTime'
 import { images } from '../assets/base64/images.js'
 import {
   cloneLayout,
@@ -1367,12 +1396,21 @@ interface HistoryItem {
   mtime_ts?: number
   batch_id?: string
   created_at?: string | number
+  uploaded?: boolean
+  upload_error?: string
 }
+
+interface HistoryGroup { key: string; title: string; items: HistoryItem[] }
 
 const history = ref<HistoryItem[]>([])
 const historyGroupMode = ref<'library' | 'time-machine'>('library')
 const restoringBatchId = ref('')
 const activeTimeRecordId = ref('')
+const historySnapshotDialog = ref(false)
+const selectedHistorySnapshot = ref<(HistoryGroup & { fullTitle: string }) | null>(null)
+const restoreConfirmDialog = ref(false)
+const pendingHistoryRestore = ref<{ batchId: string; label: string } | null>(null)
+const historyStackLimit = ref(5)
 const historySortMode = ref<'newest' | 'oldest' | 'name'>('newest')
 const selectedHistoryPaths = ref<string[]>([])
 const donationAvatarIcon = computed(() =>
@@ -2475,7 +2513,7 @@ const sortedHistory = computed(() => {
   return items.sort((a, b) => (Number(b.mtime_ts || 0) - Number(a.mtime_ts || 0)))
 })
 const groupedHistory = computed(() => {
-  const groups = new Map<string, { key: string; title: string; items: HistoryItem[] }>()
+  const groups = new Map<string, HistoryGroup>()
   for (const item of sortedHistory.value) {
     const key = historyGroupMode.value === 'library' ? (item.library || '未识别媒体库') : (item.batch_id || item.date || 'legacy')
     const title = historyGroupMode.value === 'library' ? (item.library || '未识别媒体库') : formatTimelineTime(item.created_at || item.mtime || item.date || '')
@@ -2488,6 +2526,23 @@ const groupedHistory = computed(() => {
 })
 let timeRecordObserver: IntersectionObserver | null = null
 let timeRecordClickLockUntil = 0
+let timeMachineFrame = 0
+function updateTimeMachineDepth() {
+  historyStackLimit.value = isMobileViewport() ? 3 : 5
+  if (historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
+  const center = window.innerHeight / 2
+  document.querySelectorAll<HTMLElement>('.mcr-history-group--time-machine').forEach((element) => {
+    const rect = element.getBoundingClientRect()
+    const distance = Math.min(1, Math.abs(rect.top + rect.height / 2 - center) / Math.max(center, 1))
+    element.style.setProperty('--mcr-time-scale', String(1 - distance * 0.06))
+    element.style.setProperty('--mcr-time-opacity', String(1 - distance * 0.38))
+    element.style.setProperty('--mcr-time-shift', `${Math.round(distance * 10)}px`)
+  })
+}
+function scheduleTimeMachineDepth() {
+  if (timeMachineFrame) return
+  timeMachineFrame = window.requestAnimationFrame(() => { timeMachineFrame = 0; updateTimeMachineDepth() })
+}
 function observeTimeRecords() {
   timeRecordObserver?.disconnect()
   if (historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
@@ -2500,27 +2555,42 @@ function observeTimeRecords() {
       activeTimeRecordId.value = groupedHistory.value.at(-1)?.key || activeTimeRecordId.value
       return
     }
-    const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => Math.abs(a.boundingClientRect.top - 140) - Math.abs(b.boundingClientRect.top - 140))
+    const center = window.innerHeight / 2
+    const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => Math.abs(a.boundingClientRect.top + a.boundingClientRect.height / 2 - center) - Math.abs(b.boundingClientRect.top + b.boundingClientRect.height / 2 - center))
     if (visible[0]?.target.id) activeTimeRecordId.value = visible[0].target.id.replace('time-record-', '')
-  }, { rootMargin: '-110px 0px -55% 0px', threshold: [0, 0.1, 0.4] })
+  }, { rootMargin: '-32% 0px -32% 0px', threshold: [0, 0.1, 0.4] })
   elements.forEach((element) => timeRecordObserver?.observe(element))
 }
 watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(observeTimeRecords))
+watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(scheduleTimeMachineDepth))
 
 function scrollToTimeRecord(id: string) {
   timeRecordClickLockUntil = Date.now() + 1200
   activeTimeRecordId.value = id
-  document.getElementById(`time-record-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  document.getElementById(`time-record-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function openHistorySnapshot(group: HistoryGroup) {
+  const timestamp = group.items[0]?.created_at || group.items[0]?.mtime || group.items[0]?.date || ''
+  selectedHistorySnapshot.value = { ...group, fullTitle: formatDateTime(timestamp) }
+  historySnapshotDialog.value = true
 }
 
 async function restoreHistoryBatch(batchId: string, label = '') {
   if (!batchId || restoringBatchId.value) return
-  if (!window.confirm(`确定回到此时吗？\n\n${label}\n将把此时保存的封面重新应用到对应服务器媒体库。当前封面会被替换，但历史记录不会删除。`)) return
+  pendingHistoryRestore.value = { batchId, label }
+  restoreConfirmDialog.value = true
+}
+async function executeHistoryRestore() {
+  const pending = pendingHistoryRestore.value
+  if (!pending || restoringBatchId.value) return
+  const { batchId } = pending
   restoringBatchId.value = batchId
   try {
-    const resp = await props.api.post<{ code: number; data?: { restored?: number; skipped?: number }; msg?: string }>('plugin/MediaCoverGenerator/restore_history_batch', { batch_id: batchId })
+    const resp = await props.api.post<{ code: number; data?: { restored?: number; skipped?: number; failed?: number }; msg?: string }>('plugin/MediaCoverGenerator/restore_history_batch', { batch_id: batchId })
     if (!resp || resp.code !== 0) throw new Error(resp?.msg || '恢复失败')
-    showEditorSaveStatus(`已回到此时：成功 ${resp.data?.restored || 0} 个，跳过 ${resp.data?.skipped || 0} 个`)
+    restoreConfirmDialog.value = false
+    showEditorSaveStatus(`已回到此时：成功 ${resp.data?.restored || 0} 个，跳过 ${resp.data?.skipped || 0} 个，失败 ${resp.data?.failed || 0} 个`)
   } catch (error) {
     showEditorSaveStatus(error instanceof Error ? error.message : '恢复失败')
   } finally {
@@ -3741,6 +3811,8 @@ onMounted(async () => {
 	    window.addEventListener('scroll', updateHistoryFloatingActionsPosition, true)
 	    window.addEventListener('resize', updateHistoryFloatingActionsPosition)
 	    window.addEventListener('resize', updatePreviewBayHeight)
+	    window.addEventListener('scroll', scheduleTimeMachineDepth, true)
+	    window.addEventListener('resize', scheduleTimeMachineDepth)
 	  }
 	  if (typeof ResizeObserver !== 'undefined') {
 	    previewBayResizeObserver = new ResizeObserver(updatePreviewBayHeight)
@@ -3780,6 +3852,9 @@ onBeforeUnmount(() => {
 	    window.removeEventListener('scroll', updateHistoryFloatingActionsPosition, true)
 	    window.removeEventListener('resize', updateHistoryFloatingActionsPosition)
 	    window.removeEventListener('resize', updatePreviewBayHeight)
+	    window.removeEventListener('scroll', scheduleTimeMachineDepth, true)
+	    window.removeEventListener('resize', scheduleTimeMachineDepth)
+	    if (timeMachineFrame) window.cancelAnimationFrame(timeMachineFrame)
 	  }
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', syncBackendStatusWhenVisible)
@@ -9155,13 +9230,34 @@ onBeforeUnmount(() => {
 .mcr-time-machine-node.is-active { color: var(--color-primary); font-weight: 800; }
 .mcr-time-machine-node.is-active i { transform: scale(1.55); }
 .mcr-time-machine-restore { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-primary); box-shadow: 0 6px 16px var(--color-shadow); }
-.mcr-history-group--time-machine { scroll-margin-top: 110px; transition: opacity 180ms ease, transform 180ms ease; }
-.mcr-history-group--time-machine:not(.is-active) { opacity: .72; transform: scale(.985); }
-.mcr-history-group--time-machine .v-row { flex-wrap: nowrap; min-height: 190px; padding-right: 120px; overflow: hidden; }
-.mcr-history-group--time-machine .v-col { flex: 0 0 220px; max-width: 220px; margin-right: -150px; transition: margin 180ms ease, transform 180ms ease; }
-.mcr-history-group--time-machine:hover .v-col { margin-right: -105px; }
-.mcr-time-machine-more { margin: -34px 20px 0 auto; width: max-content; padding: 6px 9px; border-radius: 999px; background: var(--color-primary); color: white; font-weight: 800; }
-@media (max-width: 768px) { .mcr-time-machine-timeline { right: 4px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { position: fixed; right: 30px; bottom: 24px; } .mcr-history-group--time-machine .v-col { flex-basis: 180px; max-width: 180px; margin-right: -125px; } }
+.mcr-history-group--time-machine { scroll-margin-top: 110px; margin-bottom: -18px; opacity: var(--mcr-time-opacity, .82); transform: translateY(var(--mcr-time-shift, 0)) scale(var(--mcr-time-scale, .97)); transform-origin: center; transition: opacity 190ms ease, transform 190ms ease, filter 190ms ease; }
+.mcr-history-group--time-machine.is-active { opacity: 1; transform: translateY(0) scale(1); filter: drop-shadow(0 14px 22px color-mix(in srgb, var(--color-shadow) 70%, transparent)); }
+.mcr-time-machine-stack { position: relative; width: min(760px, calc(100% - 130px)); height: 250px; display: block; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; transform: translateY(0); transition: transform 220ms ease, filter 220ms ease; }
+.mcr-time-machine-stack:hover { transform: translateY(-3px); filter: drop-shadow(0 12px 18px var(--color-shadow)); }
+.mcr-time-machine-stack__cover { position: absolute; inset: 0 auto auto 0; width: min(420px, 68vw); aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-surface); box-shadow: 0 8px 20px var(--color-shadow); transition: left 220ms ease, transform 220ms ease, box-shadow 220ms ease; }
+.mcr-time-machine-stack__cover:nth-child(1) { z-index: 10; }.mcr-time-machine-stack__cover:nth-child(2) { left: 72px; z-index: 9; }.mcr-time-machine-stack__cover:nth-child(3) { left: 144px; z-index: 8; }.mcr-time-machine-stack__cover:nth-child(4) { left: 216px; z-index: 7; }.mcr-time-machine-stack__cover:nth-child(5) { left: 288px; z-index: 6; }
+.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(2) { left: 88px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(3) { left: 176px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(4) { left: 264px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(5) { left: 352px; }
+.mcr-time-machine-stack__cover img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.mcr-time-machine-stack__cover > span { position: absolute; left: 12px; bottom: 10px; max-width: calc(100% - 24px); padding: 5px 8px; overflow: hidden; border-radius: 7px; background: rgba(10,16,24,.68); color: white; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.mcr-time-machine-stack__more { position: absolute; z-index: 20; top: 96px; right: 8px; padding: 8px 10px; border-radius: 999px; background: var(--color-primary); color: white; font-weight: 800; box-shadow: 0 6px 16px var(--color-shadow); }
+.mcr-history-restore-confirm { padding: 24px; border: 1px solid var(--color-border); border-radius: 20px !important; background: var(--color-surface) !important; color: var(--color-text-main) !important; }
+.mcr-history-restore-confirm h3 { margin: 0 0 12px; font-size: 24px; }.mcr-history-restore-confirm p { margin: 8px 0; color: var(--color-text-secondary); line-height: 1.65; }.mcr-history-restore-confirm footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.mcr-history-snapshot { max-height: min(82vh, 900px); overflow: hidden; border: 1px solid var(--color-border); border-radius: 22px !important; background: var(--color-surface) !important; color: var(--color-text-main) !important; }
+.mcr-history-snapshot__header { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 14px; border-bottom: 1px solid var(--color-border); }
+.mcr-history-snapshot__header span { color: var(--color-primary); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.mcr-history-snapshot__header h3 { margin: 2px 0 0; font-size: 26px; }
+.mcr-history-snapshot__header p { margin: 3px 0 0; color: var(--color-text-muted); }
+.mcr-history-snapshot__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; max-height: 58vh; padding: 18px 24px; overflow: auto; }
+.mcr-history-snapshot__item { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-soft); }
+.mcr-history-snapshot__item img { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; object-fit: cover; }
+.mcr-history-snapshot__item div { min-width: 0; display: grid; }
+.mcr-history-snapshot__item strong, .mcr-history-snapshot__item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mcr-history-snapshot__item span, .mcr-history-snapshot__item small { color: var(--color-text-muted); }
+.mcr-history-snapshot__footer { display: flex; justify-content: flex-end; padding: 14px 24px 20px; border-top: 1px solid var(--color-border); }
+@media (max-width: 900px) { .mcr-history-snapshot__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 768px) { .mcr-time-machine-timeline { right: 4px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { position: fixed; right: 30px; bottom: 24px; } .mcr-time-machine-stack { width: calc(100% - 24px); height: 190px; } .mcr-time-machine-stack__cover { width: min(310px, 76vw); border-radius: 13px; } .mcr-time-machine-stack__cover:nth-child(2) { left: 42px; }.mcr-time-machine-stack__cover:nth-child(3) { left: 84px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(2) { left: 50px; }.mcr-time-machine-stack:hover .mcr-time-machine-stack__cover:nth-child(3) { left: 100px; } .mcr-history-snapshot__grid { grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; } .mcr-history-snapshot__item { grid-template-columns: 1fr; } }
+@media (max-width: 420px) { .mcr-history-snapshot__grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .mcr-history-group--time-machine, .mcr-time-machine-stack, .mcr-time-machine-stack__cover { transition: none; transform: none; } }
 
 @media (max-width: 600px) {
   .mcr-page-shell .yh-brand-title {

@@ -102,10 +102,11 @@
               <div class="mcr-config-sidebar__spacer" />
             </aside>
 
-            <main class="mcr-config-main">
+            <main ref="settingsContentEl" class="mcr-config-main">
               <SettingsAnchorNav
                 v-if="tab === 'basic-tab'"
                 :sections="settingsAnchorSections"
+                :content-element="settingsContentEl"
                 :top-offset="96"
                 :theme="isDark ? 'dark' : 'light'"
               />
@@ -829,6 +830,7 @@ const emit = defineEmits<{
 }>()
 
 const controlDefaults = MCR_CONTROL_DEFAULTS
+const settingsContentEl = ref<HTMLElement | null>(null)
 const settingsAnchorSections = [
   { id: 'settings-runtime', label: '运行与定时' },
   { id: 'settings-monitoring', label: '入库监控' },
@@ -1399,15 +1401,17 @@ async function loadDynamicLibraryOptions() {
   }
 }
 
+let libraryRequestSequence = 0
 async function loadLibrariesForSelectedServers() {
   if (config.value.local_mode) return
+  const requestSequence = ++libraryRequestSequence
   const selected = (config.value.selected_servers || []).map(String).filter(Boolean).join(',')
   applyingProgrammaticConfig = true
   try {
     const response = await props.api.get<{ code?: number; data?: any[] }>(
       `plugin/MediaCoverGenerator/libraries?servers=${encodeURIComponent(selected)}`,
     )
-    if (response?.code === 0 && Array.isArray(response.data)) {
+    if (requestSequence === libraryRequestSequence && response?.code === 0 && Array.isArray(response.data)) {
       config.value.all_libraries = response.data
     }
   } catch (error) {

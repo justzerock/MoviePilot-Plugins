@@ -112,10 +112,11 @@
               <div class="mcr-config-sidebar__spacer" />
             </aside>
 
-            <main class="mcr-config-main">
+            <main ref="settingsContentEl" class="mcr-config-main">
               <SettingsAnchorNav
                 v-if="tab === 'basic-tab'"
                 :sections="settingsAnchorSections"
+                :content-element="settingsContentEl"
                 :top-offset="96"
                 :theme="isDark ? 'dark' : 'light'"
               />
@@ -658,6 +659,7 @@ const emit = defineEmits<{
 }>()
 
 const controlDefaults = MCR_CONTROL_DEFAULTS
+const settingsContentEl = ref<HTMLElement | null>(null)
 const settingsAnchorSections = [
   { id: 'settings-runtime', label: '运行与定时' },
   { id: 'settings-monitoring', label: '入库监控' },
@@ -1294,12 +1296,21 @@ const subtitleFontItems = computed(() => {
 
 const libraryItems = computed(() => {
   const all = (config.value as any).all_libraries as
-    | { name: string; value: string }[]
+    | { name: string; value: string; server?: string; server_id?: string }[]
     | undefined
   if (!Array.isArray(all)) return []
-  return all.map((lib) => ({
-    title: lib.name,
-    value: lib.value,
+  const selected = new Set((config.value.selected_servers || []).map(String))
+  const normalized = all.map((lib) => {
+    const separator = String(lib.name || '').indexOf(':')
+    const server = String(lib.server_id || lib.server || (separator >= 0 ? lib.name.slice(0, separator) : '')).trim()
+    const name = separator >= 0 ? String(lib.name).slice(separator + 1).trim() : String(lib.name || '')
+    return { ...lib, server, libraryName: name }
+  })
+  const visible = selected.size ? normalized.filter((lib) => selected.has(lib.server)) : normalized
+  const showServer = selected.size !== 1
+  return visible.map((lib) => ({
+    title: showServer && lib.server ? `${lib.server} - ${lib.libraryName}` : lib.libraryName,
+    value: String(lib.value),
   }))
 })
 
@@ -1321,17 +1332,22 @@ const serverItems = computed(() => {
       }
     }
   }
-  for (const lib of libraryItems.value) {
-    const text = typeof lib.title === 'string' ? lib.title : String(lib.title)
-    const idx = text.indexOf(':')
-    const server = (idx >= 0 ? text.slice(0, idx) : text).trim()
-    if (server && !seen.has(server)) {
-      seen.add(server)
-      items.push({ title: server, value: server })
-    }
-  }
   return items
 })
+
+const selectedServerValues = computed(() => new Set(serverItems.value.map((item) => item.value)))
+const selectedLibraryValues = computed(() => new Set(libraryItems.value.map((item) => item.value)))
+watch([serverItems, () => config.value.selected_servers], () => {
+  const allowed = selectedServerValues.value
+  if (!allowed.size || !Array.isArray(config.value.selected_servers)) return
+  const filtered = config.value.selected_servers.filter((item) => allowed.has(String(item)))
+  if (filtered.length !== config.value.selected_servers.length) config.value.selected_servers = filtered
+}, { deep: true, immediate: true })
+watch([libraryItems, () => config.value.include_libraries], () => {
+  if (!Array.isArray(config.value.include_libraries)) return
+  const filtered = config.value.include_libraries.filter((item) => selectedLibraryValues.value.has(String(item)))
+  if (filtered.length !== config.value.include_libraries.length) config.value.include_libraries = filtered
+}, { deep: true, immediate: true })
 
 const titleConfigReference = `媒体库名称:
   title: "主标题"
