@@ -37,6 +37,6 @@ onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); wi
 .yh-settings-anchor__button:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary, #4f8cff) 42%, transparent); outline-offset: -3px; border-radius: 10px; }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__line { background: rgba(235,235,245,.22); }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__button.is-active .yh-settings-anchor__line { background: var(--color-primary, #6ea2ff); }
-@media (max-width: 1023px) { .yh-settings-anchor { display: none; } }
+@media (max-width: 680px) { .yh-settings-anchor { display: none; } }
 @media (prefers-reduced-motion: reduce) { .yh-settings-anchor__line { transition: none; } }
 </style>

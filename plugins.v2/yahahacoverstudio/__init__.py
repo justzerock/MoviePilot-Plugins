@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.4"
+    plugin_version = "2.0.5"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -3907,7 +3907,19 @@ class YahahaCoverStudio(_PluginBase):
                     version = str(item.get("sha256") or int(path.stat().st_mtime_ns))
                     original_url = f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?file={quote(str(path))}&v={quote(version)}"
                     thumbnail_url = f"/api/v1/plugin/YahahaCoverStudio/saved_cover_image?file={quote(str(thumbnail_path))}&v={quote(version)}" if thumbnail_path else original_url
-                    covers.append({"name": path.name, "size": item.get("size", 0), "src": thumbnail_url, "url": original_url, "thumbnail": thumbnail_url, "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "created_at": manifest.get("created_at", ""), "batch_id": manifest.get("batch_id", "")})
+                    source_file = thumbnail_path or path
+                    try:
+                        from PIL import Image
+                        with Image.open(source_file) as image:
+                            image = image.convert("RGB")
+                            image.thumbnail((480, 270))
+                            buffer = io.BytesIO()
+                            image.save(buffer, format="WEBP", quality=78, method=4)
+                        image_src = "data:image/webp;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+                    except Exception as error:
+                        logger.warning("【YahahaCoverStudio】历史缩略图编码失败: %s", error)
+                        image_src = thumbnail_url
+                    covers.append({"name": path.name, "size": item.get("size", 0), "src": image_src, "url": original_url, "thumbnail": image_src, "path": str(path), "server": item.get("server_name", ""), "library": item.get("library_name", ""), "date": str(manifest.get("created_at", ""))[:10], "date_label": str(manifest.get("created_at", ""))[5:16].replace("T", " "), "mtime": manifest.get("created_at", ""), "mtime_ts": 0, "created_at": manifest.get("created_at", ""), "batch_id": manifest.get("batch_id", "")})
             return {
                 "code": 0,
                 "data": [

@@ -688,10 +688,10 @@
 
               <Teleport to="body">
                 <div
-                  v-if="pageTab === 'history-tab' && !historyListCollapsed && selectedHistoryPaths.length"
+                  v-if="historySnapshotDialog && selectedHistoryPaths.length"
                   class="mcr-history-floating-actions"
                   :data-mcr-theme="isDark ? 'dark' : 'light'"
-                  :style="historyFloatingStyle"
+                  :style="{ left: '50%', top: '84px', transform: 'translateX(-50%)' }"
                   role="toolbar"
                   aria-label="历史封面批量操作"
                 >
@@ -723,6 +723,7 @@
                   >
                     下载 ZIP
                   </button>
+                  <button type="button" class="mcr-history-floating-button mcr-history-floating-button--primary" :disabled="controlsLocked || !selectedHistorySnapshot" @click.prevent.stop="applySelectedHistorySnapshot">应用</button>
                   <button
                     type="button"
                     class="mcr-history-floating-button mcr-history-floating-button--danger"
@@ -827,14 +828,13 @@
     </v-dialog>
     <v-dialog v-model="historySnapshotDialog" max-width="1120" class="mcr-history-snapshot-dialog" :scrim="isDark ? 'rgba(0,0,0,.66)' : 'rgba(24,32,48,.34)'">
       <v-card v-if="selectedHistorySnapshot" class="mcr-history-snapshot" :data-mcr-theme="isDark ? 'dark' : 'light'">
-        <header class="mcr-history-snapshot__header"><div><span>History</span><h3>此时的封面</h3><p>{{ selectedHistorySnapshot.fullTitle }}</p></div><v-btn icon="mdi-close" variant="text" aria-label="关闭" @click="historySnapshotDialog = false" /></header>
+        <header class="mcr-history-snapshot__header"><div><span>History</span><h3>此时的封面</h3><p>{{ selectedHistorySnapshot.fullTitle }}</p></div><v-btn icon="mdi-close" variant="text" aria-label="关闭" @click="closeHistorySnapshot" /></header>
         <div class="mcr-history-snapshot__grid">
           <article v-for="item in selectedHistorySnapshot.items" :key="item.path" class="mcr-history-snapshot__item" :class="{ 'is-selected': selectedHistoryPaths.includes(item.path) }" role="checkbox" :aria-checked="selectedHistoryPaths.includes(item.path)" tabindex="0" @click="toggleHistorySelection(item)" @keydown.enter.prevent="toggleHistorySelection(item)" @keydown.space.prevent="toggleHistorySelection(item)">
             <img :src="item.src || item.url || ''" :alt="item.library || item.name" loading="lazy">
             <div class="mcr-history-snapshot__labels"><span :title="item.library || item.name">{{ item.library || item.name }}</span><span :title="item.server || '未知服务器'">{{ item.server || '未知服务器' }}</span></div>
           </article>
         </div>
-        <footer v-if="selectedHistoryPaths.length" class="mcr-history-snapshot__footer"><span>已选择 {{ selectedHistoryPaths.length }} 项</span><v-btn class="mcr-button mcr-button--ghost" @click="downloadSelectedCoversDirect">下载</v-btn><v-btn class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === selectedHistorySnapshot.key" @click="restoreHistoryBatch(selectedHistorySnapshot.key, selectedHistorySnapshot.title)">应用到服务器</v-btn><v-btn class="mcr-button mcr-button--danger" @click="deleteSelectedCovers">删除</v-btn></footer>
       </v-card>
     </v-dialog>
 
@@ -2559,6 +2559,16 @@ function openHistorySnapshot(group: HistoryGroup) {
   historySnapshotDialog.value = true
 }
 
+function closeHistorySnapshot() {
+  historySnapshotDialog.value = false
+  selectedHistoryPaths.value = []
+}
+
+function applySelectedHistorySnapshot() {
+  if (!selectedHistorySnapshot.value) return
+  void restoreHistoryBatch(selectedHistorySnapshot.value.key, selectedHistorySnapshot.value.title)
+}
+
 function timeMachineCoverStyle(groupKey: string, index: number) {
   let seed = 0
   for (const char of groupKey) seed = (seed * 31 + char.charCodeAt(0)) >>> 0
@@ -3805,6 +3815,10 @@ watch(pageTab, (nextTab) => {
   if (nextTab !== 'history-tab') {
     selectedHistoryPaths.value = []
   }
+})
+
+watch(historySnapshotDialog, (open) => {
+  if (!open) selectedHistoryPaths.value = []
 })
 
 watch(isEditingLayout, () => {
@@ -9308,6 +9322,7 @@ onBeforeUnmount(() => {
 .mcr-history-snapshot__footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 24px 20px; border-top: 1px solid var(--color-border); }.mcr-history-snapshot__footer > span { margin-right: auto; color: var(--color-text-muted); font-size: 13px; }
 @media (max-width: 900px) { .mcr-history-snapshot__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 768px) { .mcr-history-groups:has(.mcr-history-group--time-machine) { display: block; } .mcr-time-machine-timeline { right: 4px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { position: fixed; right: 30px; bottom: 24px; } .mcr-time-machine-stack { width: calc(100% - 24px); height: 190px; } .mcr-time-machine-stack__cover { width: min(310px, 76vw); border-radius: 13px; } .mcr-history-snapshot__grid { grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; } .mcr-history-snapshot__item { grid-template-columns: 1fr; } }
+@media (max-width: 1180px) { .mcr-time-machine-timeline { right: 10px; padding-left: 6px; } .mcr-time-machine-node > span:last-child { display: none; } .mcr-time-machine-restore { padding: 7px 9px; } }
 @media (max-width: 420px) { .mcr-history-snapshot__grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .mcr-history-group--time-machine, .mcr-time-machine-stack, .mcr-time-machine-stack__cover { transition: none; transform: none; } }
 

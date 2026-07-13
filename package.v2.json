@@ -35,11 +35,12 @@
         "name": "呀哈哈封面工坊",
         "description": "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
         "labels": "海报,可编辑画布,封面,Emby,Jellyfin,动态",
-        "version": "2.0.4",
+        "version": "2.0.5",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png",
         "author": "呀哈哈",
         "level": 1,
         "history": {
+            "v2.0.5": "修复插件历史缩略图认证，优化时光机浮动操作与窄窗口导航。",
             "v2.0.4": "精简时光机封面卡片，修复插件历史图片与浮动导航显示。",
             "v2.0.3": "优化时光机封面展示，修复预览刷新和插件历史图片加载。",
             "v2.0.2": "新增时光机层叠视图，修复设置导航和媒体库实时联动。",
