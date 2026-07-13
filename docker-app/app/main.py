@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.8")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.10")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2255,6 +2255,22 @@ async def first_library_name(config: dict[str, Any]) -> str:
     return "本地封面"
 
 
+def cached_library_name(config: dict[str, Any], identifier: str) -> str:
+    """Resolve a selected `server:id` value to the stable library cache name."""
+    value = str(identifier or "").strip()
+    for item in config.get("all_libraries") or []:
+        if not isinstance(item, dict):
+            continue
+        candidates = {
+            str(item.get("value") or "").strip(),
+            str(item.get("id") or "").strip(),
+            str(item.get("name") or "").strip(),
+        }
+        if value and value in candidates:
+            return str(item.get("name") or value).strip() or value
+    return value
+
+
 async def ensure_preview_images(config: dict[str, Any], library: str, required_items: int, force_refresh: bool = False) -> dict[str, Any]:
     style_config = config.get("style_config") or {}
     input_dir = Path(config.get("covers_input") or "/app/data/input")
@@ -2266,8 +2282,10 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     except Exception:
         input_is_default = False
     limit = max(1, min(60, required_items or int(style_config.get("image_limit") or 9)))
+    requested_library = str(library or "")
+    cache_library = cached_library_name(config, requested_library)
     if config.get("local_mode", False):
-        images = service.local_images(library, limit, include_mock=False)
+        images = service.local_images(cache_library, limit, include_mock=False)
         server = "local"
         source_mode = ("cache" if input_is_default else "custom") if images else "custom"
         if not images:
@@ -2277,12 +2295,15 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         server = "mock"
         source_mode = "custom"
     else:
-        images = [] if force_refresh and input_is_default else service.local_images(library, limit, include_mock=False)
+        # Cache directories use the actual library name, while selectors may use a
+        # `server:id` value. Resolve before looking on disk so reopening the page is
+        # a cache hit and does not contact the media server again.
+        images = [] if force_refresh and input_is_default else service.local_images(cache_library, limit, include_mock=False)
         server = "local"
         source_mode = ("cache" if input_is_default else "custom") if images else "media_server"
         if not images:
             try:
-                client, media_library = await service.find_library(library)
+                client, media_library = await service.find_library(requested_library)
                 server = client.server_name
                 library = media_library.name
                 cache_dir = input_dir / slugify(media_library.name)

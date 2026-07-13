@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.8"
+    plugin_version = "2.0.10"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4128,7 +4128,7 @@ class YahahaCoverStudio(_PluginBase):
         if not self._enabled:
             logger.warning("【YahahaCoverStudio】预览请求失败：插件未启用")
             raise RuntimeError("插件未启用，请先在设置页启用插件并保存")
-        self.__refresh_media_server_context(force=True)
+        self.__refresh_media_server_context(force=False)
         if not self._servers:
             logger.warning("【YahahaCoverStudio】预览请求失败：未检测到任何可用媒体服务器")
             raise RuntimeError("未检测到任何可用媒体服务器，请检查设置并保存后重试")
@@ -4184,7 +4184,10 @@ class YahahaCoverStudio(_PluginBase):
                 key=lambda item: include_order.get(item.get("server_key", ""), len(include_order))
             )
         else:
-            random.shuffle(preview_targets)
+            # Keep the initially selected library stable. A random target on every
+            # page entry defeats the persistent preview cache and looks like an
+            # unsolicited poster refresh to the user.
+            preview_targets.sort(key=lambda item: (str(item.get("server") or ""), str(item.get("library_name") or "")))
 
         if not preview_targets and self._include_libraries:
             logger.warning(
@@ -4497,7 +4500,7 @@ class YahahaCoverStudio(_PluginBase):
         return images
 
     def __check_cached_preview_images(self, library_name: str) -> Optional[Dict[str, Any]]:
-        cache_roots: List[Path] = []
+        cache_roots: List[Path] = [self.__preview_cache_root()]
         if self._covers_path:
             cache_roots.append(Path(self._covers_path))
         cache_roots.append(self.get_data_path() / "covers")
@@ -4520,23 +4523,19 @@ class YahahaCoverStudio(_PluginBase):
                 }
         return None
 
+    def __preview_cache_root(self) -> Path:
+        return self.get_data_path() / "preview_cache"
+
     def __clear_preview_cache_for_library(self, library_name: str) -> int:
-        """Remove only this library's downloaded material cache, never user custom images."""
+        """Remove only persistent preview data, never generation or user assets."""
         removed = 0
-        cache_roots: List[Path] = []
-        if self._covers_path:
-            cache_roots.append(Path(self._covers_path))
-        cache_roots.append(self.get_data_path() / "covers")
-        seen = set()
+        cache_roots: List[Path] = [self.__preview_cache_root()]
         safe_name = self.__sanitize_filename(library_name)
         for root_dir in cache_roots:
             try:
                 root = Path(root_dir).expanduser().resolve()
             except Exception:
                 continue
-            if str(root) in seen:
-                continue
-            seen.add(str(root))
             target = root / safe_name
             if not target.exists() or not target.is_dir():
                 continue
@@ -4578,10 +4577,15 @@ class YahahaCoverStudio(_PluginBase):
             })
         return images
 
-    def __build_preview_source_images(self, service, library, required_items: Optional[int] = None):
+    def __build_preview_source_images(self, service, library, required_items: Optional[int] = None, force_refresh: bool = False):
         required_items = required_items or self.__get_required_items()
         images: List[Dict[str, Any]] = []
-        image_data = self.__collect_preview_server_images(service, library, required_items=required_items)
+        image_data = self.__collect_preview_server_images(
+            service,
+            library,
+            required_items=required_items,
+            force_refresh=force_refresh,
+        )
         for index, item in enumerate(image_data[:required_items], start=1):
             images.append({
                 "slot": index,
@@ -4630,13 +4634,18 @@ class YahahaCoverStudio(_PluginBase):
             if len(combined) >= required_items:
                 return source_mode, combined
 
-        images = self.__build_preview_source_images(preview_target["service"], preview_target["library"], required_items=required_items)
+        images = self.__build_preview_source_images(
+            preview_target["service"],
+            preview_target["library"],
+            required_items=required_items,
+            force_refresh=force_refresh,
+        )
         append_images(images)
         if combined:
             return source_mode, combined
         return "media_server", []
 
-    def __collect_preview_server_images(self, service, library, required_items: Optional[int] = None):
+    def __collect_preview_server_images(self, service, library, required_items: Optional[int] = None, force_refresh: bool = False):
         logger.info(f"媒体库 {service.name}：{library['Name']} 开始收集预览素材")
         required_items = required_items or self.__get_required_items()
         library_type = library.get('CollectionType')
@@ -4653,7 +4662,95 @@ class YahahaCoverStudio(_PluginBase):
         else:
             items = self.__collect_regular_preview_items(service, parent_id, required_items)
 
+        cached_entries = self.__cache_preview_server_images(
+            service,
+            str(library.get("Name") or ""),
+            items[:required_items],
+        )
+        if cached_entries:
+            return cached_entries
         return self.__build_preview_image_entries(service, items[:required_items])
+
+    @staticmethod
+    def __preview_image_request_url(image_url: str) -> str:
+        delimiter = '&' if '?' in image_url else '?'
+        return f"{image_url}{delimiter}maxWidth=960&maxHeight=540&quality=82"
+
+    def __download_preview_image_to_cache(self, service, image_url: str, output_path: Path) -> Optional[Path]:
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_key = hashlib.sha256(image_url.encode("utf-8")).hexdigest()
+            meta_path = output_path.with_suffix(f"{output_path.suffix}.urlhash")
+            if output_path.is_file() and output_path.stat().st_size > 0 and meta_path.is_file():
+                if meta_path.read_text(encoding="utf-8").strip() == cache_key:
+                    return output_path
+            response = service.instance.get_data(url=image_url) if '[HOST]' in image_url else RequestUtils(
+                headers={'User-Agent': 'MoviePilot-YahahaCoverStudio/1.0'}, timeout=30,
+            ).get_res(url=image_url)
+            if not response or response.status_code != 200 or not response.content:
+                return None
+            temporary_path = output_path.with_suffix(f"{output_path.suffix}.part")
+            temporary_path.write_bytes(response.content)
+            temporary_path.replace(output_path)
+            meta_path.write_text(cache_key, encoding="utf-8")
+            return output_path
+        except Exception as error:
+            logger.warning("写入预览素材缓存失败 %s: %s", output_path, error)
+            return None
+
+    def __cache_preview_server_images(self, service, library_name: str, items: List[Dict[str, Any]]):
+        candidates: List[Tuple[int, Dict[str, Any], str, Path]] = []
+        cache_dir = self.__preview_cache_root() / self.__sanitize_filename(library_name)
+        for index, item in enumerate(items, start=1):
+            image_url = self.__get_image_url(item)
+            if not image_url:
+                continue
+            candidates.append((
+                index,
+                item,
+                self.__preview_image_request_url(image_url),
+                cache_dir / f"{index:02d}.jpg",
+            ))
+        if not candidates:
+            return []
+
+        cached_paths: Dict[int, Path] = {}
+        # MoviePilot media-server clients are less tolerant of broad concurrent access
+        # than httpx. Two workers retain a noticeable speed-up and a sequential retry
+        # makes manual refresh reliable on stricter Emby/Jellyfin deployments.
+        with ThreadPoolExecutor(max_workers=min(2, len(candidates))) as executor:
+            futures = {
+                executor.submit(self.__download_preview_image_to_cache, service, image_url, target): index
+                for index, _, image_url, target in candidates
+            }
+            for future in as_completed(futures):
+                index = futures[future]
+                try:
+                    path = future.result()
+                except Exception as error:
+                    logger.warning("下载预览素材失败: %s", error)
+                    continue
+                if path:
+                    cached_paths[index] = path
+        for index, _, image_url, target in candidates:
+            if index in cached_paths:
+                continue
+            path = self.__download_preview_image_to_cache(service, image_url, target)
+            if path:
+                cached_paths[index] = path
+
+        entries: List[Dict[str, Any]] = []
+        for index, item, _, _ in candidates:
+            path = cached_paths.get(index)
+            if not path:
+                continue
+            src = self.__build_local_preview_image_data_url(str(path))
+            if src:
+                entries.append({
+                    "src": src,
+                    "label": item.get("Name") or item.get("SeriesName") or item.get("Album") or "",
+                })
+        return entries
 
     def __collect_regular_preview_items(self, service, parent_id, required_items):
         items = []
@@ -4741,7 +4838,7 @@ class YahahaCoverStudio(_PluginBase):
             candidates.append((index, item, preview_url))
 
         sources: Dict[int, str] = {}
-        max_workers = min(4, len(candidates))
+        max_workers = min(2, len(candidates))
         if max_workers:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {
@@ -4757,6 +4854,16 @@ class YahahaCoverStudio(_PluginBase):
                         continue
                     if src:
                         sources[index] = src
+
+        # Some MoviePilot media-server adapters share mutable request state. Retry any
+        # missed candidates serially so the refresh control remains reliable even when
+        # a server rejects concurrent image reads.
+        for index, _, image_url in candidates:
+            if index in sources:
+                continue
+            src = self.__download_preview_image_data_url(service, image_url)
+            if src:
+                sources[index] = src
 
         entries: List[Dict[str, Any]] = []
         for index, item, _ in candidates:

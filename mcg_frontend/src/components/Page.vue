@@ -3207,20 +3207,23 @@ async function loadPreviewSources(requiredItems?: number, forceRefresh = false):
     const resp = await props.api.get<{ code: number; data?: PreviewSourcePayload; msg?: string }>(`plugin/YahahaCoverStudio/preview_sources${suffix}`)
     if (!componentActive) return false
     if (requestId !== previewSourceRequestId) return true
-    if (resp && resp.code === 0 && resp.data?.images?.length) {
-      previewSource.value = {
-        ...resp.data,
-        custom_static_layout: resp.data.custom_static_layout ? cloneLayout(resp.data.custom_static_layout) : resp.data.custom_static_layout,
+    if (resp?.code === 0) {
+      if (resp.data?.images?.length) {
+        previewSource.value = {
+          ...resp.data,
+          custom_static_layout: resp.data.custom_static_layout ? cloneLayout(resp.data.custom_static_layout) : resp.data.custom_static_layout,
+        }
+        if (requestId !== previewSourceRequestId) return true
+        await setPreviewCache(baseKey, Math.max(capacity, previewSource.value.images.length), previewSource.value)
       }
-      if (requestId !== previewSourceRequestId) return true
-      await setPreviewCache(baseKey, Math.max(capacity, previewSource.value.images.length), previewSource.value)
+      // A successful forced refresh can retain the existing artwork when no newer
+      // candidate is available; do not report that successful request as a failure.
       return true
-    } else {
-      if (resp && resp.code !== 0) {
-        console.error('load preview sources failed', resp.msg || resp)
-      }
-      return false
     }
+    if (resp) {
+      console.error('load preview sources failed', resp.msg || resp)
+    }
+    return false
   } catch (e) {
     console.error('loadPreviewSources failed', e)
     return false
