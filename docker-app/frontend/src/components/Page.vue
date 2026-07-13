@@ -829,10 +829,9 @@
       <v-card v-if="selectedHistorySnapshot" class="mcr-history-snapshot" :data-mcr-theme="isDark ? 'dark' : 'light'">
         <header class="mcr-history-snapshot__header"><div><span>History</span><h3>此时的封面</h3><p>{{ selectedHistorySnapshot.fullTitle }}</p></div><v-btn icon="mdi-close" variant="text" aria-label="关闭" @click="historySnapshotDialog = false" /></header>
         <div class="mcr-history-snapshot__grid">
-          <article v-for="item in selectedHistorySnapshot.items" :key="item.path" class="mcr-history-snapshot__item">
+          <article v-for="item in selectedHistorySnapshot.items" :key="item.path" class="mcr-history-snapshot__item" :class="{ 'is-selected': selectedHistoryPaths.includes(item.path) }" role="checkbox" :aria-checked="selectedHistoryPaths.includes(item.path)" tabindex="0" @click="toggleHistorySelection(item)" @keydown.enter.prevent="toggleHistorySelection(item)" @keydown.space.prevent="toggleHistorySelection(item)">
             <img :src="item.src || item.url || ''" :alt="item.library || item.name" loading="lazy">
-            <div><strong>{{ item.library || item.name }}</strong><span>{{ item.server || '未知服务器' }}</span><small>{{ item.uploaded === false ? '上传失败' : '已生成并保存' }}</small></div>
-            <button type="button" class="mcr-history-snapshot__check" :class="{ 'is-active': selectedHistoryPaths.includes(item.path) }" :aria-pressed="selectedHistoryPaths.includes(item.path)" @click="toggleHistorySelection(item)"><v-icon :icon="selectedHistoryPaths.includes(item.path) ? 'mdi-check' : 'mdi-plus'" size="16" /></button>
+            <div class="mcr-history-snapshot__labels"><span :title="item.library || item.name">{{ item.library || item.name }}</span><span :title="item.server || '未知服务器'">{{ item.server || '未知服务器' }}</span></div>
           </article>
         </div>
         <footer v-if="selectedHistoryPaths.length" class="mcr-history-snapshot__footer"><span>已选择 {{ selectedHistoryPaths.length }} 项</span><v-btn class="mcr-button mcr-button--ghost" @click="downloadSelectedCoversDirect">下载</v-btn><v-btn class="mcr-button mcr-button--primary" prepend-icon="mdi-history" :loading="restoringBatchId === selectedHistorySnapshot.key" @click="restoreHistoryBatch(selectedHistorySnapshot.key, selectedHistorySnapshot.title)">应用到服务器</v-btn><v-btn class="mcr-button mcr-button--danger" @click="deleteSelectedCovers">删除</v-btn></footer>
@@ -9276,12 +9275,13 @@ onBeforeUnmount(() => {
   }
 }
 
-.mcr-time-machine-timeline { position: fixed; top: 50%; right: 18px; z-index: 26; display: grid; gap: 6px; max-height: 68vh; padding: 10px 0; overflow-y: auto; border: 0; background: transparent; box-shadow: none; transform: translateY(-50%); }
-.mcr-time-machine-node { position: relative; min-height: 30px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 11px; cursor: pointer; }
-.mcr-time-machine-node i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; transition: transform 180ms ease, background-color 180ms ease; }
+.mcr-time-machine-timeline { position: fixed; top: 50%; right: clamp(28px, 4vw, 72px); z-index: 2147483000; display: grid; gap: 10px; max-height: 70vh; padding: 14px 0 14px 18px; overflow-y: auto; border: 0; background: transparent; box-shadow: none; transform: translateY(-50%); }
+.mcr-time-machine-node { position: relative; min-height: 36px; display: flex; align-items: center; justify-content: flex-end; gap: 11px; padding: 0; border: 0; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.mcr-time-machine-node::after { content: ''; position: absolute; right: 5px; top: calc(50% + 8px); width: 1px; height: 24px; background: color-mix(in srgb, var(--color-border) 76%, transparent); }.mcr-time-machine-node:last-child::after { display: none; }
+.mcr-time-machine-node i { width: 8px; height: 8px; border: 2px solid var(--color-surface); border-radius: 50%; background: currentColor; box-shadow: 0 0 0 1px var(--color-border); transition: transform 180ms ease, background-color 180ms ease; }
 .mcr-time-machine-node.is-active { color: var(--color-primary); font-weight: 800; }
-.mcr-time-machine-node.is-active i { transform: scale(1.55); }
-.mcr-time-machine-restore { padding: 7px 10px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-primary); box-shadow: 0 6px 16px var(--color-shadow); }
+.mcr-time-machine-node.is-active i { transform: scale(1.55); box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent); }.mcr-time-machine-node.is-active > span:last-child { color: var(--color-text-main); }
+.mcr-time-machine-restore { padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-primary-soft) 72%, var(--color-surface)); color: var(--color-primary); box-shadow: 0 8px 20px var(--color-shadow); font-size: 12px; font-weight: 800; transition: transform 180ms ease, background 180ms ease; }.mcr-time-machine-restore:hover { transform: translateX(-2px); background: var(--color-primary-soft); }
 .mcr-history-group--time-machine { scroll-margin-top: 110px; margin-bottom: -18px; opacity: var(--mcr-time-opacity, .82); transform: translateY(var(--mcr-time-shift, 0)) scale(var(--mcr-time-scale, .97)); transform-origin: center; transition: opacity 190ms ease, transform 190ms ease, filter 190ms ease; }
 .mcr-history-group--time-machine.is-active { opacity: 1; transform: translateY(0) scale(1); filter: drop-shadow(0 14px 22px color-mix(in srgb, var(--color-shadow) 70%, transparent)); }
 .mcr-history-groups:has(.mcr-history-group--time-machine) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 760px) minmax(96px, 13vw); }
@@ -9301,11 +9301,9 @@ onBeforeUnmount(() => {
 .mcr-history-snapshot__header h3 { margin: 2px 0 0; font-size: 26px; }
 .mcr-history-snapshot__header p { margin: 3px 0 0; color: var(--color-text-muted); }
 .mcr-history-snapshot__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; max-height: 58vh; padding: 18px 24px; overflow: auto; }
-.mcr-history-snapshot__item { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-soft); }
+.mcr-history-snapshot__item { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-surface-soft); cursor: pointer; transition: border-color 180ms ease, background 180ms ease, transform 180ms ease; }.mcr-history-snapshot__item:hover,.mcr-history-snapshot__item:focus-visible { border-color: var(--color-primary); transform: translateY(-1px); outline: none; }.mcr-history-snapshot__item.is-selected { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .mcr-history-snapshot__item img { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; object-fit: cover; }
-.mcr-history-snapshot__item div { min-width: 0; display: grid; }
-.mcr-history-snapshot__item strong, .mcr-history-snapshot__item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mcr-history-snapshot__item span, .mcr-history-snapshot__item small { color: var(--color-text-muted); }
+.mcr-history-snapshot__labels { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: 12px; }.mcr-history-snapshot__labels span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.mcr-history-snapshot__labels span:first-child { color: var(--color-text-secondary); font-weight: 700; }.mcr-history-snapshot__labels span + span::before { content: '·'; margin-right: 6px; color: var(--color-text-muted); }
 .mcr-history-snapshot__check { width: 30px; height: 30px; display: grid; place-items: center; align-self: start; border: 1px solid var(--color-border); border-radius: 9px; color: var(--color-text-muted); background: transparent; }.mcr-history-snapshot__check.is-active { color: white; background: var(--color-primary); border-color: var(--color-primary); }
 .mcr-history-snapshot__footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 14px 24px 20px; border-top: 1px solid var(--color-border); }.mcr-history-snapshot__footer > span { margin-right: auto; color: var(--color-text-muted); font-size: 13px; }
 @media (max-width: 900px) { .mcr-history-snapshot__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

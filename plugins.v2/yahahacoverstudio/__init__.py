@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.3"
+    plugin_version = "2.0.4"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -7207,6 +7207,7 @@ class YahahaCoverStudio(_PluginBase):
         result.append(data_path / "covers")
         default_output = data_path / "output"
         result.append(default_output)
+        result.append(data_path / "history" / "batches")
         result.append(data_path / "stickers")
         if self._font_path:
             result.append(Path(self._font_path))

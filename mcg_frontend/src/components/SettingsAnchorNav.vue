@@ -29,7 +29,7 @@ onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); wi
 </script>
 
 <style scoped>
-.yh-settings-anchor { position: fixed; top: 50%; z-index: 28; width: 36px; height: max-content; margin: 0; padding: 4px 0; background: transparent; transform: translateY(-50%); }
+.yh-settings-anchor { position: fixed; top: 50%; z-index: 2147483000; width: 36px; height: max-content; margin: 0; padding: 4px 0; background: transparent; pointer-events: auto; transform: translateY(-50%); }
 .yh-settings-anchor__button { width: 34px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .yh-settings-anchor__line { width: 16px; height: 2px; border-radius: 999px; background: rgba(60,60,67,.25); transition: width 180ms ease, opacity 180ms ease, background-color 180ms ease, transform 180ms ease; }
 .yh-settings-anchor__button:hover .yh-settings-anchor__line, .yh-settings-anchor__button:focus-visible .yh-settings-anchor__line { width: 24px; background: rgba(60,60,67,.55); }
