@@ -1200,7 +1200,7 @@ import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
 import { formatDateTime, formatTimelineTime } from '../utils/dateTime'
-import { getHistoryCache, getPreviewCache, setHistoryCache, setPreviewCache, stableCacheSignature } from '../services/contentCache'
+import { getHistoryCache, getPreviewCache, invalidatePreviewCache, setHistoryCache, setPreviewCache, stableCacheSignature } from '../services/contentCache'
 import { images } from '../assets/base64/images.js'
 import {
   cloneLayout,
@@ -3268,6 +3268,9 @@ async function refreshCurrentPreview() {
   if (shouldBlockLockedAction()) return
   refreshingPreview.value = true
   try {
+    // Clear the browser-side record before asking the server to drop its media cache.
+    // Otherwise a failed request could silently leave the previous cached artwork on screen.
+    await invalidatePreviewCache(previewRequestBaseKey())
     await loadPreviewSources(undefined, true)
     if (previewMode.value === 'backend') {
       await loadBackendPreview()

@@ -1,7 +1,9 @@
 const DB_NAME = 'yahaha-cover-studio-cache'
 const DB_VERSION = 1
 const STORE_NAME = 'entries'
-export const PREVIEW_CACHE_SCHEMA = 1
+// Increment when a backend refresh changes the source image contract. This prevents
+// stale preview records from surviving an application update.
+export const PREVIEW_CACHE_SCHEMA = 2
 export const HISTORY_CACHE_SCHEMA = 1
 const PREVIEW_MAX_ENTRIES = 30
 const HISTORY_MAX_ENTRIES = 8

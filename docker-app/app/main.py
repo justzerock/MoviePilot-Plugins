@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.5")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.6")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1015,17 +1015,17 @@ async def plugin_clean_images():
     config = load_config()
     removed = 0
     skipped: list[str] = []
-    output_dir = resolve_cleanable_data_dir(config.get("covers_output") or "/app/data/output")
-    if output_dir:
-        removed += clean_directory_contents(output_dir)
-    else:
-        skipped.append("covers_output")
+    # Generated covers and history are user output, not disposable source cache.
+    # Only clear server-downloaded material. Local mode deliberately keeps its input files.
+    media_cache_dir = DATA_DIR / "tmp" / "media_cache"
+    if media_cache_dir.exists():
+        removed += clean_directory_contents(media_cache_dir)
     input_dir = resolve_cleanable_data_dir(config.get("covers_input") or "/app/data/input")
-    if input_dir and input_dir.resolve() == (DATA_DIR / "input").resolve():
+    if input_dir and input_dir.resolve() == (DATA_DIR / "input").resolve() and not config.get("local_mode", False) and not config.get("mock_enabled", False):
         removed += clean_directory_contents(input_dir)
     elif input_dir:
-        skipped.append("covers_input_custom")
-    return ok({"cleaned": True, "removed": removed, "skipped": skipped})
+        skipped.append("covers_input_local_or_custom")
+    return ok({"cleaned": True, "removed": removed, "skipped": skipped, "msg": "已清理媒体素材缓存，生成封面和历史记录已保留"})
 
 
 @app.post("/api/plugin/MediaCoverGenerator/clean_fonts")
@@ -2286,6 +2286,11 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                 server = client.server_name
                 library = media_library.name
                 cache_dir = input_dir / slugify(media_library.name)
+                if force_refresh and input_is_default and cache_dir.exists():
+                    # `input/<library>` is the legacy server material cache in server mode.
+                    # Removing it before downloading makes a refresh deterministic instead of
+                    # relying on the old numbered files and their browser cache entries.
+                    shutil.rmtree(cache_dir)
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 items = await client.get_items(
                     media_library.id,
@@ -2308,7 +2313,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                 source_mode = "media_server" if images else "cache"
             except Exception:
                 images = []
-        if not images:
+        if not images and not (force_refresh and input_is_default):
             images = service.local_images("", limit, include_mock=False)
             server = "local"
             source_mode = ("cache" if input_is_default else "custom") if images else "media_server"

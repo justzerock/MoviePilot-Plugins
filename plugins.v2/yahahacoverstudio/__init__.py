@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.5"
+    plugin_version = "2.0.6"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4073,6 +4073,10 @@ class YahahaCoverStudio(_PluginBase):
                 config_bg_color = preview_target["config_bg_color"]
                 custom_texts = self.__get_custom_texts_from_config(library_name, service.name)
                 force = str(force_refresh).strip().lower() in {"1", "true", "yes", "on"}
+                if force and not preview_target.get("custom_images"):
+                    cleared = self.__clear_preview_cache_for_library(library_name)
+                    if cleared:
+                        logger.info("【YahahaCoverStudio】已清理预览素材缓存: %s：%s", service.name, library_name)
                 source_mode, images = self.__resolve_preview_source_images(
                     preview_target,
                     required_items=self.__get_preview_required_items(required_items),
@@ -4515,6 +4519,33 @@ class YahahaCoverStudio(_PluginBase):
                     "images": images,
                 }
         return None
+
+    def __clear_preview_cache_for_library(self, library_name: str) -> int:
+        """Remove only this library's downloaded material cache, never user custom images."""
+        removed = 0
+        cache_roots: List[Path] = []
+        if self._covers_path:
+            cache_roots.append(Path(self._covers_path))
+        cache_roots.append(self.get_data_path() / "covers")
+        seen = set()
+        safe_name = self.__sanitize_filename(library_name)
+        for root_dir in cache_roots:
+            try:
+                root = Path(root_dir).expanduser().resolve()
+            except Exception:
+                continue
+            if str(root) in seen:
+                continue
+            seen.add(str(root))
+            target = root / safe_name
+            if not target.exists() or not target.is_dir():
+                continue
+            try:
+                shutil.rmtree(target)
+                removed += 1
+            except Exception as error:
+                logger.warning("清理预览素材缓存失败 %s: %s", target, error)
+        return removed
 
     def __build_local_preview_source_images(self, image_paths: Optional[List[str]], source_mode: str, required_items: Optional[int] = None):
         required_items = required_items or self.__get_required_items()
