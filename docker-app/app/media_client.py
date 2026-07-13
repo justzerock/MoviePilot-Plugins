@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import base64
 import mimetypes
@@ -144,27 +145,40 @@ class MediaServerClient:
         })
         return dict(data) if isinstance(data, dict) else {}
 
-    def item_image_url(self, item: dict[str, Any], image_source: str = "backdrop") -> str:
+    def item_image_url(
+        self,
+        item: dict[str, Any],
+        image_source: str = "backdrop",
+        *,
+        max_width: int | None = None,
+        max_height: int | None = None,
+        quality: int | None = None,
+    ) -> str:
         item_id = str(item.get("Id") or "")
+        image_params = {
+            "maxWidth": max_width,
+            "maxHeight": max_height,
+            "quality": quality,
+        }
         if image_source == "poster":
             tag = item.get("PrimaryImageTag") or (item.get("ImageTags") or {}).get("Primary")
             image_id = item.get("PrimaryImageItemId") or item_id
             if tag and image_id:
-                return self._url(f"Items/{image_id}/Images/Primary", {"tag": tag})
+                return self._url(f"Items/{image_id}/Images/Primary", {"tag": tag, **image_params})
 
         backdrop_tags = item.get("BackdropImageTags") or []
         if backdrop_tags and item_id:
-            return self._url(f"Items/{item_id}/Images/Backdrop/0", {"tag": backdrop_tags[0]})
+            return self._url(f"Items/{item_id}/Images/Backdrop/0", {"tag": backdrop_tags[0], **image_params})
 
         parent_tags = item.get("ParentBackdropImageTags") or []
         parent_id = item.get("ParentBackdropItemId")
         if parent_tags and parent_id:
-            return self._url(f"Items/{parent_id}/Images/Backdrop/0", {"tag": parent_tags[0]})
+            return self._url(f"Items/{parent_id}/Images/Backdrop/0", {"tag": parent_tags[0], **image_params})
 
         tag = item.get("PrimaryImageTag") or (item.get("ImageTags") or {}).get("Primary")
         image_id = item.get("PrimaryImageItemId") or item_id
         if tag and image_id:
-            return self._url(f"Items/{image_id}/Images/Primary", {"tag": tag})
+            return self._url(f"Items/{image_id}/Images/Primary", {"tag": tag, **image_params})
         return ""
 
     async def download_image(self, image_url: str, output_path: Path) -> Path:
@@ -184,6 +198,43 @@ class MediaServerClient:
                 output_path = output_path.with_suffix(suffix)
             output_path.write_bytes(response.content)
         return output_path
+
+    async def download_images(
+        self,
+        jobs: list[tuple[str, Path]],
+        *,
+        concurrency: int = 4,
+    ) -> list[Path | None]:
+        """Download preview artwork through a small shared connection pool."""
+        if not jobs:
+            return []
+        limit = max(1, min(int(concurrency or 1), len(jobs)))
+        semaphore = asyncio.Semaphore(limit)
+        limits = httpx.Limits(max_connections=limit, max_keepalive_connections=limit)
+
+        async with httpx.AsyncClient(timeout=self.timeout, limits=limits) as client:
+            async def download_one(image_url: str, output_path: Path) -> Path | None:
+                try:
+                    async with semaphore:
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        response = await client.get(image_url)
+                        response.raise_for_status()
+                    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                    suffix = {
+                        "image/jpeg": ".jpg",
+                        "image/jpg": ".jpg",
+                        "image/png": ".png",
+                        "image/webp": ".webp",
+                        "image/gif": ".gif",
+                    }.get(content_type)
+                    if suffix and output_path.suffix.lower() != suffix:
+                        output_path = output_path.with_suffix(suffix)
+                    output_path.write_bytes(response.content)
+                    return output_path
+                except (httpx.HTTPError, OSError):
+                    return None
+
+            return list(await asyncio.gather(*(download_one(url, path) for url, path in jobs)))
 
     async def upload_library_cover(self, library_id: str, image_path: Path) -> dict[str, Any]:
         content_type = media_image_mime_type(image_path)

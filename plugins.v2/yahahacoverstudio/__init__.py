@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.7"
+    plugin_version = "2.0.8"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4729,16 +4729,42 @@ class YahahaCoverStudio(_PluginBase):
         return valid_items
 
     def __build_preview_image_entries(self, service, items):
-        entries: List[Dict[str, Any]] = []
-        for item in items:
+        candidates: List[Tuple[int, Dict[str, Any], str]] = []
+        for index, item in enumerate(items):
             image_url = self.__get_image_url(item)
             if not image_url:
                 continue
+            delimiter = '&' if '?' in image_url else '?'
+            # Both Emby and Jellyfin implement these ImageService query parameters.
+            # The MoviePilot proxy still returns a data URL for authenticated browsers.
+            preview_url = f"{image_url}{delimiter}maxWidth=960&maxHeight=540&quality=82"
+            candidates.append((index, item, preview_url))
+
+        sources: Dict[int, str] = {}
+        max_workers = min(4, len(candidates))
+        if max_workers:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(self.__download_preview_image_data_url, service, image_url): index
+                    for index, _, image_url in candidates
+                }
+                for future in as_completed(futures):
+                    index = futures[future]
+                    try:
+                        src = future.result()
+                    except Exception as err:
+                        logger.warning(f"下载预览素材失败: {err}")
+                        continue
+                    if src:
+                        sources[index] = src
+
+        entries: List[Dict[str, Any]] = []
+        for index, item, _ in candidates:
             # The MoviePilot page can authenticate API calls but a browser <img> cannot
             # reliably send the media-server credentials. Always proxy preview artwork
             # through the plugin and return a data URL so a forced refresh never leaves
             # an unauthenticated server URL behind as a broken-image placeholder.
-            src = self.__download_preview_image_data_url(service, image_url)
+            src = sources.get(index)
             if not src:
                 continue
             entries.append({

@@ -35,11 +35,12 @@
         "name": "呀哈哈封面工坊",
         "description": "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
         "labels": "海报,可编辑画布,封面,Emby,Jellyfin,动态",
-        "version": "2.0.7",
+        "version": "2.0.8",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png",
         "author": "呀哈哈",
         "level": 1,
         "history": {
+            "v2.0.8": "优化 Emby/Jellyfin 预览海报刷新：服务端缩放、连接复用与并发下载。",
             "v2.0.7": "修复刷新后插件预览海报破图，并统一双端刷新成功/失败提示。",
             "v2.0.6": "修复双端封面素材缓存刷新：刷新会强制重新拉取服务器素材，清理缓存不再删除生成封面。",
             "v2.0.5": "修复插件历史缩略图认证，优化时光机浮动操作与窄窗口导航。",

@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.7")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.8")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2298,18 +2298,23 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                     str(style_config.get("sort_by") or config.get("sort_by") or "DateCreated"),
                 )
                 image_source = str(style_config.get("image_source") or "backdrop")
-                downloaded: list[Path] = []
+                download_jobs: list[tuple[str, Path]] = []
                 for index, item in enumerate(items):
-                    image_url = client.item_image_url(item, image_source)
+                    # Emby/Jellyfin resize preview assets server-side. Final rendering still
+                    # uses the original source images and is unaffected by this limit.
+                    image_url = client.item_image_url(
+                        item,
+                        image_source,
+                        max_width=960,
+                        max_height=540,
+                        quality=82,
+                    )
                     if not image_url:
                         continue
-                    try:
-                        downloaded.append(await client.download_image(image_url, cache_dir / f"{index + 1:02d}.jpg"))
-                    except Exception:
-                        continue
-                    if len(downloaded) >= limit:
+                    download_jobs.append((image_url, cache_dir / f"{index + 1:02d}.jpg"))
+                    if len(download_jobs) >= limit:
                         break
-                images = downloaded
+                images = [path for path in await client.download_images(download_jobs, concurrency=4) if path]
                 source_mode = "media_server" if images else "cache"
             except Exception:
                 images = []
