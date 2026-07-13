@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.6"
+    plugin_version = "2.0.7"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4734,10 +4734,11 @@ class YahahaCoverStudio(_PluginBase):
             image_url = self.__get_image_url(item)
             if not image_url:
                 continue
-            if '[HOST]' in image_url:
-                src = self.__download_preview_image_data_url(service, image_url)
-            else:
-                src = image_url
+            # The MoviePilot page can authenticate API calls but a browser <img> cannot
+            # reliably send the media-server credentials. Always proxy preview artwork
+            # through the plugin and return a data URL so a forced refresh never leaves
+            # an unauthenticated server URL behind as a broken-image placeholder.
+            src = self.__download_preview_image_data_url(service, image_url)
             if not src:
                 continue
             entries.append({
@@ -4748,9 +4749,15 @@ class YahahaCoverStudio(_PluginBase):
 
     def __download_preview_image_data_url(self, service, image_url: str) -> str:
         try:
-            if not service:
-                return ""
-            response = service.instance.get_data(url=image_url)
+            if '[HOST]' in image_url:
+                if not service:
+                    return ""
+                response = service.instance.get_data(url=image_url)
+            else:
+                response = RequestUtils(
+                    headers={'User-Agent': 'MoviePilot-YahahaCoverStudio/1.0'},
+                    timeout=30,
+                ).get_res(url=image_url)
             if not response or response.status_code != 200:
                 return ""
             content = response.content
@@ -4759,6 +4766,7 @@ class YahahaCoverStudio(_PluginBase):
             content_type = response.headers.get("content-type") if hasattr(response, "headers") else None
             if not content_type:
                 content_type = "image/jpeg"
+            content_type = str(content_type).split(";", 1)[0].strip().lower() or "image/jpeg"
             encoded = base64.b64encode(content).decode("utf-8")
             return f"data:{content_type};base64,{encoded}"
         except Exception as e:

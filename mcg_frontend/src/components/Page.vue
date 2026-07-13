@@ -3183,20 +3183,20 @@ async function loadHistory() {
   }
 }
 
-async function loadPreviewSources(requiredItems?: number, forceRefresh = false) {
-  if (!componentActive) return
+async function loadPreviewSources(requiredItems?: number, forceRefresh = false): Promise<boolean> {
+  if (!componentActive) return false
   if (isGenerating.value) {
     previewSourcesLoading.value = false
-    return
+    return false
   }
   const capacity = Math.max(1, Number(requiredItems) || 9)
   const baseKey = previewRequestBaseKey()
   const requestId = ++previewSourceRequestId
   if (!forceRefresh) {
     const cached = await getPreviewCache<PreviewSourcePayload>(baseKey, capacity)
-    if (cached?.images?.length) {
-      previewSource.value = cached
-      return
+      if (cached?.images?.length) {
+        previewSource.value = cached
+        return true
     }
   }
   previewSourcesLoading.value = !previewSource.value?.images?.length
@@ -3205,24 +3205,25 @@ async function loadPreviewSources(requiredItems?: number, forceRefresh = false) 
     if (forceRefresh) query.set('force_refresh', 'true')
     const suffix = `?${query}`
     const resp = await props.api.get<{ code: number; data?: PreviewSourcePayload; msg?: string }>(`plugin/YahahaCoverStudio/preview_sources${suffix}`)
-    if (!componentActive || requestId !== previewSourceRequestId) return
-    if (resp && resp.code === 0 && resp.data) {
+    if (!componentActive) return false
+    if (requestId !== previewSourceRequestId) return true
+    if (resp && resp.code === 0 && resp.data?.images?.length) {
       previewSource.value = {
         ...resp.data,
         custom_static_layout: resp.data.custom_static_layout ? cloneLayout(resp.data.custom_static_layout) : resp.data.custom_static_layout,
       }
-      if (requestId !== previewSourceRequestId) return
+      if (requestId !== previewSourceRequestId) return true
       await setPreviewCache(baseKey, Math.max(capacity, previewSource.value.images.length), previewSource.value)
-      if (forceRefresh) showEditorSaveStatus('海报已刷新')
+      return true
     } else {
-      if (forceRefresh) showEditorSaveStatus('刷新失败，继续使用当前海报')
       if (resp && resp.code !== 0) {
         console.error('load preview sources failed', resp.msg || resp)
       }
+      return false
     }
   } catch (e) {
-    if (forceRefresh) showEditorSaveStatus('刷新失败，继续使用当前海报')
     console.error('loadPreviewSources failed', e)
+    return false
   } finally {
     if (componentActive) {
       if (requestId === previewSourceRequestId) previewSourcesLoading.value = false
@@ -3270,7 +3271,8 @@ async function refreshCurrentPreview() {
     // Clear the browser-side record before asking the server to drop its media cache.
     // Otherwise a failed request could silently leave the previous cached artwork on screen.
     await invalidatePreviewCache(previewRequestBaseKey())
-    await loadPreviewSources(undefined, true)
+    const refreshed = await loadPreviewSources(undefined, true)
+    showEditorSaveStatus(refreshed ? '海报已刷新' : '刷新失败，继续使用当前海报')
     if (previewMode.value === 'backend') {
       await loadBackendPreview()
     }
