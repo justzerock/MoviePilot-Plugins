@@ -1,9 +1,9 @@
-import { importShared } from './__federation_fn_import-ui-rev-20260714-02.js';
-import { _ as _export_sfc } from './_plugin-vue_export-helper-ui-rev-20260714-02.js';
-import { B as BUILTIN_FONT_ITEMS, M as MCR_CONTROL_DEFAULTS, b as BlueprintField, c as BlueprintSelect, A as AsyncStatusDots, V as ViewportSaveToast, a as getTemplateFontFaceName } from './ViewportSaveToast-ui-rev-20260714-02.js';
+import { importShared } from './__federation_fn_import-ui-rev-20260714-03.js';
+import { _ as _export_sfc } from './_plugin-vue_export-helper-ui-rev-20260714-03.js';
+import { B as BUILTIN_FONT_ITEMS, M as MCR_CONTROL_DEFAULTS, b as BlueprintField, c as BlueprintSelect, A as AsyncStatusDots, V as ViewportSaveToast, a as getTemplateFontFaceName } from './ViewportSaveToast-ui-rev-20260714-03.js';
 
-const UI_REV = "20260714-02";
-const PROGRAM_VERSION = "2.0.12";
+const UI_REV = "20260714-03";
+const PROGRAM_VERSION = "2.0.13";
 
 const {defineComponent:_defineComponent$1} = await importShared('vue');
 

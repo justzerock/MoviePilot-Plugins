@@ -1,5 +1,5 @@
-import { importShared } from './__federation_fn_import-ui-rev-20260714-02.js';
-import { _ as _export_sfc } from './_plugin-vue_export-helper-ui-rev-20260714-02.js';
+import { importShared } from './__federation_fn_import-ui-rev-20260714-03.js';
+import { _ as _export_sfc } from './_plugin-vue_export-helper-ui-rev-20260714-03.js';
 
 const MCR_CONTROL_DEFAULTS = {
   VTextField: {

@@ -176,8 +176,19 @@
                     </div>
                     <v-tooltip v-if="!isEditingLayout" text="重新获取海报">
                       <template #activator="{ props: tooltipProps }">
-                        <button v-bind="tooltipProps" type="button" class="mcr-preview-refresh" :class="{ 'is-loading': refreshingPreview }" aria-label="重新获取海报" :disabled="refreshingPreview || controlsLocked" @click="refreshCurrentPreview">
-                          <v-icon icon="mdi-refresh" size="22" />
+                        <button
+                          v-bind="tooltipProps"
+                          type="button"
+                          class="mcr-preview-refresh"
+                          :class="{ 'is-loading': refreshingPreview }"
+                          :aria-label="refreshingPreview ? '正在重新获取海报' : '重新获取海报'"
+                          :aria-busy="refreshingPreview"
+                          :disabled="refreshingPreview || controlsLocked"
+                          @click="refreshCurrentPreview"
+                        >
+                          <span class="mcr-preview-refresh__icon" aria-hidden="true">
+                            <v-icon icon="mdi-refresh" size="22" />
+                          </span>
                         </button>
                       </template>
                     </v-tooltip>
@@ -4276,6 +4287,7 @@ onBeforeUnmount(() => {
 }
 
 .mcr-preview-refresh {
+  position: relative;
   display: inline-grid;
   width: 42px;
   height: 42px;
@@ -4285,12 +4297,32 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   color: var(--color-text-secondary);
   background: var(--color-surface-soft);
-  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition: color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .mcr-preview-refresh:hover:not(:disabled) { color: var(--color-primary); background: var(--color-primary-soft); }
-.mcr-preview-refresh:disabled { opacity: 0.55; }
-.mcr-preview-refresh.is-loading .v-icon { animation: mcr-preview-refresh-spin 700ms linear infinite; }
+.mcr-preview-refresh:disabled { opacity: 0.72; }
+.mcr-preview-refresh__icon {
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+}
+.mcr-preview-refresh.is-loading {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  cursor: progress;
+}
+.mcr-preview-refresh.is-loading .mcr-preview-refresh__icon { animation: mcr-preview-refresh-spin 760ms linear infinite; }
+.mcr-preview-refresh.is-loading::after {
+  position: absolute;
+  inset: 4px;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  border-top-color: var(--color-primary);
+  border-radius: inherit;
+  content: '';
+  animation: mcr-preview-refresh-spin 920ms linear infinite reverse;
+}
 @keyframes mcr-preview-refresh-spin { to { transform: rotate(360deg); } }
 
 .blueprint-hero-actions {

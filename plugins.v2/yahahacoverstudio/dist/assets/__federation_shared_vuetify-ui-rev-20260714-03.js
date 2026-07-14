@@ -1,4 +1,4 @@
-import { importShared } from './__federation_fn_import-ui-rev-20260714-02.js';
+import { importShared } from './__federation_fn_import-ui-rev-20260714-03.js';
 
 /* eslint-disable no-console */
 
