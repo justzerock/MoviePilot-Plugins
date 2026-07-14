@@ -56,6 +56,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "main_title_font_custom": "",
     "subtitle_font_custom": "",
     "custom_text_font_custom": "",
+    "preview_font_enabled": True,
+    "font_subset_enabled": True,
+    "library_scheme_rules": [],
+    "default_scheme_id": "",
     "animation_duration": 8,
     "animation_scroll": "alternate",
     "animation_fps": 24,
@@ -98,6 +102,8 @@ def ensure_data_dirs() -> None:
     for path in (
         DATA_DIR,
         DATA_DIR / "fonts",
+        DATA_DIR / "fonts" / "originals",
+        DATA_DIR / "fonts" / "subsets",
         DATA_DIR / "input",
         DATA_DIR / "output",
         DATA_DIR / "stickers",
@@ -214,6 +220,23 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         config["log_retention_days"] = 7
     config["history_enabled"] = bool(config.get("history_enabled", config.get("save_recent_covers", True)))
+    config["preview_font_enabled"] = bool(config.get("preview_font_enabled", True))
+    config["font_subset_enabled"] = bool(config.get("font_subset_enabled", True))
+    legacy_scheme = str((config.get("style_config") or {}).get("style") or "single_1")
+    config["default_scheme_id"] = str(config.get("default_scheme_id") or legacy_scheme)
+    rules: list[dict[str, Any]] = []
+    seen_libraries: set[str] = set()
+    for raw in config.get("library_scheme_rules") or []:
+        if not isinstance(raw, dict):
+            continue
+        scheme_id = str(raw.get("scheme_id") or "").strip()
+        keys = [str(item).strip() for item in (raw.get("library_keys") or []) if str(item).strip()]
+        keys = [item for item in keys if item not in seen_libraries]
+        if not scheme_id or not keys:
+            continue
+        seen_libraries.update(keys)
+        rules.append({"id": str(raw.get("id") or secrets.token_hex(6)), "scheme_id": scheme_id, "library_keys": keys})
+    config["library_scheme_rules"] = rules
     try:
         config["history_retention_batches"] = max(1, min(1000, int(config.get("history_retention_batches") or 30)))
     except (TypeError, ValueError):

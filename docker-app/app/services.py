@@ -12,6 +12,7 @@ from .media_client import MediaLibrary, MediaServerClient, configured_clients
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .run_logs import APP_LOGGER
 from .history_store import HistoryBatch, HistoryStore
+from .font_preview import PreviewFontService
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -202,6 +203,7 @@ class CoverService:
     def __init__(self) -> None:
         self.config = load_config()
         self.history_batch: HistoryBatch | None = None
+        self.preview_fonts = PreviewFontService(DATA_DIR, APP_LOGGER)
 
     def reload(self) -> dict[str, Any]:
         self.config = load_config()
@@ -268,8 +270,10 @@ class CoverService:
         for source_dir in (BUNDLED_FONTS_DIR, fonts_dir):
             if not source_dir.exists():
                 continue
-            for path in source_dir.iterdir():
+            for path in source_dir.rglob("*"):
                 if not path.is_file() or path.suffix.lower() not in FONT_EXTENSIONS:
+                    continue
+                if "subsets" in path.parts:
                     continue
                 resolved = str(path.resolve())
                 keys = {
@@ -346,7 +350,72 @@ class CoverService:
                 font_paths[key] = resolved
         return {key: value for key, value in font_paths.items() if value}
 
-    def render_config(self, style_config: dict[str, Any], library_name: str, style_name: str, server_name: str = "") -> dict[str, Any]:
+    def preview_font_assets(self) -> dict[str, dict[str, Any]]:
+        return self.preview_fonts.assets([Path(value) for value in set(self.build_font_paths().values())])
+
+    def preview_font_info(self, font_id: str) -> dict[str, Any] | None:
+        return self.preview_fonts.info(
+            font_id,
+            self.preview_font_assets(),
+            self.config,
+            lambda asset_id, variant, version: f"/api/fonts/{asset_id}/file?variant={variant}&v={version}",
+        )
+
+    def preview_font_file(self, font_id: str, variant: str, version: str) -> tuple[Path, str, str] | None:
+        return self.preview_fonts.file_for(font_id, variant, version, self.preview_font_assets())
+
+    def preview_font_status(self, font_id: str) -> dict[str, Any] | None:
+        return self.preview_fonts.status(font_id, self.preview_font_assets(), self.config)
+
+    def preview_font_faces(self) -> dict[str, str]:
+        if not bool(self.config.get("preview_font_enabled", True)):
+            return {}
+        paths = self.build_font_paths()
+        assets = self.preview_font_assets()
+        path_to_id = {str(item["path"]): asset_id for asset_id, item in assets.items()}
+        faces: dict[str, str] = {}
+        # Preview surfaces only need the three semantic fonts.  Loading the
+        # complete custom-font library here used to create many redundant
+        # FontFace requests before a user even selected a text layer.
+        for alias in ("main_title", "subtitle", "custom_text"):
+            path = paths.get(alias)
+            if not path:
+                continue
+            info = self.preview_font_info(path_to_id.get(str(Path(path).resolve()), ""))
+            if info and info.get("url"):
+                faces[alias] = str(info["url"])
+        return faces
+
+    def scheme_catalog(self) -> list[dict[str, str]]:
+        entries = [
+            {"id": "single_1", "name": "风格 1"},
+            {"id": "single_2", "name": "风格 2"},
+            {"id": "multi_1", "name": "风格 3"},
+            {"id": "static_4", "name": "风格 4"},
+            {"id": "animated_1", "name": "动态风格 1"},
+            {"id": "animated_2", "name": "动态风格 2"},
+            {"id": "animated_3", "name": "动态风格 3"},
+            {"id": "animated_4", "name": "动态风格 4"},
+        ]
+        for template in self.config.get("custom_static_layouts") or []:
+            if isinstance(template, dict) and str(template.get("id") or "").strip():
+                entries.append({"id": str(template["id"]), "name": str(template.get("name") or "自定义方案")})
+        return entries
+
+    def resolve_scheme_for_library(self, library_key: str) -> str:
+        for rule in self.config.get("library_scheme_rules") or []:
+            if isinstance(rule, dict) and library_key in {str(value) for value in (rule.get("library_keys") or [])}:
+                return str(rule.get("scheme_id") or "")
+        return str(self.config.get("default_scheme_id") or (self.config.get("style_config") or {}).get("style") or "single_1")
+
+    def scheme_style_and_layout(self, scheme_id: str) -> tuple[str, dict[str, Any] | None]:
+        for template in self.config.get("custom_static_layouts") or []:
+            if isinstance(template, dict) and str(template.get("id") or "") == scheme_id and isinstance(template.get("layout"), dict):
+                return "custom_static", template["layout"]
+        known = {item["id"] for item in self.scheme_catalog()}
+        return (scheme_id if scheme_id in known else str((self.config.get("style_config") or {}).get("style") or "single_1")), None
+
+    def render_config(self, style_config: dict[str, Any], library_name: str, style_name: str, server_name: str = "", custom_layout: dict[str, Any] | None = None) -> dict[str, Any]:
         config = dict(style_config)
         if style_name.startswith("animated_"):
             animated_settings = self.config.get("animated_settings") if isinstance(self.config.get("animated_settings"), dict) else {}
@@ -382,7 +451,7 @@ class CoverService:
         config["font_paths"] = self.build_font_paths()
         config.setdefault("font", config["font_paths"].get("main_title", ""))
         if style_name == "custom_static":
-            layout = self.config.get("custom_static_layout")
+            layout = custom_layout or self.config.get("custom_static_layout")
             if not isinstance(layout, dict):
                 active_id = self.config.get("custom_static_active_id")
                 for template in self.config.get("custom_static_layouts") or []:
@@ -531,7 +600,9 @@ class CoverService:
 
     async def generate_library(self, client: MediaServerClient, library: MediaLibrary, style: str | None = None, trigger: str = "manual") -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
-        style_name = style or style_config.get("style") or "single_1"
+        library_key = f"{client.server_id}:{library.id}"
+        scheme_id = self.resolve_scheme_for_library(library_key)
+        style_name, scheme_layout = self.scheme_style_and_layout(scheme_id)
         image_limit = self.image_limit_for_style(style_config, style_name)
         image_source = str(style_config.get("image_source") or "backdrop")
 
@@ -594,7 +665,7 @@ class CoverService:
             raise ValueError(f"No image sources available for {library.name}")
 
         title, subtitle, _texts = library_title_payload(self.config, library.name, client.server_name)
-        render_config = self.render_config(style_config, library.name, style_name, client.server_name)
+        render_config = self.render_config(style_config, library.name, style_name, client.server_name, scheme_layout)
         output_path = output_dir / f"{slugify(library.name)}_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
         uploaded = False
@@ -611,6 +682,7 @@ class CoverService:
             "library_id": library.id,
             "server": client.server_name,
             "style": style_name,
+            "scheme_id": scheme_id,
             "output": str(output_path),
             "url": f"/data/output/{output_path.name}",
             "source_count": len(image_paths),
@@ -623,12 +695,13 @@ class CoverService:
 
     async def generate_from_local(self, style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
-        style_name = style or style_config.get("style") or "single_1"
+        scheme_id = self.resolve_scheme_for_library("local:local")
+        style_name, scheme_layout = self.scheme_style_and_layout(scheme_id)
         output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
         image_paths = self.local_images("", self.image_limit_for_style(style_config, style_name))
         if not image_paths:
             raise ValueError("本地图片模式未找到素材，请将图片放入 /app/data/input 或 /app/data/input/媒体库名")
-        render_config = self.render_config(style_config, "本地封面", style_name)
+        render_config = self.render_config(style_config, "本地封面", style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
         result = {
@@ -636,6 +709,7 @@ class CoverService:
             "library_id": "",
             "server": "local",
             "style": style_name,
+            "scheme_id": scheme_id,
             "output": str(output_path),
             "url": f"/data/output/{output_path.name}",
             "source_count": len(image_paths),
@@ -646,14 +720,15 @@ class CoverService:
 
     async def generate_local_library(self, library_name: str, style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
-        style_name = style or style_config.get("style") or "single_1"
+        scheme_id = self.resolve_scheme_for_library(f"local:{slugify(library_name)}")
+        style_name, scheme_layout = self.scheme_style_and_layout(scheme_id)
         output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
         image_limit = self.image_limit_for_style(style_config, style_name)
         image_paths = self.local_images(library_name, image_limit, include_mock=False)
         if not image_paths:
             raise ValueError(f"本地媒体库没有可用图片: {library_name}")
         title, subtitle = title_for_library(self.config, library_name)
-        render_config = self.render_config(style_config, library_name, style_name)
+        render_config = self.render_config(style_config, library_name, style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
         result = {
@@ -661,6 +736,7 @@ class CoverService:
             "library_id": slugify(library_name),
             "server": "local",
             "style": style_name,
+            "scheme_id": scheme_id,
             "output": str(output_path),
             "url": f"/data/output/{output_path.name}",
             "source_count": len(image_paths),
@@ -777,13 +853,14 @@ class CoverService:
 
     async def generate_mock_library(self, library: dict[str, Any], style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
-        style_name = style or style_config.get("style") or "single_1"
+        scheme_id = self.resolve_scheme_for_library(f"mock:{library.get('id') or library.get('name')}")
+        style_name, scheme_layout = self.scheme_style_and_layout(scheme_id)
         image_limit = self.image_limit_for_style(style_config, style_name)
         input_dir = self.input_directory() or resolve_data_path(None, "/app/data/input")
         output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
         title, subtitle = title_for_library(self.config, library["name"])
         image_paths = ensure_mock_images(input_dir, slugify(library["name"]), title, image_limit)
-        render_config = self.render_config(style_config, library["name"], style_name)
+        render_config = self.render_config(style_config, library["name"], style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"{slugify(library['name'])}_{style_name}{self.output_suffix(render_config, style_name)}"
         self.renderer().render(image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
         result = {
@@ -791,6 +868,7 @@ class CoverService:
             "library_id": library["id"],
             "server": "mock",
             "style": style_name,
+            "scheme_id": scheme_id,
             "output": str(output_path),
             "url": f"/data/output/{output_path.name}",
             "source_count": len(image_paths),

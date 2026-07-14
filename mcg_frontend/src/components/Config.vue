@@ -117,6 +117,7 @@
                 v-if="tab === 'basic-tab'"
                 :sections="settingsAnchorSections"
                 :content-element="settingsContentEl"
+                :scroll-container="settingsContentEl"
                 :top-offset="96"
                 :theme="isDark ? 'dark' : 'light'"
               />
@@ -241,6 +242,18 @@
                 </v-row>
               </section>
 
+              <section id="settings-schemes" class="mcr-config-section-card">
+                <header class="mcr-config-section-card__header">
+                  <div><div class="mcr-config-section-card__title">媒体库方案</div><p class="mcr-config-section-card__copy">为媒体库指定封面方案；未匹配的媒体库使用默认方案。</p></div>
+                  <v-btn size="small" class="mcr-button mcr-button--ghost mcr-button--dark-neutral" prepend-icon="mdi-plus" @click="addSchemeRule">新增规则</v-btn>
+                </header>
+                <BlueprintSelect v-model="config.default_scheme_id" :items="schemeItems" label="默认方案" />
+                <div v-for="(rule, index) in config.library_scheme_rules" :key="rule.id" class="mcr-config-scheme-rule">
+                  <v-row class="mcr-form-grid"><v-col cols="12" md="4"><BlueprintSelect v-model="rule.scheme_id" :items="schemeItems" label="封面方案" /></v-col><v-col cols="12" md="8"><BlueprintSelect v-model="rule.library_keys" :items="ruleLibraryItems(index)" multiple label="媒体库" hint="已在其他规则中分配的媒体库不会重复显示" /></v-col></v-row>
+                  <v-btn icon="mdi-close" size="x-small" variant="text" class="mcr-config-scheme-rule__remove" title="删除规则" @click="removeSchemeRule(index)" />
+                </div>
+              </section>
+
               <section id="settings-images" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
@@ -310,6 +323,10 @@
                       label="自定义文本字体"
                     />
                   </v-col>
+                </v-row>
+                <v-row class="mcr-form-grid mt-1">
+                  <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.preview_font_enabled" label="预览字体" hide-details /><p>在预览页和画布编辑器中加载实际字体，使预览更接近正式生成。</p></v-col>
+                  <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.font_subset_enabled" :disabled="!config.preview_font_enabled" label="自动精简预览字体" hide-details /><p>只保留预览中可能使用的文字，不影响正式生成使用的原始字体。</p></v-col>
                 </v-row>
 
                 <input
@@ -664,6 +681,7 @@ const settingsAnchorSections = [
   { id: 'settings-runtime', label: '运行与定时' },
   { id: 'settings-monitoring', label: '入库监控' },
   { id: 'settings-libraries', label: '媒体库范围' },
+  { id: 'settings-schemes', label: '媒体库方案' },
   { id: 'settings-images', label: '自定义图片目录' },
   { id: 'settings-history', label: '历史封面' },
   { id: 'settings-fonts', label: '字体库' },
@@ -733,6 +751,10 @@ const defaults: YahahaCoverStudioConfig = {
   custom_static_layout: null,
   custom_static_layouts: null,
   custom_static_active_id: null,
+  preview_font_enabled: true,
+  font_subset_enabled: true,
+  library_scheme_rules: [],
+  default_scheme_id: 'static_1',
 }
 
 const config = ref<YahahaCoverStudioConfig>({
@@ -860,6 +882,10 @@ function normalizeConfigInput(input?: Partial<YahahaCoverStudioConfig> | Record<
     backup_enabled: Boolean(raw.backup_enabled ?? defaults.backup_enabled),
     backup_cron: raw.backup_cron ?? defaults.backup_cron,
     backup_path: raw.backup_path ?? defaults.backup_path,
+    preview_font_enabled: Boolean(raw.preview_font_enabled ?? defaults.preview_font_enabled),
+    font_subset_enabled: Boolean(raw.font_subset_enabled ?? defaults.font_subset_enabled),
+    library_scheme_rules: Array.isArray(raw.library_scheme_rules) ? raw.library_scheme_rules : [],
+    default_scheme_id: raw.default_scheme_id ?? raw.cover_style ?? defaults.default_scheme_id,
   } as YahahaCoverStudioConfig
 }
 
@@ -1313,6 +1339,19 @@ const libraryItems = computed(() => {
     value: String(lib.value),
   }))
 })
+
+const schemeItems = computed(() => {
+  const builtin = [
+    { title: '风格 1', value: 'static_1' }, { title: '风格 2', value: 'static_2' }, { title: '风格 3', value: 'static_3' }, { title: '风格 4', value: 'static_4' },
+    { title: '动态风格 1', value: 'animated_1' }, { title: '动态风格 2', value: 'animated_2' }, { title: '动态风格 3', value: 'animated_3' }, { title: '动态风格 4', value: 'animated_4' },
+  ]
+  const custom = Array.isArray(config.value.custom_static_layouts) ? config.value.custom_static_layouts.map((item) => ({ title: String(item.name || '自定义方案'), value: String(item.id) })) : []
+  return [...builtin, ...custom].filter((item, index, list) => list.findIndex((candidate) => candidate.value === item.value) === index)
+})
+const allSchemeLibraryItems = computed(() => ((config.value.all_libraries || []) as any[]).map((library) => ({ title: library.server ? `${library.server} - ${library.name}` : String(library.name || library.value), value: String(library.value || `${library.server_id || library.server || ''}:${library.id || library.name || ''}`) })))
+function addSchemeRule() { const rules = Array.isArray(config.value.library_scheme_rules) ? [...config.value.library_scheme_rules] : []; rules.push({ id: `rule_${Date.now().toString(36)}`, scheme_id: String(config.value.default_scheme_id || 'static_1'), library_keys: [] }); config.value.library_scheme_rules = rules }
+function removeSchemeRule(index: number) { const rules = Array.isArray(config.value.library_scheme_rules) ? [...config.value.library_scheme_rules] : []; rules.splice(index, 1); config.value.library_scheme_rules = rules }
+function ruleLibraryItems(index: number) { const current = new Set((config.value.library_scheme_rules?.[index]?.library_keys || []).map(String)); const occupied = new Set((config.value.library_scheme_rules || []).flatMap((rule, ruleIndex) => ruleIndex === index ? [] : (rule.library_keys || []).map(String))); return allSchemeLibraryItems.value.filter((item) => current.has(item.value) || !occupied.has(item.value)) }
 
 const serverItems = computed(() => {
   const items: { title: string; value: string }[] = []

@@ -23,6 +23,7 @@ import pytz
 import yaml
 
 from fastapi import Body, Request
+from fastapi.responses import FileResponse, JSONResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -52,6 +53,7 @@ from app.plugins.yahahacoverstudio.style.style_animated_3 import create_style_an
 from app.plugins.yahahacoverstudio.style.style_animated_4 import create_style_animated_4
 from app.plugins.yahahacoverstudio.utils.image_manager import ResolutionConfig, ImageResourceManager
 from app.plugins.yahahacoverstudio.history_store import HistoryStore
+from app.plugins.yahahacoverstudio.font_preview import PreviewFontService
 try:
     from app.plugins.yahahacoverstudio.utils.network_helper import NetworkHelper, validate_font_file
 except Exception as import_err:
@@ -123,7 +125,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.14"
+    plugin_version = "2.0.15"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -232,6 +234,11 @@ class YahahaCoverStudio(_PluginBase):
     _custom_static_layout = None
     _custom_static_layouts: List[Dict[str, Any]] = []
     _custom_static_active_id: Optional[str] = None
+    _preview_font_enabled = True
+    _font_subset_enabled = True
+    _library_scheme_rules: List[Dict[str, Any]] = []
+    _default_scheme_id = ""
+    _preview_font_service = None
 
     def get_render_mode(self) -> Tuple[str, str]:
         """获取插件渲染模式
@@ -255,6 +262,7 @@ class YahahaCoverStudio(_PluginBase):
         (data_path / 'input').mkdir(parents=True, exist_ok=True)
         self._covers_path = data_path / 'input'
         self._font_path = data_path / 'fonts'
+        self._preview_font_service = PreviewFontService(data_path, logger)
         custom_static_state_loaded = False
         self._animated_settings = {}
         if config:
@@ -289,6 +297,9 @@ class YahahaCoverStudio(_PluginBase):
             self._main_title_font_path = get_compat_value("main_title_font_path", "zh_font_path", "")
             self._subtitle_font_path = get_compat_value("subtitle_font_path", "en_font_path", "")
             self._custom_text_font_path = config.get("custom_text_font_path", self._subtitle_font_path)
+            self._preview_font_enabled = bool(config.get("preview_font_enabled", True))
+            self._font_subset_enabled = bool(config.get("font_subset_enabled", True))
+            self._library_scheme_rules = self.__normalize_library_scheme_rules(config.get("library_scheme_rules"))
             self._cover_style = config.get("cover_style", "static_1")
 
             # 样式命名升级兼容（仅对旧配置执行一次迁移）
@@ -303,6 +314,7 @@ class YahahaCoverStudio(_PluginBase):
             self._cover_style_base = config.get("cover_style_base", default_base)
             self._cover_style_variant = config.get("cover_style_variant", default_variant)
             self._cover_style = self.__compose_cover_style(self._cover_style_base, self._cover_style_variant)
+            self._default_scheme_id = str(config.get("default_scheme_id") or self._cover_style or "static_1")
             self._multi_1_blur = config.get("multi_1_blur", True)
             self._main_title_font_size = get_compat_value("main_title_font_size", "zh_font_size", 170)
             self._subtitle_font_size = get_compat_value("subtitle_font_size", "en_font_size", 75)
@@ -909,6 +921,64 @@ class YahahaCoverStudio(_PluginBase):
         suffix = base.split("_")[-1]
         return base if mode == "static" else f"animated_{suffix}"
 
+    def __normalize_library_scheme_rules(self, raw_rules: Any) -> List[Dict[str, Any]]:
+        if isinstance(raw_rules, str):
+            try:
+                raw_rules = json.loads(raw_rules)
+            except Exception:
+                raw_rules = []
+        if not isinstance(raw_rules, list):
+            return []
+        used_keys, normalized = set(), []
+        for raw_rule in raw_rules:
+            if not isinstance(raw_rule, dict):
+                continue
+            scheme_id = str(raw_rule.get("scheme_id") or "").strip()
+            keys = []
+            for raw_key in raw_rule.get("library_keys") or []:
+                key = str(raw_key or "").strip()
+                if key and key not in used_keys:
+                    keys.append(key)
+                    used_keys.add(key)
+            if scheme_id and keys:
+                normalized.append({"id": str(raw_rule.get("id") or uuid.uuid4().hex[:12]), "scheme_id": scheme_id, "library_keys": keys})
+        return normalized
+
+    def __scheme_catalog(self) -> List[Dict[str, str]]:
+        entries = [
+            {"id": "static_1", "name": "风格 1"}, {"id": "static_2", "name": "风格 2"},
+            {"id": "static_3", "name": "风格 3"}, {"id": "static_4", "name": "风格 4"},
+            {"id": "animated_1", "name": "动态风格 1"}, {"id": "animated_2", "name": "动态风格 2"},
+            {"id": "animated_3", "name": "动态风格 3"}, {"id": "animated_4", "name": "动态风格 4"},
+        ]
+        for template in self._custom_static_layouts or []:
+            if isinstance(template, dict) and str(template.get("id") or "").strip():
+                entries.append({"id": str(template["id"]), "name": str(template.get("name") or "自定义方案")})
+        return entries
+
+    def __library_scheme_key(self, service, library: Dict[str, Any]) -> str:
+        library_id = library.get("Id") if getattr(service, "type", "") == "emby" else library.get("ItemId")
+        return f"{getattr(service, 'name', '')}:{library_id or library.get('Name') or ''}"
+
+    def __resolve_scheme_for_library(self, service, library: Dict[str, Any]) -> str:
+        key = self.__library_scheme_key(service, library)
+        legacy_key = key.replace(":", "-", 1)
+        for rule in self._library_scheme_rules:
+            keys = {str(value) for value in rule.get("library_keys", [])}
+            if key in keys or legacy_key in keys:
+                return str(rule.get("scheme_id") or self._default_scheme_id or self._cover_style)
+        return str(self._default_scheme_id or self._cover_style or "static_1")
+
+    def __apply_scheme_for_library(self, service, library: Dict[str, Any]) -> str:
+        scheme_id = self.__resolve_scheme_for_library(service, library)
+        template = next((item for item in self._custom_static_layouts or [] if isinstance(item, dict) and str(item.get("id")) == scheme_id), None)
+        if isinstance(template, dict) and isinstance(template.get("layout"), dict):
+            self._cover_style = "static_custom"
+            self._custom_static_layout = template["layout"]
+        elif scheme_id in {item["id"] for item in self.__scheme_catalog()}:
+            self._cover_style = scheme_id
+        return scheme_id
+
     def __resolve_cover_style_ui(self, cover_style: str) -> Tuple[str, str]:
         if cover_style == "static_custom":
             return "custom_static", "static"
@@ -1054,6 +1124,10 @@ class YahahaCoverStudio(_PluginBase):
             "main_title_font_path": str(self._main_title_font_path),
             "subtitle_font_path": str(self._subtitle_font_path),
             "custom_text_font_path": str(self._custom_text_font_path),
+            "preview_font_enabled": self._preview_font_enabled,
+            "font_subset_enabled": self._font_subset_enabled,
+            "library_scheme_rules": self._library_scheme_rules,
+            "default_scheme_id": self._default_scheme_id,
             "zh_font_path": str(self._main_title_font_path),
             "en_font_path": str(self._subtitle_font_path),
             "cover_style": self._cover_style,
@@ -2253,6 +2327,10 @@ class YahahaCoverStudio(_PluginBase):
                 "main_title_font_path": self._main_title_font_path,
                 "subtitle_font_path": self._subtitle_font_path,
                 "custom_text_font_path": self._custom_text_font_path,
+                "preview_font_enabled": self._preview_font_enabled,
+                "font_subset_enabled": self._font_subset_enabled,
+                "library_scheme_rules": self._library_scheme_rules,
+                "default_scheme_id": self._default_scheme_id,
                 "cover_style": self._cover_style,
                 "cover_style_base": self._cover_style_base,
                 "cover_style_variant": self._cover_style_variant,
@@ -2370,6 +2448,10 @@ class YahahaCoverStudio(_PluginBase):
             self._main_title_font_preset = str(raw.get("main_title_font_preset") or self._main_title_font_preset or "chaohei")
             self._subtitle_font_preset = str(raw.get("subtitle_font_preset") or self._subtitle_font_preset or "EmblemaOne")
             self._custom_text_font_preset = str(raw.get("custom_text_font_preset") or self._custom_text_font_preset or self._subtitle_font_preset or "EmblemaOne")
+            self._preview_font_enabled = as_bool(raw.get("preview_font_enabled"), bool(self._preview_font_enabled))
+            self._font_subset_enabled = as_bool(raw.get("font_subset_enabled"), bool(self._font_subset_enabled))
+            self._library_scheme_rules = self.__normalize_library_scheme_rules(raw.get("library_scheme_rules"))
+            self._default_scheme_id = str(raw.get("default_scheme_id") or self._default_scheme_id or self._cover_style or "static_1")
             self._main_title_font_custom = ""
             self._subtitle_font_custom = ""
             self._custom_text_font_custom = ""
@@ -2649,6 +2731,10 @@ class YahahaCoverStudio(_PluginBase):
             "main_title_font_path",
             "subtitle_font_path",
             "custom_text_font_path",
+            "preview_font_enabled",
+            "font_subset_enabled",
+            "library_scheme_rules",
+            "default_scheme_id",
             "cover_style",
             "cover_style_base",
             "cover_style_variant",
@@ -2694,6 +2780,8 @@ class YahahaCoverStudio(_PluginBase):
             self._monitor_source = "transfer"
         if self._cover_style_variant not in ["static", "animated"]:
             self._cover_style_variant = "static"
+        self._library_scheme_rules = self.__normalize_library_scheme_rules(self._library_scheme_rules)
+        self._default_scheme_id = str(self._default_scheme_id or self._cover_style or "static_1")
         self._animated_settings = self.__normalize_animated_settings_map(self._animated_settings)
 
         custom_static_state = payload.get("custom_static_state")
@@ -3444,6 +3532,33 @@ class YahahaCoverStudio(_PluginBase):
                 "summary": "获取自定义字体库(兼容无前导斜杠)",
             },
             {
+                "path": "/fonts/{font_id}/preview",
+                "endpoint": self.api_preview_font,
+                "auth": "bear",
+                "methods": ["GET"],
+                "summary": "获取预览字体信息",
+            },
+            {
+                "path": "/fonts/{font_id}/status",
+                "endpoint": self.api_preview_font_status,
+                "auth": "bear",
+                "methods": ["GET"],
+                "summary": "获取预览字体精简状态",
+            },
+            {
+                "path": "/fonts/{font_id}/rebuild",
+                "endpoint": self.api_rebuild_preview_font,
+                "auth": "bear",
+                "methods": ["POST"],
+                "summary": "重新生成预览字体",
+            },
+            {
+                "path": "/fonts/{font_id}/file",
+                "endpoint": self.api_preview_font_file,
+                "methods": ["GET"],
+                "summary": "获取受控预览字体文件",
+            },
+            {
                 "path": "/upload_font",
                 "endpoint": self.api_upload_font,
                 "auth": "bear",
@@ -4033,6 +4148,11 @@ class YahahaCoverStudio(_PluginBase):
                     "lock_latest_sort": bool(self._lock_latest_sort),
                     "cover_style_base": self._cover_style_base,
                     "cover_style_variant": self._cover_style_variant,
+                    "preview_font_enabled": bool(self._preview_font_enabled),
+                    "font_subset_enabled": bool(self._font_subset_enabled),
+                    "library_scheme_rules": self._library_scheme_rules,
+                    "default_scheme_id": self._default_scheme_id,
+                    "scheme_catalog": self.__scheme_catalog(),
                     "poster_source": "poster" if self._use_primary else "backdrop",
                     "use_primary": bool(self._use_primary),
                     "sort_by": self._sort_by or "Random",
@@ -4213,6 +4333,8 @@ class YahahaCoverStudio(_PluginBase):
         return preview_targets
 
     def __build_preview_font_faces(self) -> Dict[str, str]:
+        if not self._preview_font_enabled:
+            return {}
         font_faces: Dict[str, str] = {}
         semantic_paths = {
             "main_title": self._main_title_font_path,
@@ -4226,33 +4348,78 @@ class YahahaCoverStudio(_PluginBase):
         }
         for key, path_value in semantic_paths.items():
             if path_value and Path(path_value).is_file():
-                font_faces[key] = self.__get_preview_file_url(str(path_value))
+                assets = self.__preview_font_assets()
+                font_id = next((asset_id for asset_id, item in assets.items() if str(item.get("path")) == str(Path(path_value).resolve())), "")
+                info = self.__preview_font_info(font_id) if font_id else None
+                if info and info.get("url"):
+                    font_faces[key] = str(info["url"])
+                else:
+                    font_faces[key] = self.__get_preview_file_url(str(path_value))
                 continue
             url_value = str(semantic_urls.get(key) or "").strip()
             if url_value and re.match(r'^https?://', url_value, re.IGNORECASE):
                 font_faces[key] = url_value
 
-        _, _, main_title_font_preset_paths, _ = self.__get_font_presets()
-        builtin_urls = self.__builtin_font_urls()
-        for key, url in builtin_urls.items():
-            local_path = main_title_font_preset_paths.get(key)
-            if local_path and Path(local_path).is_file():
-                font_faces[key] = self.__get_preview_file_url(local_path)
-                continue
-            fallback_path = self.__ensure_builtin_font_path(key)
-            if fallback_path and Path(fallback_path).is_file():
-                font_faces[key] = self.__get_preview_file_url(fallback_path)
-            else:
-                font_faces[key] = url
-        try:
-            font_dir = self.__custom_font_library_dir()
-            if font_dir.is_dir():
-                for font_file in font_dir.iterdir():
-                    if font_file.is_file() and validate_font_file(font_file):
-                        font_faces[self.__font_library_value(font_file)] = self.__get_preview_file_url(str(font_file.resolve()))
-        except Exception as err:
-            logger.warning("【YahahaCoverStudio】构建自定义字体预览映射失败: %s", err)
+        # Do not preload every built-in/custom font. The active semantic font
+        # map lets both preview surfaces load only what this layout uses.
         return font_faces
+
+    def __preview_font_assets(self) -> Dict[str, Dict[str, Any]]:
+        if not self._preview_font_service:
+            self._preview_font_service = PreviewFontService(self.get_data_path(), logger)
+        paths = [Path(value) for value in (self._main_title_font_path, self._subtitle_font_path, self._custom_text_font_path) if value and Path(value).is_file()]
+        return self._preview_font_service.assets(paths)
+
+    def __preview_font_config(self) -> Dict[str, Any]:
+        return {
+            "preview_font_enabled": self._preview_font_enabled,
+            "font_subset_enabled": self._font_subset_enabled,
+            "title_config": self._title_config,
+            "all_libraries": self._all_libraries,
+            "custom_static_layout": self._custom_static_layout,
+            "custom_static_layouts": self._custom_static_layouts,
+            "animated_settings": self._animated_settings,
+        }
+
+    def __preview_font_info(self, font_id: str) -> Optional[Dict[str, Any]]:
+        if not self._preview_font_service:
+            return None
+        return self._preview_font_service.info(
+            font_id,
+            self.__preview_font_assets(),
+            self.__preview_font_config(),
+            lambda asset_id, variant, version: f"/api/v1/plugin/YahahaCoverStudio/fonts/{asset_id}/file?variant={quote(variant)}&v={quote(version)}",
+        )
+
+    def api_preview_font(self, font_id: str):
+        info = self.__preview_font_info(font_id)
+        return {"code": 0, "data": info} if info else {"code": 1, "msg": "字体不存在"}
+
+    def api_preview_font_status(self, font_id: str):
+        if not self._preview_font_service:
+            return {"code": 1, "msg": "字体预览服务未初始化"}
+        status = self._preview_font_service.status(font_id, self.__preview_font_assets(), self.__preview_font_config())
+        return {"code": 0, "data": status} if status else {"code": 1, "msg": "字体不存在"}
+
+    def api_rebuild_preview_font(self, font_id: str):
+        assets = self.__preview_font_assets()
+        item = assets.get(font_id)
+        if not item or not self._preview_font_service:
+            return {"code": 1, "msg": "字体不存在"}
+        info = self.__preview_font_info(font_id) or {}
+        from app.plugins.yahahacoverstudio.font_preview import collect_characters
+        chars = collect_characters(self.__preview_font_config())
+        self._preview_font_service.schedule(item, chars, str(info.get("charset_hash") or ""), force=True)
+        return {"code": 0, "msg": "已开始优化字体"}
+
+    def api_preview_font_file(self, font_id: str, variant: str = "original", v: str = ""):
+        if not self._preview_font_service:
+            return JSONResponse(status_code=404, content={"detail": "font not found"})
+        resolved = self._preview_font_service.file_for(font_id, variant, v, self.__preview_font_assets())
+        if not resolved:
+            return JSONResponse(status_code=404, content={"detail": "font not found"})
+        path, media_type, version = resolved
+        return FileResponse(path, media_type=media_type, headers={"Cache-Control": "public, max-age=31536000, immutable", "ETag": f'"{version}"'})
 
     def __ensure_builtin_font_path(self, preset_key: str) -> str:
         if not preset_key:
@@ -7860,6 +8027,17 @@ class YahahaCoverStudio(_PluginBase):
     def __update_library(self, service, library):
         library_name = library['Name']
         logger.info(f"媒体库 {service.name}：{library_name} 开始准备更新封面")
+        # All formal entry points converge here, so resolve the library rule
+        # once and restore the global editing state afterwards.
+        previous_style, previous_layout = self._cover_style, self._custom_static_layout
+        scheme_id = self.__apply_scheme_for_library(service, library)
+        try:
+            return self.__update_library_with_scheme(service, library, scheme_id)
+        finally:
+            self._cover_style, self._custom_static_layout = previous_style, previous_layout
+
+    def __update_library_with_scheme(self, service, library, scheme_id: str):
+        library_name = library['Name']
         # 自定义图像路径
         image_path = self.__check_custom_image(library_name)
         # 从配置获取标题和背景颜色
@@ -7885,7 +8063,7 @@ class YahahaCoverStudio(_PluginBase):
         if image_data is True:
             return CoverUpdateOutcome.SKIPPED
         if isinstance(image_data, str) and image_data:
-            return CoverUpdateOutcome.UPDATED if self.__set_library_image(service, library, image_data) else CoverUpdateOutcome.FAILED
+            return CoverUpdateOutcome.UPDATED if self.__set_library_image(service, library, image_data, scheme_id=scheme_id) else CoverUpdateOutcome.FAILED
         return CoverUpdateOutcome.FAILED
 
     def __check_custom_image(self, library_name):
@@ -9292,7 +9470,7 @@ class YahahaCoverStudio(_PluginBase):
             logger.warning(f"清理历史封面失败: {e}")
         
 
-    def __set_library_image(self, service, library, image_base64):
+    def __set_library_image(self, service, library, image_base64, scheme_id: str = ""):
         """
         设置媒体库封面
         """
@@ -9342,7 +9520,7 @@ class YahahaCoverStudio(_PluginBase):
                 if self._history_batch:
                     try:
                         library_id = library.get("Id") if service.type == "emby" else library.get("ItemId")
-                        HistoryStore(self.get_data_path()).add_bytes(self._history_batch, image_bytes, service.name, service.name, str(library_id or library["Name"]), library["Name"], self._cover_style, extension, uploaded)
+                        HistoryStore(self.get_data_path()).add_bytes(self._history_batch, image_bytes, service.name, service.name, str(library_id or library["Name"]), library["Name"], scheme_id or self._cover_style, extension, uploaded)
                     except Exception as history_err:
                         logger.error(f"【YahahaCoverStudio】记录历史批次失败: {history_err}", exc_info=True)
             if uploaded:

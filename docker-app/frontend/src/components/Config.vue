@@ -107,6 +107,7 @@
                 v-if="tab === 'basic-tab'"
                 :sections="settingsAnchorSections"
                 :content-element="settingsContentEl"
+                :scroll-container="settingsContentEl"
                 :top-offset="96"
                 :theme="isDark ? 'dark' : 'light'"
               />
@@ -311,6 +312,25 @@
                 </v-row>
               </section>
 
+              <section id="settings-schemes" class="mcr-config-section-card">
+                <header class="mcr-config-section-card__header">
+                  <div>
+                    <div class="mcr-config-section-card__title">媒体库方案</div>
+                    <p class="mcr-config-section-card__copy">为不同媒体库指定封面方案；未单独指定的媒体库使用默认方案。</p>
+                  </div>
+                  <v-btn size="small" class="mcr-button mcr-button--ghost mcr-button--dark-neutral" prepend-icon="mdi-plus" @click="addSchemeRule">新增规则</v-btn>
+                </header>
+                <div class="yh-scheme-assignment yh-scheme-assignment--default">
+                  <div class="yh-scheme-assignment__label"><strong>默认方案</strong><span>未分配的媒体库将使用此方案</span></div>
+                  <BlueprintSelect v-model="config.default_scheme_id" :items="schemeItems" label="默认方案" />
+                </div>
+                <div v-if="!config.library_scheme_rules?.length" class="yh-scheme-assignment__empty">暂无指定媒体库，全部使用默认方案。</div>
+                <div v-for="(rule, index) in config.library_scheme_rules" :key="rule.id" class="yh-scheme-assignment">
+                  <div class="yh-scheme-assignment__head"><strong>指定方案 {{ index + 1 }}</strong><button type="button" class="yh-scheme-assignment__remove" title="删除规则" @click="removeSchemeRule(index)"><v-icon icon="mdi-close" size="17" /></button></div>
+                  <v-row class="mcr-form-grid"><v-col cols="12" md="4"><BlueprintSelect v-model="rule.scheme_id" :items="schemeItems" label="封面方案" /></v-col><v-col cols="12" md="8"><BlueprintSelect v-model="rule.library_keys" :items="ruleLibraryItems(index)" multiple label="媒体库" hint="已在其他规则中分配的媒体库不会重复显示" /></v-col></v-row>
+                </div>
+              </section>
+
               <section id="settings-images" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div>
@@ -381,6 +401,10 @@
                       label="自定义文本字体"
                     />
                   </v-col>
+                </v-row>
+                <v-row class="mcr-form-grid mcr-form-grid--center yh-font-preview-controls" align="center">
+                  <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.preview_font_enabled" label="预览字体" hide-details /><p>在预览页和画布编辑器中加载实际字体，使预览更接近正式生成。</p></v-col>
+                  <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.font_subset_enabled" :disabled="!config.preview_font_enabled" label="自动精简预览字体" hide-details /><p>只保留预览可能使用的文字，不影响正式生成的原始字体。</p></v-col>
                 </v-row>
 
                 <input
@@ -836,6 +860,7 @@ const settingsAnchorSections = [
   { id: 'settings-monitoring', label: '入库监控' },
   { id: 'settings-servers', label: '媒体服务器' },
   { id: 'settings-libraries', label: '媒体库范围' },
+  { id: 'settings-schemes', label: '媒体库方案' },
   { id: 'settings-images', label: '自定义图片目录' },
   { id: 'settings-history', label: '历史封面' },
   { id: 'settings-fonts', label: '字体库' },
@@ -917,6 +942,10 @@ const defaults: MediaCoverGeneratorConfig = {
   custom_static_layout: null,
   custom_static_layouts: null,
   custom_static_active_id: null,
+  preview_font_enabled: true,
+  font_subset_enabled: true,
+  library_scheme_rules: [],
+  default_scheme_id: 'single_1',
 }
 
 const config = ref<MediaCoverGeneratorConfig>({
@@ -1195,6 +1224,10 @@ function normalizeConfigInput(input?: Partial<MediaCoverGeneratorConfig> | Recor
     backup_enabled: Boolean(raw.backup_enabled ?? defaults.backup_enabled),
     backup_cron: raw.backup_cron ?? defaults.backup_cron,
     backup_path: raw.backup_path ?? defaults.backup_path,
+    preview_font_enabled: Boolean(raw.preview_font_enabled ?? defaults.preview_font_enabled),
+    font_subset_enabled: Boolean(raw.font_subset_enabled ?? defaults.font_subset_enabled),
+    library_scheme_rules: Array.isArray(raw.library_scheme_rules) ? raw.library_scheme_rules : [],
+    default_scheme_id: raw.default_scheme_id ?? raw.style_config?.style ?? defaults.default_scheme_id,
     local_mode: localMode,
     mock_enabled: localMode
       ? false
@@ -1781,6 +1814,25 @@ const libraryItems = computed(() => {
     value: String(lib.value || `${lib.server_id || lib.server || 'local'}:${lib.name}`),
   }))
 })
+
+const schemeItems = computed(() => {
+  const fromBackend = Array.isArray((config.value as any).scheme_catalog)
+    ? (config.value as any).scheme_catalog.filter((item: any) => item?.id).map((item: any) => ({ title: String(item.name || item.id), value: String(item.id) }))
+    : []
+  const fallback = [
+    { title: '风格 1', value: 'single_1' }, { title: '风格 2', value: 'single_2' }, { title: '风格 3', value: 'multi_1' }, { title: '风格 4', value: 'static_4' },
+    { title: '动态风格 1', value: 'animated_1' }, { title: '动态风格 2', value: 'animated_2' }, { title: '动态风格 3', value: 'animated_3' }, { title: '动态风格 4', value: 'animated_4' },
+  ]
+  const templates = Array.isArray(config.value.custom_static_layouts) ? config.value.custom_static_layouts.map((item) => ({ title: String(item.name || '自定义方案'), value: String(item.id) })) : []
+  return [...fromBackend, ...fallback, ...templates].filter((item, index, list) => list.findIndex((candidate) => candidate.value === item.value) === index)
+})
+const allSchemeLibraryItems = computed(() => {
+  const all = ((config.value as any).all_libraries || []) as Array<{ name?: string; value?: string; server?: string; server_id?: string }>
+  return all.filter(Boolean).map((library) => ({ title: library.server ? `${library.server} - ${library.name}` : String(library.name || library.value), value: String(library.value || `${library.server_id || library.server || 'local'}:${library.name || ''}`) }))
+})
+function addSchemeRule() { const rules = Array.isArray(config.value.library_scheme_rules) ? [...config.value.library_scheme_rules] : []; rules.push({ id: `rule_${Date.now().toString(36)}`, scheme_id: String(config.value.default_scheme_id || 'single_1'), library_keys: [] }); config.value.library_scheme_rules = rules }
+function removeSchemeRule(index: number) { const rules = Array.isArray(config.value.library_scheme_rules) ? [...config.value.library_scheme_rules] : []; rules.splice(index, 1); config.value.library_scheme_rules = rules }
+function ruleLibraryItems(index: number) { const current = new Set((config.value.library_scheme_rules?.[index]?.library_keys || []).map(String)); const occupied = new Set((config.value.library_scheme_rules || []).flatMap((rule, ruleIndex) => ruleIndex === index ? [] : (rule.library_keys || []).map(String))); return allSchemeLibraryItems.value.filter((item) => current.has(item.value) || !occupied.has(item.value)) }
 
 const serverItems = computed(() => {
   const items: { title: string; value: string }[] = []

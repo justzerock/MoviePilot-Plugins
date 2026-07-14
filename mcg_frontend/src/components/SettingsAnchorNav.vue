@@ -13,19 +13,26 @@ export interface SettingsAnchorSection { id: string; label: string }
 const props = withDefaults(defineProps<{ sections: SettingsAnchorSection[]; contentElement?: HTMLElement | null; scrollContainer?: HTMLElement | null; topOffset?: number; theme?: 'light' | 'dark' }>(), { contentElement: null, scrollContainer: null, topOffset: 96, theme: 'light' })
 const activeId = ref(props.sections[0]?.id || '')
 const navLeft = ref(12)
+const navWidth = 36
+const viewportPadding = 12
 let observer: IntersectionObserver | null = null
 let resizeObserver: ResizeObserver | null = null
-let resolvedScrollContainer: HTMLElement | null = null
-let clickLockUntil = 0
-let clickUnlockTimer: number | null = null
+let scrollRoot: HTMLElement | null = null
+let targetId = ''
+let releaseFrame = 0
+let releaseDeadline = 0
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 function observedElements() { return props.sections.map((section) => document.getElementById(section.id)).filter((element): element is HTMLElement => Boolean(element)) }
-function findScrollContainer(element: HTMLElement | null) { let current = element?.parentElement || null; while (current) { const style = getComputedStyle(current); if (/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`) && current.scrollHeight > current.clientHeight) return current; current = current.parentElement } return null }
-function updatePosition() { const rect = props.contentElement?.getBoundingClientRect(); navLeft.value = rect ? Math.max(12, Math.round(rect.left - 46)) : 12; resolvedScrollContainer = props.scrollContainer || findScrollContainer(props.contentElement || observedElements()[0] || null) }
-function setupObserver() { observer?.disconnect(); updatePosition(); const elements = observedElements(); if (!elements.length || typeof IntersectionObserver === 'undefined') return; observer = new IntersectionObserver((entries) => { if (Date.now() < clickLockUntil) return; const root = resolvedScrollContainer; const reachedBottom = root ? root.scrollTop + root.clientHeight >= root.scrollHeight - 2 : window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2; if (reachedBottom && props.sections.length) { activeId.value = props.sections.at(-1)?.id || activeId.value; return } const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => Math.abs(a.boundingClientRect.top - props.topOffset) - Math.abs(b.boundingClientRect.top - props.topOffset)); if (visible[0]?.target.id) activeId.value = visible[0].target.id }, { root: resolvedScrollContainer, rootMargin: `-${props.topOffset}px 0px -62% 0px`, threshold: [0, .05, .25, .6] }); elements.forEach((element) => observer?.observe(element)) }
-function scrollToSection(id: string) { const target = document.getElementById(id); if (!target) return; activeId.value = id; clickLockUntil = Date.now() + 1800; if (resolvedScrollContainer) { const rootRect = resolvedScrollContainer.getBoundingClientRect(); const targetRect = target.getBoundingClientRect(); resolvedScrollContainer.scrollTo({ top: resolvedScrollContainer.scrollTop + targetRect.top - rootRect.top - props.topOffset, behavior: 'smooth' }) } else target.scrollIntoView({ behavior: 'smooth', block: 'start' }); if (clickUnlockTimer !== null) window.clearTimeout(clickUnlockTimer); clickUnlockTimer = window.setTimeout(() => { activeId.value = id; clickUnlockTimer = null }, 950) }
+function resolveScrollRoot() { scrollRoot = props.scrollContainer || null }
+function updatePosition() { const rect = props.contentElement?.getBoundingClientRect(); const desired = rect ? rect.left - navWidth - 18 : viewportPadding; navLeft.value = Math.round(clamp(desired, viewportPadding, Math.max(viewportPadding, window.innerWidth - navWidth - viewportPadding))) }
+function isAtBottom() { return scrollRoot ? scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2 : window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2 }
+function releaseProgrammaticScroll() { if (!targetId) return; const target = document.getElementById(targetId); const nearTarget = Boolean(target && Math.abs(target.getBoundingClientRect().top - props.topOffset) < 4); if (nearTarget || performance.now() >= releaseDeadline) { targetId = ''; releaseFrame = 0; return }; releaseFrame = requestAnimationFrame(releaseProgrammaticScroll) }
+function cancelProgrammaticScroll() { targetId = ''; if (releaseFrame) cancelAnimationFrame(releaseFrame); releaseFrame = 0 }
+function setupObserver() { observer?.disconnect(); resolveScrollRoot(); updatePosition(); const elements = observedElements(); if (!elements.length || typeof IntersectionObserver === 'undefined') return; observer = new IntersectionObserver((entries) => { if (targetId) return; if (isAtBottom() && props.sections.length) { activeId.value = props.sections.at(-1)?.id || activeId.value; return }; const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => Math.abs(a.boundingClientRect.top - props.topOffset) - Math.abs(b.boundingClientRect.top - props.topOffset)); if (visible[0]?.target.id) activeId.value = visible[0].target.id }, { root: scrollRoot, rootMargin: `-${props.topOffset}px 0px -62% 0px`, threshold: [0, .05, .25, .6] }); elements.forEach((element) => observer?.observe(element)) }
+function scrollToSection(id: string) { const target = document.getElementById(id); if (!target) return; cancelProgrammaticScroll(); activeId.value = id; targetId = id; releaseDeadline = performance.now() + 1400; if (scrollRoot) { const rootRect = scrollRoot.getBoundingClientRect(); const targetTop = scrollRoot.scrollTop + target.getBoundingClientRect().top - rootRect.top - props.topOffset; const maxTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight); scrollRoot.scrollTo({ top: clamp(targetTop, 0, maxTop), behavior: 'smooth' }) } else { const targetTop = target.getBoundingClientRect().top + window.scrollY - props.topOffset; const maxTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight); window.scrollTo({ top: clamp(targetTop, 0, maxTop), behavior: 'smooth' }) }; releaseFrame = requestAnimationFrame(releaseProgrammaticScroll) }
 watch(() => [props.sections, props.scrollContainer, props.contentElement], () => void nextTick(setupObserver), { deep: true })
-onMounted(() => void nextTick(() => { setupObserver(); if (typeof ResizeObserver !== 'undefined' && props.contentElement) { resizeObserver = new ResizeObserver(setupObserver); resizeObserver.observe(props.contentElement) } window.addEventListener('resize', setupObserver) }))
-onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); window.removeEventListener('resize', setupObserver); if (clickUnlockTimer !== null) window.clearTimeout(clickUnlockTimer) })
+onMounted(() => void nextTick(() => { setupObserver(); if (typeof ResizeObserver !== 'undefined' && props.contentElement) { resizeObserver = new ResizeObserver(updatePosition); resizeObserver.observe(props.contentElement) } window.addEventListener('resize', updatePosition); window.addEventListener('wheel', cancelProgrammaticScroll, { passive: true }); window.addEventListener('touchstart', cancelProgrammaticScroll, { passive: true }); window.addEventListener('pointerdown', cancelProgrammaticScroll, { passive: true }) }))
+onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); cancelProgrammaticScroll(); window.removeEventListener('resize', updatePosition); window.removeEventListener('wheel', cancelProgrammaticScroll); window.removeEventListener('touchstart', cancelProgrammaticScroll); window.removeEventListener('pointerdown', cancelProgrammaticScroll) })
 </script>
 
 <style scoped>
@@ -37,6 +44,6 @@ onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); wi
 .yh-settings-anchor__button:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary, #4f8cff) 42%, transparent); outline-offset: -3px; border-radius: 10px; }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__line { background: rgba(235,235,245,.22); }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__button.is-active .yh-settings-anchor__line { background: var(--color-primary, #6ea2ff); }
-@media (max-width: 680px) { .yh-settings-anchor { display: none; } }
+@media (max-width: 480px) { .yh-settings-anchor { display: none; } }
 @media (prefers-reduced-motion: reduce) { .yh-settings-anchor__line { transition: none; } }
 </style>

@@ -791,6 +791,7 @@ import SvgTemplatePreview from './SvgTemplatePreview.vue'
 import { useTemplateCanvasStore } from '../stores/templateCanvas'
 import { BUILTIN_FONT_ITEMS, SEMANTIC_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
 import { getThemeColor, getThemeRgba } from '../utils/themeColors'
+import { loadPreviewFontFaces } from '../services/fontPreview'
 
 type AnyLayer = TemplateLayer
 
@@ -1039,9 +1040,7 @@ watch(
 watch(
   () => props.previewSource?.font_faces,
   async (fontFaces) => {
-    await Promise.all(
-      Object.entries(fontFaces || {}).map(([key, url]) => ensureFontFace(getTemplateFontFaceName(key), url)),
-    )
+    await loadPreviewFontFaces(fontFaces, getTemplateFontFaceName)
   },
   { deep: true, immediate: true },
 )
@@ -1066,29 +1065,9 @@ const layerNodeRegistry = new Map<string, any>()
 let canvasResizeObserver: ResizeObserver | null = null
 let canvasPaneResizeObserver: ResizeObserver | null = null
 let windowResizeAttached = false
-const loadedFontUrls = new Map<string, Promise<void>>()
 const defaultAutoBlendColor = computed(() => getThemeColor('--mcr-cover-auto-blend'))
 const defaultDeepGradientColor = computed(() => getThemeColor('--mcr-cover-deep-gradient'))
 const defaultTextColor = computed(() => '#ffffff')
-
-function ensureFontFace(name: string, url?: string) {
-  if (!url || typeof FontFace === 'undefined' || typeof document === 'undefined') {
-    return Promise.resolve()
-  }
-  const cacheKey = `${name}:${url}`
-  const cached = loadedFontUrls.get(cacheKey)
-  if (cached) return cached
-  const pending = new FontFace(name, `url(${url})`).load()
-    .then((font) => {
-      document.fonts.add(font)
-    })
-    .catch((error) => {
-      console.error(`load editor font face failed: ${name}`, error)
-    })
-    .then(() => undefined)
-  loadedFontUrls.set(cacheKey, pending)
-  return pending
-}
 
 async function loadFontLibrary() {
   if (!props.api?.get) return
@@ -1098,9 +1077,6 @@ async function loadFontLibrary() {
       throw new Error(resp?.msg || 'load fonts failed')
     }
     customFontItems.value = Array.isArray(resp.data?.custom) ? resp.data.custom : []
-    await Promise.all(
-      customFontItems.value.map((item) => ensureFontFace(getTemplateFontFaceName(item.value), item.url || item.dataUrl)),
-    )
   } catch (error) {
     console.warn('load editor font library failed', error)
   }

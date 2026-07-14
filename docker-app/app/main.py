@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.14")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.15")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -890,6 +890,45 @@ async def plugin_fonts():
         if path.is_file() and path.suffix.lower() in storage.FONT_EXTENSIONS
     ]
     return ok({"custom": items})
+
+
+@app.get("/api/fonts/{font_id}/preview")
+async def preview_font(font_id: str):
+    info = service.preview_font_info(font_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="字体不存在")
+    return info
+
+
+@app.get("/api/fonts/{font_id}/status")
+async def preview_font_status(font_id: str):
+    info = service.preview_font_status(font_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="字体不存在")
+    return info
+
+
+@app.post("/api/fonts/{font_id}/rebuild")
+async def rebuild_preview_font(font_id: str):
+    assets = service.preview_font_assets()
+    asset = assets.get(font_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="字体不存在")
+    from .font_preview import collect_preview_characters
+    characters = collect_preview_characters(service.config)
+    charset_hash = sha256(characters.encode("utf-8"))[:16]
+    service.preview_fonts.schedule(asset, characters, charset_hash, force=True)
+    return {"font_id": font_id, "status": "pending", "charset_hash": charset_hash}
+
+
+@app.get("/api/fonts/{font_id}/file")
+async def preview_font_file(font_id: str, variant: str = Query("original"), v: str = Query("")):
+    resolved = service.preview_font_file(font_id, variant, v)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="字体文件不存在")
+    path, media_type, version = resolved
+    headers = {"Cache-Control": "public, max-age=31536000, immutable", "ETag": f'\"{version}\"'}
+    return FileResponse(path, media_type=media_type, headers=headers)
 
 
 @app.get("/api/plugin/MediaCoverGenerator/stickers")
@@ -2036,6 +2075,11 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "custom_static_layout": config.get("custom_static_layout"),
         "custom_static_layouts": config.get("custom_static_layouts"),
         "custom_static_active_id": config.get("custom_static_active_id"),
+        "preview_font_enabled": bool(config.get("preview_font_enabled", True)),
+        "font_subset_enabled": bool(config.get("font_subset_enabled", True)),
+        "library_scheme_rules": config.get("library_scheme_rules") or [],
+        "default_scheme_id": str(config.get("default_scheme_id") or style_config.get("style") or "single_1"),
+        "scheme_catalog": service.scheme_catalog(),
     }
 
 
@@ -2096,6 +2140,10 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         "log_retention_days",
         "page_tab",
         "style_naming_v2",
+        "preview_font_enabled",
+        "font_subset_enabled",
+        "library_scheme_rules",
+        "default_scheme_id",
         "custom_width",
         "custom_height",
         "bg_color_mode",
@@ -2363,7 +2411,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         ],
         "custom_static_layout": config.get("custom_static_layout"),
         "bg_color": style_config.get("background_color") or "#6f8090",
-        "font_faces": {},
+        "font_faces": service.preview_font_faces(),
     }
 
 

@@ -76,6 +76,22 @@ export interface MediaCoverGeneratorConfig {
   custom_static_layout?: CustomStaticLayout | null
   custom_static_layouts?: CustomStaticLayoutTemplate[] | null
   custom_static_active_id?: string | null
+  preview_font_enabled?: boolean
+  font_subset_enabled?: boolean
+  library_scheme_rules?: LibrarySchemeRule[]
+  default_scheme_id?: string
+  scheme_catalog?: SchemeCatalogItem[]
+}
+
+export interface LibrarySchemeRule {
+  id: string
+  scheme_id: string
+  library_keys: string[]
+}
+
+export interface SchemeCatalogItem {
+  id: string
+  name: string
 }
 
 export interface MediaServerConfig {

@@ -678,7 +678,7 @@
               </div>
 
               <Teleport to="body">
-                <nav v-if="pageTab === 'history-tab' && historyGroupMode === 'time-machine' && groupedHistory.length" class="mcr-time-machine-timeline" :data-mcr-theme="isDark ? 'dark' : 'light'" aria-label="历史时间轴">
+                <nav v-if="pageTab === 'history-tab' && historyGroupMode === 'time-machine' && groupedHistory.length" class="mcr-time-machine-timeline" :style="timeMachineTimelineStyle" :data-mcr-theme="isDark ? 'dark' : 'light'" aria-label="历史时间轴">
                   <button v-for="group in groupedHistory" :key="group.key" type="button" class="mcr-time-machine-node" :class="{ 'is-active': activeTimeRecordId === group.key }" @click="scrollToTimeRecord(group.key)">
                     <span v-if="activeTimeRecordId === group.key" class="mcr-time-machine-restore" @click.stop="restoreHistoryBatch(group.key, group.title)">回到此时</span>
                     <i aria-hidden="true" /><span>{{ group.title }}</span>
@@ -742,7 +742,7 @@
                   id="mcr-history-list-content"
                   class="mcr-history-list-content"
                 >
-                  <div v-if="history.length" class="mcr-history-groups">
+                  <div v-if="history.length" ref="historyGroupsEl" class="mcr-history-groups">
                     <section
                       v-for="group in groupedHistory"
                       :key="group.key"
@@ -2510,6 +2510,27 @@ const groupedHistory = computed(() => {
 let timeRecordObserver: IntersectionObserver | null = null
 let timeRecordClickLockUntil = 0
 let timeMachineFrame = 0
+let timeMachineResizeObserver: ResizeObserver | null = null
+const historyGroupsEl = ref<HTMLElement | null>(null)
+const timeMachineTimelineStyle = ref<Record<string, string>>({ left: '12px', top: '80px' })
+watch(historyGroupsEl, (element) => {
+  timeMachineResizeObserver?.disconnect()
+  timeMachineResizeObserver = null
+  if (element && typeof ResizeObserver !== 'undefined') {
+    timeMachineResizeObserver = new ResizeObserver(updateTimeMachineTimelinePosition)
+    timeMachineResizeObserver.observe(element)
+  }
+  updateTimeMachineTimelinePosition()
+})
+function updateTimeMachineTimelinePosition() {
+  if (!historyGroupsEl.value || historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
+  const rect = historyGroupsEl.value.getBoundingClientRect()
+  const width = 146
+  const padding = 12
+  const desired = rect.right + 20
+  const left = Math.min(Math.max(desired, padding), Math.max(padding, window.innerWidth - width - padding))
+  timeMachineTimelineStyle.value = { left: `${Math.round(left)}px`, right: 'auto', top: `${Math.max(72, Math.round(window.innerHeight / 2))}px` }
+}
 function updateTimeMachineDepth() {
   historyStackLimit.value = isMobileViewport() ? 3 : 5
   if (historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
@@ -2524,7 +2545,7 @@ function updateTimeMachineDepth() {
 }
 function scheduleTimeMachineDepth() {
   if (timeMachineFrame) return
-  timeMachineFrame = window.requestAnimationFrame(() => { timeMachineFrame = 0; updateTimeMachineDepth() })
+  timeMachineFrame = window.requestAnimationFrame(() => { timeMachineFrame = 0; updateTimeMachineDepth(); updateTimeMachineTimelinePosition() })
 }
 function observeTimeRecords() {
   timeRecordObserver?.disconnect()
@@ -2544,7 +2565,7 @@ function observeTimeRecords() {
   }, { rootMargin: '-32% 0px -32% 0px', threshold: [0, 0.1, 0.4] })
   elements.forEach((element) => timeRecordObserver?.observe(element))
 }
-watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(observeTimeRecords))
+watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(() => { observeTimeRecords(); updateTimeMachineTimelinePosition() }))
 watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(scheduleTimeMachineDepth))
 
 function scrollToTimeRecord(id: string) {
@@ -3906,6 +3927,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   timeRecordObserver?.disconnect()
+	  timeMachineResizeObserver?.disconnect()
   componentActive = false
   if (typeof window !== 'undefined') {
     pageThemeMediaQuery?.removeEventListener?.('change', syncSystemTheme)

@@ -375,6 +375,7 @@ import {
 import SvgTemplatePreview from './SvgTemplatePreview.vue'
 import { getTemplateFontFaceName } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
+import { loadPreviewFontFaces } from '../services/fontPreview'
 
 const props = defineProps<{
   source: PreviewSourcePayload | null
@@ -388,7 +389,6 @@ const firstImage = computed(() => props.source?.images?.[0] || null)
 const autoBlendColor = ref(getThemeColor('--mcr-cover-auto-blend'))
 const previewStageEl = ref<HTMLElement | null>(null)
 const previewStageScale = ref(1)
-const loadedFontUrls = new Map<string, Promise<void>>()
 const textMeasureCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
 let previewStageResizeObserver: ResizeObserver | null = null
 const sortedLayers = computed(() => {
@@ -688,31 +688,10 @@ function getMeasuredLineStyle(layer: CustomTitleLayer | CustomTextLayer, index: 
   }
 }
 
-function ensureFontFace(name: string, url?: string) {
-  if (!url || typeof FontFace === 'undefined' || typeof document === 'undefined') {
-    return Promise.resolve()
-  }
-  const cacheKey = `${name}:${url}`
-  const cached = loadedFontUrls.get(cacheKey)
-  if (cached) return cached
-  const pending = new FontFace(name, `url(${url})`).load()
-    .then((font) => {
-      document.fonts.add(font)
-    })
-    .catch((error) => {
-      console.error(`load font face failed: ${name}`, error)
-    })
-    .then(() => undefined)
-  loadedFontUrls.set(cacheKey, pending)
-  return pending
-}
-
 watch(
   () => props.source?.font_faces,
   async (fontFaces) => {
-    await Promise.all(
-      Object.entries(fontFaces || {}).map(([key, url]) => ensureFontFace(getTemplateFontFaceName(key), url)),
-    )
+    await loadPreviewFontFaces(fontFaces, getTemplateFontFaceName)
   },
   { deep: true, immediate: true },
 )
