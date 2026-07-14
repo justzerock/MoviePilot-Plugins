@@ -220,6 +220,20 @@ class CoverService:
     def local_mode(self) -> bool:
         return bool(self.config.get("local_mode", False))
 
+    def input_directory(self) -> Path | None:
+        """Return an explicit local source directory, if this mode has one.
+
+        Server mode intentionally has no implicit input directory. Previously the
+        default /app/data/input also held downloaded preview cache files, so an
+        empty custom-directory field silently became a local image source.
+        """
+        configured = str(self.config.get("covers_input") or "").strip()
+        if configured:
+            return resolve_data_path(configured, "/app/data/input")
+        if self.local_mode() or self.mock_enabled():
+            return resolve_data_path(None, "/app/data/input")
+        return None
+
     def renderer(self) -> CoverRenderer:
         return CoverRenderer(DATA_DIR / "fonts")
 
@@ -625,7 +639,9 @@ class CoverService:
         return result
 
     def local_images(self, library_name: str = "", limit: int = 9, include_mock: bool = True) -> list[Path]:
-        input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
+        input_dir = self.input_directory()
+        if input_dir is None:
+            return []
         roots: list[Path] = []
         if library_name:
             exact_root = input_dir / str(library_name)
@@ -648,9 +664,9 @@ class CoverService:
         return paths
 
     def local_libraries(self) -> list[dict[str, Any]]:
-        input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
+        input_dir = self.input_directory()
         libraries: list[dict[str, Any]] = []
-        if not input_dir.exists():
+        if input_dir is None or not input_dir.exists():
             return libraries
         for child in sorted(input_dir.iterdir(), key=lambda item: item.name):
             if not child.is_dir():
@@ -732,7 +748,7 @@ class CoverService:
         style_config = dict(self.config.get("style_config") or {})
         style_name = style or style_config.get("style") or "single_1"
         image_limit = self.image_limit_for_style(style_config, style_name)
-        input_dir = resolve_data_path(self.config.get("covers_input"), "/app/data/input")
+        input_dir = self.input_directory() or resolve_data_path(None, "/app/data/input")
         output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
         title, subtitle = title_for_library(self.config, library["name"])
         image_paths = ensure_mock_images(input_dir, slugify(library["name"]), title, image_limit)

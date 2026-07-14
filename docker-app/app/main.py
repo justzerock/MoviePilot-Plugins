@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.11")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.12")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1020,10 +1020,11 @@ async def plugin_clean_images():
     media_cache_dir = DATA_DIR / "tmp" / "media_cache"
     if media_cache_dir.exists():
         removed += clean_directory_contents(media_cache_dir)
-    input_dir = resolve_cleanable_data_dir(config.get("covers_input") or "/app/data/input")
-    if input_dir and input_dir.resolve() == (DATA_DIR / "input").resolve() and not config.get("local_mode", False) and not config.get("mock_enabled", False):
-        removed += clean_directory_contents(input_dir)
-    elif input_dir:
+    preview_cache_dir = DATA_DIR / "tmp" / "preview_cache"
+    if preview_cache_dir.exists():
+        removed += clean_directory_contents(preview_cache_dir)
+    input_dir = resolve_cleanable_data_dir(config.get("covers_input"))
+    if input_dir:
         skipped.append("covers_input_local_or_custom")
     return ok({"cleaned": True, "removed": removed, "skipped": skipped, "msg": "已清理媒体素材缓存，生成封面和历史记录已保留"})
 
@@ -1669,11 +1670,11 @@ def remember_libraries(config: dict[str, Any], libraries: list[dict[str, Any]]) 
     service.config = config
 
 
-def first_cached_input_library(config: dict[str, Any]) -> str:
-    input_dir = resolve_data_path(config.get("covers_input"), "/app/data/input")
-    if not input_dir.exists():
+def first_cached_preview_library() -> str:
+    cache_root = DATA_DIR / "tmp" / "preview_cache"
+    if not cache_root.exists():
         return ""
-    for child in sorted(input_dir.iterdir(), key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True):
+    for child in sorted(cache_root.iterdir(), key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True):
         if not child.is_dir():
             continue
         try:
@@ -1922,7 +1923,10 @@ def quote_yaml_value(value: str) -> str:
 
 
 def resolve_cleanable_data_dir(value: Any) -> Path | None:
-    path = Path(str(value or ""))
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    path = Path(raw)
     if not path.is_absolute():
         path = DATA_DIR / path
     try:
@@ -1987,7 +1991,7 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "selected_servers": config.get("selected_servers") or [],
         "include_libraries": config.get("include_libraries") or [],
         "sort_by": str(config.get("sort_by") or "Random"),
-        "covers_input": str(config.get("covers_input") or "/app/data/input"),
+        "covers_input": str(config.get("covers_input") or ""),
         "covers_output": str(config.get("covers_output") or "/app/data/output"),
         "save_recent_covers": bool(config.get("save_recent_covers", True)),
         "history_enabled": bool(config.get("history_enabled", True)),
@@ -2232,9 +2236,9 @@ async def first_library_name(config: dict[str, Any]) -> str:
     include_libraries = [str(item) for item in (config.get("include_libraries") or []) if str(item)]
     if include_libraries:
         return include_libraries[0]
-    cached_input_library = first_cached_input_library(config)
-    if cached_input_library:
-        return cached_input_library
+    cached_preview_library = first_cached_preview_library()
+    if cached_preview_library:
+        return cached_preview_library
     cached_libraries = [
         str(item.get("name") or item.get("value") or "").strip()
         for item in (config.get("all_libraries") or [])
@@ -2273,14 +2277,10 @@ def cached_library_name(config: dict[str, Any], identifier: str) -> str:
 
 async def ensure_preview_images(config: dict[str, Any], library: str, required_items: int, force_refresh: bool = False) -> dict[str, Any]:
     style_config = config.get("style_config") or {}
-    input_dir = Path(config.get("covers_input") or "/app/data/input")
+    configured_input = str(config.get("covers_input") or "").strip()
+    input_dir = Path(configured_input) if configured_input else (DATA_DIR / "input")
     if not input_dir.is_absolute():
         input_dir = DATA_DIR / input_dir
-    default_input_dir = (DATA_DIR / "input").resolve()
-    try:
-        input_is_default = input_dir.resolve() == default_input_dir
-    except Exception:
-        input_is_default = False
     limit = max(1, min(60, required_items or int(style_config.get("image_limit") or 9)))
     requested_library = str(library or "")
     cache_library = cached_library_name(config, requested_library)
@@ -2291,7 +2291,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     if config.get("local_mode", False):
         images = service.local_images(cache_library, limit, include_mock=False)
         server = "local"
-        source_mode = ("cache" if input_is_default else "custom") if images else "custom"
+        source_mode = "custom" if configured_input else "local"
         if not images:
             images = service.local_images("", limit, include_mock=False)
     elif config.get("mock_enabled", True):
@@ -2299,22 +2299,24 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         server = "mock"
         source_mode = "custom"
     else:
-        # Cache directories use the actual library name, while selectors may use a
-        # `server:id` value. Resolve before looking on disk so reopening the page is
-        # a cache hit and does not contact the media server again.
-        images = [] if force_refresh and input_is_default else service.local_images(cache_library, limit, include_mock=False)
-        server = "local"
-        source_mode = ("cache" if input_is_default else "custom") if images else "media_server"
+        # Server previews use an internal cache, never the user-controlled input
+        # directory. This keeps an empty covers_input truly empty and prevents a
+        # previous server cache from turning into a local image source.
+        cache_dir = DATA_DIR / "tmp" / "preview_cache" / slugify(cache_library or requested_library or "default")
+        if configured_input:
+            images = service.local_images(cache_library, limit, include_mock=False)
+            source_mode = "custom" if images else "media_server"
+        else:
+            images = [] if force_refresh else preview_cache_images(cache_dir, limit)
+            source_mode = "cache" if images else "media_server"
+        server = "local" if configured_input and images else "media_server"
         if not images:
             try:
                 client, media_library = await service.find_library(requested_library)
                 server = client.server_name
                 library = media_library.name
-                cache_dir = input_dir / slugify(media_library.name)
-                if force_refresh and input_is_default and cache_dir.exists():
-                    # `input/<library>` is the legacy server material cache in server mode.
-                    # Removing it before downloading makes a refresh deterministic instead of
-                    # relying on the old numbered files and their browser cache entries.
+                cache_dir = DATA_DIR / "tmp" / "preview_cache" / slugify(media_library.name)
+                if force_refresh and cache_dir.exists():
                     shutil.rmtree(cache_dir)
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 items = await client.get_items(
@@ -2343,13 +2345,6 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                 source_mode = "media_server" if images else "cache"
             except Exception:
                 images = []
-        if not images and not (force_refresh and input_is_default):
-            images = service.local_images("", limit, include_mock=False)
-            server = "local"
-            source_mode = ("cache" if input_is_default else "custom") if images else "media_server"
-    if force_refresh and len(images) > 1:
-        offset = int(datetime.now(timezone.utc).timestamp() * 1000) % len(images)
-        images = images[offset:] + images[:offset]
     preview_version = str(int(datetime.now(timezone.utc).timestamp() * 1000)) if force_refresh else ""
     title, subtitle, custom_texts = library_title_payload(config, library)
     base, variant = STYLE_TO_PLUGIN.get(str(style_config.get("style") or "single_1"), ("static_1", "static"))
@@ -2375,6 +2370,16 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         "bg_color": style_config.get("background_color") or "#6f8090",
         "font_faces": {},
     }
+
+
+def preview_cache_images(cache_dir: Path, limit: int) -> list[Path]:
+    if not cache_dir.exists():
+        return []
+    return [
+        path
+        for path in sorted(cache_dir.iterdir(), key=lambda item: item.name)
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+    ][:limit]
 
 
 def data_file_url(path: Path) -> str:

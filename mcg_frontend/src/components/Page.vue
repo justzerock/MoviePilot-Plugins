@@ -3214,7 +3214,12 @@ async function loadPreviewSources(requiredItems?: number, forceRefresh = false):
           custom_static_layout: resp.data.custom_static_layout ? cloneLayout(resp.data.custom_static_layout) : resp.data.custom_static_layout,
         }
         if (requestId !== previewSourceRequestId) return true
-        await setPreviewCache(baseKey, Math.max(capacity, previewSource.value.images.length), previewSource.value)
+        try {
+          await setPreviewCache(baseKey, Math.max(capacity, previewSource.value.images.length), previewSource.value)
+        } catch (cacheError) {
+          // Cache persistence is optional; the refresh itself already succeeded.
+          console.warn('preview cache persistence failed', cacheError)
+        }
       }
       // A successful forced refresh can retain the existing artwork when no newer
       // candidate is available; do not report that successful request as a failure.
@@ -3273,7 +3278,11 @@ async function refreshCurrentPreview() {
   try {
     // Clear the browser-side record before asking the server to drop its media cache.
     // Otherwise a failed request could silently leave the previous cached artwork on screen.
-    await invalidatePreviewCache(previewRequestBaseKey())
+    try {
+      await invalidatePreviewCache(previewRequestBaseKey())
+    } catch (cacheError) {
+      console.warn('preview cache invalidation failed', cacheError)
+    }
     const refreshed = await loadPreviewSources(undefined, true)
     showEditorSaveStatus(refreshed ? '海报已刷新' : '刷新失败，继续使用当前海报')
     if (previewMode.value === 'backend') {

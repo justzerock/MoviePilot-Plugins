@@ -38,7 +38,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "include_libraries": [],
     "all_libraries": [],
     "sort_by": "Random",
-    "covers_input": "/app/data/input",
+    # An empty value means that server mode uses media-server artwork directly.
+    # Local and test modes still use /app/data/input as their implicit source.
+    "covers_input": "",
     "covers_output": "/app/data/output",
     "save_recent_covers": True,
     "history_enabled": True,
@@ -101,6 +103,7 @@ def ensure_data_dirs() -> None:
         DATA_DIR / "stickers",
         DATA_DIR / "backups",
         DATA_DIR / "tmp",
+        DATA_DIR / "tmp" / "preview_cache",
         DATA_DIR / "logs",
         DATA_DIR / "history",
     ):
