@@ -117,6 +117,7 @@ class HistoryBatch:
             "generated_at": iso_time(),
             "error": str(result.get("upload_error") or "") or None,
             "original_filename": source.name,
+            "source_item_id": str(result.get("source_item_id") or "") or None,
         }
         if source.is_file():
             suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif"} else ".jpg"
@@ -145,7 +146,7 @@ class HistoryBatch:
 
 
 class HistoryStore:
-    def __init__(self, data_dir: Path, app_version: str = "2.0.12") -> None:
+    def __init__(self, data_dir: Path, app_version: str = "2.0.14") -> None:
         self.root = data_dir / HISTORY_ROOT_NAME
         self.batches = self.root / "batches"
         self.tmp = self.root / ".tmp"
@@ -225,6 +226,29 @@ class HistoryStore:
             removed += 1
         self.rebuild_history_index()
         return removed
+
+    def latest_source_item_id(self, server_id: str, library_id: str) -> str:
+        """Return the latest successfully rendered source media ID for a library."""
+        expected_server = safe_id(server_id, "local")
+        expected_library = safe_id(library_id, "library")
+        manifests: list[dict[str, Any]] = []
+        for directory in self.batches.iterdir():
+            if directory.is_dir():
+                manifest = self.get_history_batch(directory.name)
+                if manifest:
+                    manifests.append(manifest)
+        manifests.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        for manifest in manifests:
+            for item in manifest.get("items") or []:
+                if (
+                    str(item.get("server_id") or "") == expected_server
+                    and str(item.get("library_id") or "") == expected_library
+                    and item.get("status") == "success"
+                    and str(item.get("upload_status") or "") in {"success", "skipped"}
+                    and str(item.get("source_item_id") or "").strip()
+                ):
+                    return str(item["source_item_id"])
+        return ""
 
     def migrate_legacy(self, legacy_output: Path) -> int:
         """Import the old flat output folder once without altering its files."""

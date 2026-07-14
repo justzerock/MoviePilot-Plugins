@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.12")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.14")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -179,7 +179,7 @@ class GenerationManager:
         if batch:
             self.run_log.info("历史批次开始 batch_id=%s", batch.batch_id)
         self.run_log.info("任务开始 trigger=%s style=%s library=%s mode=%s", trigger, style or "default", library_name or "all", "local" if self.service.local_mode() else "server")
-        self.task = asyncio.create_task(self._run(style, library_name))
+        self.task = asyncio.create_task(self._run(style, library_name, trigger))
         await asyncio.sleep(0)
         return self.snapshot()
 
@@ -192,13 +192,13 @@ class GenerationManager:
         self.label = "已停止"
         return self.snapshot()
 
-    async def _run(self, style: str = "", library_name: str | None = None) -> None:
+    async def _run(self, style: str = "", library_name: str | None = None, trigger: str = "manual") -> None:
         try:
             style_name = normalize_style(style)
             if library_name:
                 self.total = 1
                 self.label = f"正在生成 {library_name}"
-                self.items.extend(await self.service.generate(library_name, style_name))
+                self.items.extend(await self.service.generate(library_name, style_name, trigger=trigger))
                 self.run_log and self.run_log.info("媒体库完成 library=%s result=%s", library_name, self.items[-1] if self.items else {})
                 self.current = 1
                 self.label = "生成完成"
@@ -207,7 +207,7 @@ class GenerationManager:
             if not libraries:
                 self.total = 1
                 self.label = "正在生成本地封面"
-                self.items.extend(await self.service.generate(None, style_name))
+                self.items.extend(await self.service.generate(None, style_name, trigger=trigger))
                 self.current = 1
                 self.label = "生成完成"
                 return
@@ -221,7 +221,7 @@ class GenerationManager:
                     self.current += 1
                     continue
                 self.label = f"正在生成 {library_name}"
-                self.items.extend(await self.service.generate(str(library.get("value") or library_name), style_name))
+                self.items.extend(await self.service.generate(str(library.get("value") or library_name), style_name, trigger=trigger))
                 self.run_log and self.run_log.info("媒体库完成 library=%s", library_name)
                 self.current += 1
                 await asyncio.sleep(0)
@@ -240,9 +240,10 @@ class GenerationManager:
             except Exception as history_error:
                 APP_LOGGER.exception("历史批次归档失败: %s", history_error)
             if self.run_log:
-                succeeded = sum(1 for item in self.items if not item.get("upload_error"))
-                failed = sum(1 for item in self.items if item.get("upload_error"))
-                self.run_log.info("任务结束 status=%s success=%s failed=%s skipped=%s", self.label, succeeded, failed, max(0, self.total - self.current))
+                skipped = sum(1 for item in self.items if item.get("skipped"))
+                succeeded = sum(1 for item in self.items if not item.get("skipped") and not item.get("upload_error"))
+                failed = sum(1 for item in self.items if not item.get("skipped") and item.get("upload_error"))
+                self.run_log.info("任务结束 status=%s success=%s failed=%s skipped=%s", self.label, succeeded, failed, skipped + max(0, self.total - self.current))
                 self.run_log.close()
                 self.run_log = None
             try:
@@ -565,12 +566,6 @@ async def media_server_webhook(request: Request, token: str = Query(""), source:
 
     delay_seconds = max(0, int(config.get("delay") or 0))
     style = str(config.get("style_config", {}).get("style") or "")
-    if config.get("lock_latest_sort"):
-        config["sort_by"] = "DateCreated"
-        config.setdefault("style_config", {})["image_count_mode"] = "auto"
-        save_config(config)
-        service.reload()
-
     asyncio.create_task(delayed_generation_start(delay_seconds, style, library_name))
     return ok({
         "accepted": True,

@@ -14,6 +14,7 @@ import random
 import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote, unquote
 from typing import Any, Dict, List, Optional, Tuple
@@ -106,6 +107,14 @@ from app.plugins.yahahacoverstudio.utils.performance_helper import PerformanceMo
 from app.plugins.yahahacoverstudio.utils.color_helper import ColorHelper
 
 
+class CoverUpdateOutcome(str, Enum):
+    """Explicit update result; never confuse a monitor skip with image data."""
+
+    UPDATED = "updated"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
 class YahahaCoverStudio(_PluginBase):
     # 插件名称
     plugin_name = "呀哈哈封面工坊"
@@ -114,7 +123,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.13"
+    plugin_version = "2.0.14"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -7542,30 +7551,12 @@ class YahahaCoverStudio(_PluginBase):
         if update_key in self._current_updating_items:
             logger.info(f"媒体库 {server}：{library['Name']} 的项目 {mediainfo.title_year} 正在更新中，跳过此次更新")
             return
-        # self.clean_cover_history(save=True)
-        old_history = self.get_data('cover_history') or []
-        # 新增去重判断逻辑
-        latest_item = max(
-            (item for item in old_history if str(item.get("library_id")) == str(library_id)),
-            key=lambda x: x["timestamp"],
-            default=None
-        )
-        if latest_item and str(latest_item.get("item_id")) == str(item_id):
-            logger.info(f"媒体 {mediainfo.title_year} 在库中是最新记录，不更新封面图")
-            return
-        
         # 安全地获取字体和翻译
         try:
             self.__get_fonts()
         except Exception as e:
             logger.error(f"初始化字体或翻译时出错: {e}")
             # 继续执行，但可能会影响封面生成质量
-        new_history = self.update_cover_history(
-            server=server, 
-            library_id=library_id, 
-            item_id=item_id
-        )
-        # logger.info(f"最新数据： {new_history}")
         self._monitor_sort = 'DateCreated'
         self._current_updating_items.add(update_key)
         try:
@@ -7573,8 +7564,10 @@ class YahahaCoverStudio(_PluginBase):
         finally:
             self._monitor_sort = ''
             self._current_updating_items.discard(update_key)
-        if updated:
+        if updated is CoverUpdateOutcome.UPDATED:
             logger.info(f"媒体库 {server}：{library['Name']} 封面更新成功")
+        elif updated is CoverUpdateOutcome.SKIPPED:
+            logger.info(f"媒体库 {server}：{library['Name']} 最新入库素材未变化，跳过生成")
         else:
             logger.warning(f"媒体库 {server}：{library['Name']} 封面更新失败")
 
@@ -7633,32 +7626,19 @@ class YahahaCoverStudio(_PluginBase):
             logger.info(f"媒体库 {server}：{library.get('Name')} 的项目 {item_name} 正在更新中，跳过此次 Webhook 更新")
             return
 
-        old_history = self.get_data('cover_history') or []
-        latest_item = max(
-            (item for item in old_history if str(item.get("library_id")) == str(library_id)),
-            key=lambda x: x["timestamp"],
-            default=None
-        )
-        if latest_item and str(latest_item.get("item_id")) == str(item_id):
-            logger.info(f"媒体 {item_name} 在库中是最新记录，不更新封面图")
-            return
-
         try:
             self.__get_fonts()
         except Exception as e:
             logger.error(f"初始化字体或翻译时出错: {e}")
 
-        self.update_cover_history(
-            server=server,
-            library_id=library_id,
-            item_id=item_id,
-        )
-
         self._monitor_sort = "DateCreated"
         self._current_updating_items.add(update_key)
         try:
-            if self.__update_library(service, library):
+            updated = self.__update_library(service, library)
+            if updated is CoverUpdateOutcome.UPDATED:
                 logger.info(f"媒体库 {server}：{library.get('Name')} Webhook 封面更新成功")
+            elif updated is CoverUpdateOutcome.SKIPPED:
+                logger.info(f"媒体库 {server}：{library.get('Name')} 最新入库素材未变化，跳过生成")
             else:
                 logger.warning(f"媒体库 {server}：{library.get('Name')} Webhook 封面更新失败")
         finally:
@@ -7853,8 +7833,12 @@ class YahahaCoverStudio(_PluginBase):
                     total_count,
                     f"{server}：{library.get('Name', '')}",
                 )
-                if self.__update_library(service, library):
+                outcome = self.__update_library(service, library)
+                if outcome is CoverUpdateOutcome.UPDATED:
                     logger.info(f"媒体库 {server}：{library['Name']} 封面更新成功")
+                    success_count += 1
+                elif outcome is CoverUpdateOutcome.SKIPPED:
+                    logger.info(f"媒体库 {server}：{library['Name']} 素材未变化，跳过生成")
                     success_count += 1
                 else:
                     logger.warning(f"媒体库 {server}：{library['Name']} 封面更新失败")
@@ -7896,8 +7880,13 @@ class YahahaCoverStudio(_PluginBase):
         else:
             image_data = self.__generate_from_server(service, library, title)
 
-        if image_data:
-            return self.__set_library_image(service, library, image_data)
+        # `True` is the legacy signal from __generate_from_server for a monitor
+        # de-duplication skip. It is intentionally not image/Base64 data.
+        if image_data is True:
+            return CoverUpdateOutcome.SKIPPED
+        if isinstance(image_data, str) and image_data:
+            return CoverUpdateOutcome.UPDATED if self.__set_library_image(service, library, image_data) else CoverUpdateOutcome.FAILED
+        return CoverUpdateOutcome.FAILED
 
     def __check_custom_image(self, library_name):
         images = self.__collect_library_images_from_root(self._covers_input, library_name)
@@ -8346,8 +8335,9 @@ class YahahaCoverStudio(_PluginBase):
         """
         if not first_item:
             return False
-        effective_sort = "DateCreated" if self._monitor_sort else (self._sort_by or "Random")
-        if effective_sort != "DateCreated":
+        # Manual and scheduled runs always follow their configured sort and must
+        # remain reproducible. Only monitor-triggered work is latest-item deduped.
+        if not self._monitor_sort:
             return False
 
         if service.type == "emby":

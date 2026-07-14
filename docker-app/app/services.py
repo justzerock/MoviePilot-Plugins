@@ -255,6 +255,8 @@ class CoverService:
         return manifest
 
     def record_batch_result(self, result: dict[str, Any], server_id: str, server_name: str, server_type: str, library_id: str, library_name: str) -> None:
+        if result.get("skipped"):
+            return
         if self.history_batch:
             item = self.history_batch.add_result(result, server_id=server_id, server_name=server_name, server_type=server_type, library_id=library_id, library_name=library_name)
             result["history_batch_id"] = self.history_batch.batch_id
@@ -480,7 +482,7 @@ class CoverService:
                     return client, library
         raise ValueError(f"Library not found: {library_name}")
 
-    async def generate(self, library_name: str | None = None, style: str | None = None) -> list[dict[str, Any]]:
+    async def generate(self, library_name: str | None = None, style: str | None = None, trigger: str = "manual") -> list[dict[str, Any]]:
         if self.local_mode():
             if library_name:
                 local_libraries = self.local_libraries()
@@ -515,19 +517,19 @@ class CoverService:
 
         if library_name:
             client, library = await self.find_library(library_name)
-            return [await self.generate_library(client, library, style)]
+            return [await self.generate_library(client, library, style, trigger=trigger)]
 
         libraries = self.selected_generation_libraries(await self.libraries())
         if libraries:
             output = []
             for library_info in libraries:
                 client, library = await self.find_library(str(library_info.get("value") or library_info["name"]))
-                output.append(await self.generate_library(client, library, style))
+                output.append(await self.generate_library(client, library, style, trigger=trigger))
             return output
 
         return [await self.generate_from_local(style)]
 
-    async def generate_library(self, client: MediaServerClient, library: MediaLibrary, style: str | None = None) -> dict[str, Any]:
+    async def generate_library(self, client: MediaServerClient, library: MediaLibrary, style: str | None = None, trigger: str = "manual") -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
         style_name = style or style_config.get("style") or "single_1"
         image_limit = self.image_limit_for_style(style_config, style_name)
@@ -538,22 +540,50 @@ class CoverService:
         media_cache_dir.mkdir(parents=True, exist_ok=True)
 
         image_paths: list[Path] = self.local_images(library.name, image_limit, include_mock=False)
-        sort_by = str(style_config.get("sort_by") or self.config.get("sort_by") or "DateCreated")
+        # A monitor run always reflects the newest scanned item. Manual and
+        # scheduled runs intentionally keep the user's configured sort order.
+        sort_by = "DateCreated" if trigger == "monitor" else str(style_config.get("sort_by") or self.config.get("sort_by") or "DateCreated")
+        source_item_id = ""
         if len(image_paths) < image_limit:
             items = await client.get_items(library.id, image_limit, sort_by)
-            used_paths = {path.resolve() for path in image_paths if path.exists()}
-            start_index = len(image_paths)
-            for index, item in enumerate(items, start=start_index + 1):
-                if len(image_paths) >= image_limit:
-                    break
+            download_jobs: list[tuple[str, Path]] = []
+            for index, item in enumerate(items, start=1):
                 image_url = client.item_image_url(item, image_source)
                 if not image_url:
                     continue
+                if not source_item_id:
+                    source_item_id = str(item.get("Id") or item.get("ItemId") or "").strip()
+                download_jobs.append((image_url, media_cache_dir / f"{index:02d}.jpg"))
+                if len(download_jobs) >= image_limit:
+                    break
+            if trigger == "monitor" and source_item_id:
+                previous_item_id = HistoryStore(DATA_DIR).latest_source_item_id(client.server_id, library.id)
+                if previous_item_id == source_item_id:
+                    APP_LOGGER.info(
+                        "监控跳过未变化媒体库 server=%s library=%s source_item_id=%s",
+                        client.server_name,
+                        library.name,
+                        source_item_id,
+                    )
+                    return {
+                        "library": library.name,
+                        "library_id": library.id,
+                        "server": client.server_name,
+                        "style": style_name,
+                        "skipped": True,
+                        "skip_reason": "latest_item_unchanged",
+                        "source_item_id": source_item_id,
+                    }
+            used_paths = {path.resolve() for path in image_paths if path.exists()}
+            start_index = len(image_paths)
+            for index, (image_url, downloaded_path) in enumerate(download_jobs, start=start_index + 1):
+                if len(image_paths) >= image_limit:
+                    break
                 path = media_cache_dir / f"{index:02d}.jpg"
                 try:
                     downloaded = await client.download_image(image_url, path)
                 except Exception as error:
-                    APP_LOGGER.warning("图片下载失败 library=%s item=%s: %s", library.name, item.get("Id") or item.get("Name") or index, error)
+                    APP_LOGGER.warning("图片下载失败 library=%s index=%s: %s", library.name, index, error)
                     continue
                 resolved = downloaded.resolve()
                 if resolved in used_paths:
@@ -584,6 +614,7 @@ class CoverService:
             "output": str(output_path),
             "url": f"/data/output/{output_path.name}",
             "source_count": len(image_paths),
+            "source_item_id": source_item_id,
             "uploaded": uploaded,
             "upload_error": upload_error,
         }
