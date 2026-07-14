@@ -114,7 +114,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.10"
+    plugin_version = "2.0.11"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4089,7 +4089,11 @@ class YahahaCoverStudio(_PluginBase):
                     version = int(time.time() * 1000)
                     for image in images:
                         src = str(image.get("src") or "")
-                        if src:
+                        # Local and proxied plugin previews use data URLs. Appending a
+                        # query string to one corrupts the base64 payload and becomes a
+                        # browser broken-image placeholder. Data URLs are uncached, so
+                        # they do not need a cache-busting version in the first place.
+                        if src and not src.startswith("data:"):
                             image["src"] = f"{src}{'&' if '?' in src else '?'}preview_version={version}"
                 if not images:
                     logger.info(f"媒体库 {service.name}：{library_name} 无可用预览素材，继续尝试下一个媒体库")

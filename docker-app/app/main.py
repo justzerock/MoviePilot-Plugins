@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.10")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.11")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2284,6 +2284,10 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     limit = max(1, min(60, required_items or int(style_config.get("image_limit") or 9)))
     requested_library = str(library or "")
     cache_library = cached_library_name(config, requested_library)
+    # Keep API titles, title mappings and cache directory lookup on the same human
+    # readable library name. The selector can be the internal `server:id` value.
+    if cache_library:
+        library = cache_library
     if config.get("local_mode", False):
         images = service.local_images(cache_library, limit, include_mock=False)
         server = "local"
