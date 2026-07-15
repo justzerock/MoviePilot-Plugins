@@ -21,6 +21,7 @@
           :template="source?.custom_static_layout"
           :source="source"
           :params="params"
+          :font-revision="fontRevision"
           :auto-blend-color="autoBlendColor"
         />
         <div v-else class="sim-stage" :style="previewStageFixedStyle">
@@ -373,7 +374,6 @@ import {
   resolveBlendColor,
 } from '../utils/renderSimulation'
 import SvgTemplatePreview from './SvgTemplatePreview.vue'
-import { getTemplateFontFaceName } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
 import { loadPreviewFontFaces } from '../services/fontPreview'
 
@@ -389,9 +389,11 @@ const firstImage = computed(() => props.source?.images?.[0] || null)
 const autoBlendColor = ref(getThemeColor('--mcr-cover-auto-blend'))
 const previewStageEl = ref<HTMLElement | null>(null)
 const previewStageScale = ref(1)
+const fontRevision = ref(0)
 const textMeasureCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
 let previewStageResizeObserver: ResizeObserver | null = null
 const sortedLayers = computed(() => {
+  fontRevision.value
   const layout = props.source?.custom_static_layout as CustomStaticLayout | null | undefined
   return [...(layout?.layers || [])].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
 })
@@ -436,12 +438,14 @@ const overlayStyle = computed(() => buildOverlayStyle(effectiveBlendColor.value,
 const canvasStyle = computed(() => ({
   backgroundColor: effectiveBlendColor.value,
 }))
-const mainTitleStyle = computed(() => ({
-  fontFamily: getPreviewFontFamily('main_title', titles.value.zh),
-}))
-const subtitleStyle = computed(() => ({
-  fontFamily: getPreviewFontFamily('subtitle', titles.value.en),
-}))
+const mainTitleStyle = computed(() => {
+  fontRevision.value
+  return { fontFamily: getPreviewFontFamily('main_title', titles.value.zh) }
+})
+const subtitleStyle = computed(() => {
+  fontRevision.value
+  return { fontFamily: getPreviewFontFamily('subtitle', titles.value.en) }
+})
 const previewStageFixedStyle = computed(() => ({
   transform: `scale(${previewStageScale.value})`,
   width: `${documentSize.value.width}px`,
@@ -586,6 +590,7 @@ function getImageStyle(layer: CustomImageLayer | CustomTitleLayer | CustomTextLa
 }
 
 function getTitleStyle(layer: CustomTitleLayer | CustomTextLayer) {
+  fontRevision.value
   const normalized = normalizeLayerEffects(layer)
   const measured = getMeasuredTextLayout(layer)
   const fontFamily = getPreviewFontFamily(normalized.fontFamily, getCustomLayerText(layer))
@@ -614,6 +619,7 @@ function getMeasuredTextLayout(layer: CustomTitleLayer | CustomTextLayer): Custo
 }
 
 function measureTextWidth(text: string, layer: CustomTitleLayer | CustomTextLayer) {
+  fontRevision.value
   const context = textMeasureCanvas?.getContext('2d')
   if (!context) {
     return text.length * Math.max(12, layer.fontSize || 60) * 0.55
@@ -691,7 +697,8 @@ function getMeasuredLineStyle(layer: CustomTitleLayer | CustomTextLayer, index: 
 watch(
   () => props.source?.font_faces,
   async (fontFaces) => {
-    await loadPreviewFontFaces(fontFaces, getTemplateFontFaceName)
+    await loadPreviewFontFaces(fontFaces)
+    fontRevision.value += 1
   },
   { deep: true, immediate: true },
 )

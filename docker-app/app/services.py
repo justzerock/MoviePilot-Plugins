@@ -204,6 +204,7 @@ class CoverService:
         self.config = load_config()
         self.history_batch: HistoryBatch | None = None
         self.preview_fonts = PreviewFontService(DATA_DIR, APP_LOGGER)
+        self._preview_font_paths: set[str] = set()
 
     def reload(self) -> dict[str, Any]:
         self.config = load_config()
@@ -350,8 +351,12 @@ class CoverService:
                 font_paths[key] = resolved
         return {key: value for key, value in font_paths.items() if value}
 
-    def preview_font_assets(self) -> dict[str, dict[str, Any]]:
-        return self.preview_fonts.assets([Path(value) for value in set(self.build_font_paths().values())])
+    def preview_font_assets(self, paths: list[str] | None = None) -> dict[str, dict[str, Any]]:
+        selected = paths or list(self._preview_font_paths)
+        if not selected:
+            semantic = self.build_font_paths()
+            selected = [semantic.get(key, "") for key in ("main_title", "subtitle", "custom_text")]
+        return self.preview_fonts.assets([Path(value) for value in set(selected) if value])
 
     def preview_font_info(self, font_id: str) -> dict[str, Any] | None:
         return self.preview_fonts.info(
@@ -367,23 +372,39 @@ class CoverService:
     def preview_font_status(self, font_id: str) -> dict[str, Any] | None:
         return self.preview_fonts.status(font_id, self.preview_font_assets(), self.config)
 
-    def preview_font_faces(self) -> dict[str, str]:
+    def preview_font_faces(self, layout: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
         if not bool(self.config.get("preview_font_enabled", True)):
             return {}
         paths = self.build_font_paths()
-        assets = self.preview_font_assets()
+        aliases = {"main_title", "subtitle", "custom_text"}
+
+        def visit(layers: list[Any]) -> None:
+            for layer in layers:
+                if not isinstance(layer, dict):
+                    continue
+                if str(layer.get("type") or "") == "group":
+                    visit(layer.get("children") or [])
+                    continue
+                if str(layer.get("type") or "") in {"main_title", "title_zh", "subtitle", "title_en", "text"}:
+                    aliases.add(str(layer.get("fontFamily") or ("subtitle" if layer.get("type") in {"subtitle", "title_en"} else "custom_text" if layer.get("type") == "text" else "main_title")))
+
+        if isinstance(layout, dict):
+            visit(layout.get("layers") or [])
+        selected_paths = [paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index()) for alias in aliases]
+        self._preview_font_paths.update(str(path) for path in selected_paths if path)
+        assets = self.preview_font_assets(selected_paths)
         path_to_id = {str(item["path"]): asset_id for asset_id, item in assets.items()}
-        faces: dict[str, str] = {}
+        faces: dict[str, dict[str, Any]] = {}
         # Preview surfaces only need the three semantic fonts.  Loading the
         # complete custom-font library here used to create many redundant
         # FontFace requests before a user even selected a text layer.
-        for alias in ("main_title", "subtitle", "custom_text"):
-            path = paths.get(alias)
+        for alias in aliases:
+            path = paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index())
             if not path:
                 continue
             info = self.preview_font_info(path_to_id.get(str(Path(path).resolve()), ""))
             if info and info.get("url"):
-                faces[alias] = str(info["url"])
+                faces[alias] = info
         return faces
 
     def scheme_catalog(self) -> list[dict[str, str]]:

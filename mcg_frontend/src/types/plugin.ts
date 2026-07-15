@@ -304,6 +304,16 @@ export interface PreviewTitles {
   en: string
 }
 
+export interface PreviewFontFace {
+  url: string
+  font_id?: string
+  font_family?: string
+  version?: string
+  source_type?: 'subset' | 'original' | 'remote' | 'disabled'
+  subset_status?: 'ready' | 'pending' | 'building' | 'failed' | 'disabled'
+  charset_hash?: string
+}
+
 export interface PreviewSourcePayload {
   server: string
   library: string
@@ -316,7 +326,7 @@ export interface PreviewSourcePayload {
   images: PreviewSourceImage[]
   custom_static_layout?: CustomStaticLayout | null
   bg_color?: string | null
-  font_faces?: Partial<Record<string, string>>
+  font_faces?: Partial<Record<string, PreviewFontFace | string>>
 }
 
 export interface BackendPreviewPayload {

@@ -115,7 +115,8 @@ class PreviewFontService:
         manifest = self._manifest(asset, charset_hash)
         subset_file = self._subset_path(asset, charset_hash)
         if manifest.get("status") == "ready" and subset_file.is_file():
-            return {"font_id": font_id, "font_family": family, "source_type": "subset", "url": url_for(font_id, "subset", charset_hash), "format": "woff2", "subset_status": "ready", "charset_hash": charset_hash, "version": charset_hash}
+            subset_family = f"YahahaPreview_{font_id}_{charset_hash}"
+            return {"font_id": font_id, "font_family": subset_family, "source_type": "subset", "url": url_for(font_id, "subset", charset_hash), "format": "woff2", "subset_status": "ready", "charset_hash": charset_hash, "version": charset_hash}
         self.schedule(asset, characters, charset_hash)
         status = str(manifest.get("status") or "pending")
         return self._original_info(asset, family, charset_hash, url_for, status)

@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.15")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.16")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2411,7 +2411,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         ],
         "custom_static_layout": config.get("custom_static_layout"),
         "bg_color": style_config.get("background_color") or "#6f8090",
-        "font_faces": service.preview_font_faces(),
+        "font_faces": service.preview_font_faces(config.get("custom_static_layout")),
     }
 
 

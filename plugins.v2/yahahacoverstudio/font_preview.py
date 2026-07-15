@@ -70,17 +70,17 @@ class PreviewFontService:
         if not item: return None
         chars = collect_characters(config)
         charset_hash = hashlib.sha256(chars.encode()).hexdigest()[:16]
-        family = f"YahahaPreview_{font_id}_{charset_hash}"
-        if not config.get("preview_font_enabled", True): return {"font_id": font_id, "font_family": family, "source_type": "disabled", "url": "", "format": "", "subset_status": "disabled", "charset_hash": charset_hash, "version": item["sha"]}
+        original_family = f"YahahaPreview_{font_id}_{item['sha'][:12]}"
+        if not config.get("preview_font_enabled", True): return {"font_id": font_id, "font_family": original_family, "source_type": "disabled", "url": "", "format": "", "subset_status": "disabled", "charset_hash": charset_hash, "version": item["sha"]}
         if config.get("font_subset_enabled", True):
             manifest = self._manifest(item, charset_hash)
             subset = self._subset(item, charset_hash)
             if manifest.get("status") == "ready" and subset.is_file():
-                return {"font_id": font_id, "font_family": family, "source_type": "subset", "url": url_for(font_id, "subset", charset_hash), "format": "woff2", "subset_status": "ready", "charset_hash": charset_hash, "version": charset_hash}
+                return {"font_id": font_id, "font_family": f"YahahaPreview_{font_id}_{charset_hash}", "source_type": "subset", "url": url_for(font_id, "subset", charset_hash), "format": "woff2", "subset_status": "ready", "charset_hash": charset_hash, "version": charset_hash}
             self.schedule(item, chars, charset_hash)
             state = str(manifest.get("status") or "pending")
         else: state = "disabled"
-        return {"font_id": font_id, "font_family": family, "source_type": "original", "url": url_for(font_id, "original", item["sha"]), "format": item["format"], "subset_status": state, "charset_hash": charset_hash, "version": item["sha"]}
+        return {"font_id": font_id, "font_family": original_family, "source_type": "original", "url": url_for(font_id, "original", item["sha"]), "format": item["format"], "subset_status": state, "charset_hash": charset_hash, "version": item["sha"]}
 
     def file_for(self, font_id: str, variant: str, version: str, assets: dict[str, dict[str, Any]]):
         item = assets.get(font_id)

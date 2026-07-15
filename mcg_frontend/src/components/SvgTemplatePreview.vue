@@ -23,6 +23,7 @@ const props = defineProps<{
   selectedLayerId?: string | null
   interactive?: boolean
   autoBlendColor?: string
+  fontRevision?: number
 }>()
 
 const emit = defineEmits<{
@@ -32,11 +33,11 @@ const emit = defineEmits<{
 }>()
 
 const svgMarkup = computed(() =>
-  renderTemplateSvg(props.template, props.source, props.params, {
+  (props.fontRevision, renderTemplateSvg(props.template, props.source, props.params, {
     selectedLayerId: props.selectedLayerId,
     interactive: props.interactive,
     autoBlendColor: props.autoBlendColor,
-  }),
+  })),
 )
 
 const hasTextMaskLayer = computed(() => {

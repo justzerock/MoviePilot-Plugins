@@ -14,7 +14,23 @@ export const SEMANTIC_FONT_ITEMS = [
   { title: '自定义文本字体', value: 'custom_text' },
 ]
 
+const previewFontFamilies = new Map<string, string>()
+
+function normalizedFontKey(fontFamily?: string | null) {
+  return String(fontFamily || 'main_title')
+}
+
+export function applyPreviewFontFamily(fontFamily: string, loadedFamily: string) {
+  previewFontFamilies.set(normalizedFontKey(fontFamily), loadedFamily)
+}
+
+export function clearPreviewFontFamily(fontFamily: string) {
+  previewFontFamilies.delete(normalizedFontKey(fontFamily))
+}
+
 export function getTemplateFontFaceName(fontFamily?: string | null) {
+  const loaded = previewFontFamilies.get(normalizedFontKey(fontFamily))
+  if (loaded) return loaded
   if (fontFamily === 'subtitle') return 'McrSubtitleFont'
   if (fontFamily === 'custom_text') return 'McrCustomTextFont'
   if (!fontFamily || fontFamily === 'main_title') return 'McrMainTitleFont'
@@ -45,8 +61,6 @@ export function isCjkFontFamily(fontFamily?: string | null) {
 export function getTemplateFontFamilyStack(fontFamily?: string | null, text?: string | null) {
   const primary = getTemplateFontFaceName(fontFamily || 'main_title')
   const systemCjk = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "WenQuanYi Zen Hei"'
-  if (containsCjkText(text) && !isCjkFontFamily(fontFamily)) {
-    return `McrFont_chaohei, McrFont_yasong, ${primary}, ${systemCjk}, sans-serif`
-  }
-  return `${primary}, ${systemCjk}, sans-serif`
+  const cjkFallback = containsCjkText(text) ? 'McrFont_chaohei, McrFont_yasong, ' : ''
+  return `${primary}, ${cjkFallback}${systemCjk}, sans-serif`
 }

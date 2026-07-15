@@ -93,6 +93,7 @@
             :template="layout"
             :source="previewSource || null"
             :params="effectiveParams"
+            :font-revision="fontRevision"
             :auto-blend-color="autoBlendColor"
             :selected-layer-id="selectedLayerId"
             interactive
@@ -789,7 +790,7 @@ import BlueprintRange from './BlueprintRange.vue'
 import BlueprintSelect from './BlueprintSelect.vue'
 import SvgTemplatePreview from './SvgTemplatePreview.vue'
 import { useTemplateCanvasStore } from '../stores/templateCanvas'
-import { BUILTIN_FONT_ITEMS, SEMANTIC_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
+import { BUILTIN_FONT_ITEMS, SEMANTIC_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor, getThemeRgba } from '../utils/themeColors'
 import { loadPreviewFontFaces } from '../services/fontPreview'
 
@@ -917,6 +918,7 @@ const aspectRatioPresets = [
 ]
 
 const internalLayout = ref<CustomStaticLayout>(cloneLayout(props.modelValue))
+const fontRevision = ref(0)
 
 const templateCanvasStore = useTemplateCanvasStore()
 const selectedLayerId = computed({
@@ -1040,7 +1042,8 @@ watch(
 watch(
   () => props.previewSource?.font_faces,
   async (fontFaces) => {
-    await loadPreviewFontFaces(fontFaces, getTemplateFontFaceName)
+    await loadPreviewFontFaces(fontFaces)
+    fontRevision.value += 1
   },
   { deep: true, immediate: true },
 )
@@ -1953,6 +1956,7 @@ function getKonvaImageFallbackConfig(layer: CustomImageLayer) {
 }
 
 function getKonvaTextConfig(layer: CustomTitleLayer | CustomTextLayer) {
+  fontRevision.value
   const normalized = normalizeLayerEffects(layer)
   const fontFamily = getTextLayerFontFamily(layer)
   const isSubtitle = !isMainTitleLayer(layer)

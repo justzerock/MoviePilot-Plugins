@@ -125,7 +125,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.15"
+    plugin_version = "2.0.16"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -239,6 +239,7 @@ class YahahaCoverStudio(_PluginBase):
     _library_scheme_rules: List[Dict[str, Any]] = []
     _default_scheme_id = ""
     _preview_font_service = None
+    _preview_font_paths: Dict[str, str] = {}
 
     def get_render_mode(self) -> Tuple[str, str]:
         """获取插件渲染模式
@@ -263,6 +264,7 @@ class YahahaCoverStudio(_PluginBase):
         self._covers_path = data_path / 'input'
         self._font_path = data_path / 'fonts'
         self._preview_font_service = PreviewFontService(data_path, logger)
+        self._preview_font_paths = {}
         custom_static_state_loaded = False
         self._animated_settings = {}
         if config:
@@ -4231,6 +4233,7 @@ class YahahaCoverStudio(_PluginBase):
                 logger.info(
                     f"【YahahaCoverStudio】预览素材获取成功，媒体库: {service.name}：{library_name}，来源: {source_mode}"
                 )
+                preview_layout = self.__build_custom_static_text_layout(self._custom_static_layout, title, custom_texts)
                 return {
                     "code": 0,
                     "data": {
@@ -4246,9 +4249,9 @@ class YahahaCoverStudio(_PluginBase):
                         },
                         "custom_texts": custom_texts,
                         "images": images,
-                        "custom_static_layout": self.__build_custom_static_text_layout(self._custom_static_layout, title, custom_texts),
+                        "custom_static_layout": preview_layout,
                         "bg_color": config_bg_color,
-                        "font_faces": self.__build_preview_font_faces(),
+                        "font_faces": self.__build_preview_font_faces(preview_layout),
                     },
                 }
 
@@ -4332,10 +4335,10 @@ class YahahaCoverStudio(_PluginBase):
 
         return preview_targets
 
-    def __build_preview_font_faces(self) -> Dict[str, str]:
+    def __build_preview_font_faces(self, layout: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
         if not self._preview_font_enabled:
             return {}
-        font_faces: Dict[str, str] = {}
+        font_faces: Dict[str, Dict[str, Any]] = {}
         semantic_paths = {
             "main_title": self._main_title_font_path,
             "subtitle": self._subtitle_font_path,
@@ -4346,19 +4349,45 @@ class YahahaCoverStudio(_PluginBase):
             "subtitle": self._subtitle_font_custom or self._subtitle_font_url,
             "custom_text": self._custom_text_font_custom or self._custom_text_font_url,
         }
-        for key, path_value in semantic_paths.items():
+        aliases = {"main_title", "subtitle", "custom_text"}
+        if isinstance(layout, dict):
+            for layer in self.__iter_custom_text_layers(layout.get("layers") or []):
+                layer_type = str(layer.get("type") or "")
+                aliases.add(str(layer.get("fontFamily") or ("subtitle" if layer_type in ("subtitle", "title_en") else "custom_text" if layer_type == "text" else "main_title")))
+        for key in aliases:
+            path_value = semantic_paths.get(key) or self.__resolve_template_font_path(key)
             if path_value and Path(path_value).is_file():
+                resolved_path = str(Path(path_value).resolve())
+                self._preview_font_paths[resolved_path] = resolved_path
                 assets = self.__preview_font_assets()
-                font_id = next((asset_id for asset_id, item in assets.items() if str(item.get("path")) == str(Path(path_value).resolve())), "")
+                font_id = next((asset_id for asset_id, item in assets.items() if str(item.get("path")) == resolved_path), "")
                 info = self.__preview_font_info(font_id) if font_id else None
                 if info and info.get("url"):
-                    font_faces[key] = str(info["url"])
+                    font_faces[key] = info
                 else:
-                    font_faces[key] = self.__get_preview_file_url(str(path_value))
+                    digest = hashlib.sha256(Path(path_value).read_bytes()).hexdigest()[:16]
+                    font_faces[key] = {
+                        "font_id": f"path_{digest[:12]}",
+                        "font_family": f"YahahaPreview_path_{digest}",
+                        "source_type": "original",
+                        "url": self.__get_preview_file_url(str(path_value)),
+                        "format": Path(path_value).suffix.lower().lstrip(".") or "ttf",
+                        "subset_status": "failed",
+                        "version": digest,
+                    }
                 continue
             url_value = str(semantic_urls.get(key) or "").strip()
             if url_value and re.match(r'^https?://', url_value, re.IGNORECASE):
-                font_faces[key] = url_value
+                digest = hashlib.sha256(url_value.encode("utf-8")).hexdigest()[:16]
+                font_faces[key] = {
+                    "font_id": f"remote_{digest[:12]}",
+                    "font_family": f"YahahaPreview_remote_{digest}",
+                    "source_type": "remote",
+                    "url": url_value,
+                    "format": Path(url_value.split("?", 1)[0]).suffix.lower().lstrip(".") or "ttf",
+                    "subset_status": "ready",
+                    "version": digest,
+                }
 
         # Do not preload every built-in/custom font. The active semantic font
         # map lets both preview surfaces load only what this layout uses.
@@ -4367,7 +4396,7 @@ class YahahaCoverStudio(_PluginBase):
     def __preview_font_assets(self) -> Dict[str, Dict[str, Any]]:
         if not self._preview_font_service:
             self._preview_font_service = PreviewFontService(self.get_data_path(), logger)
-        paths = [Path(value) for value in (self._main_title_font_path, self._subtitle_font_path, self._custom_text_font_path) if value and Path(value).is_file()]
+        paths = [Path(value) for value in (*self._preview_font_paths.values(), self._main_title_font_path, self._subtitle_font_path, self._custom_text_font_path) if value and Path(value).is_file()]
         return self._preview_font_service.assets(paths)
 
     def __preview_font_config(self) -> Dict[str, Any]:
