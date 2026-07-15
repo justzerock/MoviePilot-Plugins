@@ -54,6 +54,7 @@ from app.plugins.yahahacoverstudio.style.style_animated_4 import create_style_an
 from app.plugins.yahahacoverstudio.utils.image_manager import ResolutionConfig, ImageResourceManager
 from app.plugins.yahahacoverstudio.history_store import HistoryStore
 from app.plugins.yahahacoverstudio.font_preview import PreviewFontService
+from app.plugins.yahahacoverstudio.title_config import normalize_title_config
 try:
     from app.plugins.yahahacoverstudio.utils.network_helper import NetworkHelper, validate_font_file
 except Exception as import_err:
@@ -125,7 +126,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.18"
+    plugin_version = "2.0.19"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -2468,8 +2469,8 @@ class YahahaCoverStudio(_PluginBase):
             title_config = str(raw.get("title_config") or "")
             strict_raw = raw.get("title_config_strict", False)
             strict = bool(strict_raw) if not isinstance(strict_raw, str) else strict_raw.lower() in ("1", "true", "yes", "on")
-            _, errors, _ = self.__parse_title_config(title_config, strict=strict)
-            if errors:
+            parsed_title_config, errors, _ = self.__parse_title_config(title_config, strict=strict)
+            if errors and not parsed_title_config:
                 return {"code": 1, "msg": errors[0], "data": {"valid": False, "errors": errors}}
             raw["update_now"] = False
             raw["main_title_font_custom"] = ""
@@ -2551,12 +2552,14 @@ class YahahaCoverStudio(_PluginBase):
                 strict_raw = raw.get("title_config_strict")
             strict = bool(strict_raw) if not isinstance(strict_raw, str) else strict_raw.lower() in ("1", "true", "yes", "on")
             parsed, errors, processed_yaml = self.__parse_title_config(yaml_text, strict=strict)
+            valid = not errors or bool(parsed)
             return {
-                "code": 0 if not errors else 1,
-                "msg": "标题配置有效" if not errors else errors[0],
+                "code": 0 if valid else 1,
+                "msg": "标题配置有效" if valid else errors[0],
                 "data": {
-                    "valid": not errors,
-                    "errors": errors,
+                    "valid": valid,
+                    "errors": [] if valid else errors,
+                    "warnings": errors if valid else [],
                     "parsed": parsed,
                     "processed_yaml": processed_yaml,
                     "strict": strict,
@@ -2578,7 +2581,7 @@ class YahahaCoverStudio(_PluginBase):
             distinguish_raw = raw.get("distinguish_same_name_libraries", self._distinguish_same_name_libraries)
             distinguish_same_name = bool(distinguish_raw) if not isinstance(distinguish_raw, str) else distinguish_raw.lower() in ("1", "true", "yes", "on")
             parsed, errors, processed_yaml = self.__parse_title_config(yaml_text, strict=strict)
-            if errors:
+            if errors and not parsed:
                 return {
                     "code": 1,
                     "msg": errors[0],
@@ -7059,20 +7062,16 @@ class YahahaCoverStudio(_PluginBase):
             "include_libraries": self._include_libraries,
             "all_libraries": self._all_libraries,
             "sort_by": "Random",
-            "title_config": '''# 配置封面标题（按媒体库名称对应）
-# 支持两种格式：
-#
-# 格式1 - 两行配置（主标题+副标题）：
+            "title_config": '''# 推荐对象格式；旧列表格式仍可读取。
 # 媒体库名称:
-#   - 主标题
-#   - 副标题
-#
-# 格式2 - 三行配置（主标题+副标题+背景颜色）：
-# 媒体库名称:
-#   - 主标题
-#   - 副标题
-#   - "#FF5722"  # 背景颜色（可选，必须加引号）
-#
+#   title: "主标题"
+#   subtitle: "副标题"
+#   background: "#5f7185"
+#   texts:
+#     slogan: "自定义文本"
+#     note: "备注文本"
+#     any_key: "任意自定义文本"
+# texts 下的键名可自由定义，并在画布文字图层中填写同名配置键。
 ''',
             "title_config_strict": False,
             "distinguish_same_name_libraries": False,
@@ -9045,7 +9044,11 @@ class YahahaCoverStudio(_PluginBase):
                             indent = "  "
                         elif key_lookup in known_entry_keys:
                             indent = "  "
-                        elif current_texts_open and str(value_part or "").strip():
+                        elif (
+                            current_texts_open
+                            and str(value_part or "").strip()
+                            and not str(value_part or "").lstrip().startswith(("[", "{"))
+                        ):
                             indent = "    "
 
                     # 如果键不是以引号开头，且包含数字或特殊字符，则添加引号。
@@ -9084,70 +9087,8 @@ class YahahaCoverStudio(_PluginBase):
             title_config = yaml.safe_load(processed_yaml) or {}
             if not isinstance(title_config, dict):
                 return {}, ["标题配置根节点必须是 YAML 对象。"], processed_yaml
-            filtered = {}
-
-            def normalize_texts(raw_texts: Any) -> Dict[str, str]:
-                if not isinstance(raw_texts, dict):
-                    return {}
-                return {
-                    str(text_key).strip(): str(text_val)
-                    for text_key, text_val in raw_texts.items()
-                    if str(text_key).strip() and text_val is not None
-                }
-
-            def collect_extra_texts(raw_map: Dict[str, Any]) -> Dict[str, str]:
-                texts = normalize_texts(raw_map.get("texts"))
-                for text_key, text_val in raw_map.items():
-                    normalized_text_key = str(text_key).strip()
-                    if normalized_text_key in known_entry_keys:
-                        continue
-                    if normalized_text_key and isinstance(text_val, (str, int, float, bool)):
-                        texts.setdefault(normalized_text_key, str(text_val))
-                return texts
-
-            for key, value in title_config.items():
-                normalized_key = str(key).strip()
-                if not normalized_key:
-                    errors.append(f"标题配置项键为空: {key} -> {value}")
-                    continue
-                if isinstance(value, list) and len(value) >= 2 and isinstance(value[0], str) and isinstance(value[1], str):
-                    entry = [value[0], value[1]]
-                    bg_color = None
-                    texts: Dict[str, str] = {}
-                    for item in value[2:]:
-                        if isinstance(item, str) and not bg_color:
-                            bg_color = item
-                            continue
-                        if isinstance(item, dict):
-                            if "texts" in item:
-                                texts.update(normalize_texts(item.get("texts")))
-                            texts.update(collect_extra_texts(item))
-                    if isinstance(bg_color, str) and bg_color.strip():
-                        entry.append(bg_color.strip())
-                    if texts:
-                        entry.append({"texts": texts})
-                    filtered[normalized_key] = entry
-                    continue
-                if isinstance(value, dict):
-                    zh_title = str(value.get("title") or value.get("main") or value.get("zh") or value.get("name") or normalized_key)
-                    en_title = str(value.get("subtitle") or value.get("sub") or value.get("en") or "")
-                    bg_color = value.get("background") or value.get("bg") or value.get("color")
-                    text_value = value.get("text") or value.get("custom_text") or value.get("content")
-                    texts = collect_extra_texts(value)
-                    if text_value is not None:
-                        texts.setdefault("default", str(text_value))
-                    entry = [zh_title, en_title]
-                    if isinstance(bg_color, str) and bg_color.strip():
-                        entry.append(bg_color.strip())
-                    if texts:
-                        entry.append({"texts": texts})
-                    filtered[normalized_key] = entry
-                    continue
-                # 忽略格式不正确的项
-                errors.append(
-                    f"标题配置项格式不正确: {normalized_key}。请使用列表格式 [- 主标题, - 副标题] 或字典格式 title/subtitle。"
-                )
-                continue
+            filtered, item_warnings = normalize_title_config(title_config)
+            errors.extend(item_warnings)
 
             logger.debug(f"解析后的配置: {filtered}")
             if raw_yaml.strip() and not filtered:
@@ -9162,7 +9103,7 @@ class YahahaCoverStudio(_PluginBase):
             logger.warning(f"标题配置错误: {error}")
         return parsed
 
-    def __find_title_config_values(self, library_name: Any, server_name: Any = "") -> Optional[List[Any]]:
+    def __find_title_config_values(self, library_name: Any, server_name: Any = "") -> Optional[Dict[str, Any]]:
         raw_library_name = str(library_name or "").strip()
         title_config = self._current_config or (self.__load_title_config(self._title_config) if self._title_config else {})
         if not raw_library_name or not isinstance(title_config, dict):
@@ -9177,12 +9118,12 @@ class YahahaCoverStudio(_PluginBase):
             for config_key, config_values in title_config.items():
                 candidate = compact(config_key)
                 if server_key and library_key and server_key in candidate and library_key in candidate:
-                    return config_values if isinstance(config_values, list) else None
+                    return config_values if isinstance(config_values, dict) else None
 
         library_key = compact(raw_library_name)
         for config_key, config_values in title_config.items():
             if compact(config_key) == library_key:
-                return config_values if isinstance(config_values, list) else None
+                return config_values if isinstance(config_values, dict) else None
         return None
 
     def __get_title_from_config(self, library_name, server_name: Any = ""):
@@ -9209,10 +9150,10 @@ class YahahaCoverStudio(_PluginBase):
             return (zh_title, en_title, bg_color)
 
         config_values = self.__find_title_config_values(normalized_library_name, server_name)
-        if isinstance(config_values, list):
-            zh_title = config_values[0] if config_values else normalized_library_name
-            en_title = config_values[1] if len(config_values) > 1 else ''
-            bg_color = config_values[2] if len(config_values) > 2 and isinstance(config_values[2], str) else None
+        if isinstance(config_values, dict):
+            zh_title = str(config_values.get("title") or normalized_library_name)
+            en_title = str(config_values.get("subtitle") or "")
+            bg_color = config_values.get("background") if isinstance(config_values.get("background"), str) else None
         else:
             logger.debug(f"未找到媒体库 '{normalized_library_name}' 的配置，回退为媒体库名")
 
@@ -9228,20 +9169,14 @@ class YahahaCoverStudio(_PluginBase):
             title_config = self.__load_title_config(self._title_config)
 
         matched_values = self.__find_title_config_values(normalized_library_name, server_name)
-        if not isinstance(matched_values, list):
+        if not isinstance(matched_values, dict):
             return {}
-
-        for item in matched_values[2:]:
-            if not isinstance(item, dict):
-                continue
-            raw_texts = item.get("texts")
-            if isinstance(raw_texts, dict):
-                return {
-                    str(key).strip(): str(value)
-                    for key, value in raw_texts.items()
-                    if str(key).strip()
-                }
-        return {}
+        raw_texts = matched_values.get("texts")
+        return {
+            str(key).strip(): str(value)
+            for key, value in raw_texts.items()
+            if str(key).strip() and value is not None
+        } if isinstance(raw_texts, dict) else {}
     
     def __get_server_libraries(self, service):
         try:

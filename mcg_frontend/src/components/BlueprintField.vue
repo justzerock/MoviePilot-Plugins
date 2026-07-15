@@ -18,6 +18,10 @@
       :rows="rows"
       :placeholder="placeholder"
       @input="onInput"
+      @focus="emit('focus')"
+      @blur="emit('blur')"
+      @compositionstart="emit('compositionstart')"
+      @compositionend="emit('compositionend')"
     />
     <input
       v-else
@@ -59,6 +63,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string | number | null): void
+  (e: 'focus' | 'blur' | 'compositionstart' | 'compositionend'): void
 }>()
 
 const attrs = useAttrs()

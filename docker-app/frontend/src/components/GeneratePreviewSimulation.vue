@@ -833,7 +833,6 @@ onUnmounted(() => {
 
 .sim-title-zh {
   font-size: 170px;
-  font-weight: 700;
   line-height: 1.1;
   letter-spacing: 0;
   text-shadow: 12px 12px 20px rgba(var(--mcr-rgb-shadow), 0.26);
@@ -962,7 +961,6 @@ onUnmounted(() => {
 
 .sim-style-3-title {
   font-size: 170px;
-  font-weight: 700;
   line-height: 1.06;
   letter-spacing: 0;
   text-shadow: 8px 8px 18px rgba(var(--mcr-rgb-shadow), 0.28);

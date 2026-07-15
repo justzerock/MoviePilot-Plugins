@@ -70,7 +70,7 @@ class PreviewFontService:
         if not item: return None
         chars = collect_characters(config)
         charset_hash = hashlib.sha256(chars.encode()).hexdigest()[:16]
-        original_family = f"YahahaPreview_{font_id}_{item['sha'][:12]}"
+        original_family = f"YahahaPreview_{font_id}_{item['sha']}"
         if not config.get("preview_font_enabled", True): return {"font_id": font_id, "font_family": original_family, "source_type": "disabled", "url": "", "format": "", "subset_status": "disabled", "charset_hash": charset_hash, "version": item["sha"]}
         if config.get("font_subset_enabled", True):
             manifest = self._manifest(item, charset_hash)
@@ -112,7 +112,9 @@ class PreviewFontService:
                 from fontTools.ttLib import TTFont
                 target = self._subset(item, charset_hash); target.parent.mkdir(parents=True, exist_ok=True)
                 temp = target.with_suffix(".tmp")
-                font = TTFont(str(item["path"]), recalcBBoxes=False, recalcTimestamp=False)
+                source_path = Path(item["path"])
+                font_kwargs = {"fontNumber": 0} if source_path.suffix.lower() == ".ttc" else {}
+                font = TTFont(str(source_path), recalcBBoxes=False, recalcTimestamp=False, **font_kwargs)
                 opts = subset.Options(); opts.flavor = "woff2"; opts.recalc_timestamp = False
                 worker = subset.Subsetter(options=opts); worker.populate(text=chars); worker.subset(font); font.flavor = "woff2"; font.save(str(temp)); os.replace(temp, target)
                 self._write(item, charset_hash, {"status": "ready", "character_count": len(chars), "characters": chars, "woff2_file": target.name, "size_bytes": target.stat().st_size, "error": None})

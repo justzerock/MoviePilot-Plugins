@@ -729,23 +729,29 @@
                 </span>
               </div>
 
-              <div
-                v-if="titleConfigValidationMessage"
-                class="mcr-title-config-alert"
-                :class="{ 'mcr-title-config-alert--ok': titleConfigValidationValid }"
-              >
-                {{ titleConfigValidationMessage }}
+              <div class="mcr-title-config-editor-shell">
+                <BlueprintField
+                  v-model="titleConfigEditorText"
+                  textarea
+                  label="主副标题配置 (YAML)"
+                  rows="16"
+                  spellcheck="false"
+                  class="font-mono mcr-config-editor"
+                  :placeholder="titlePlaceholder"
+                  @focus="titleConfigEditorFocused = true"
+                  @blur="titleConfigEditorFocused = false"
+                  @compositionstart="onTitleConfigCompositionStart"
+                  @compositionend="onTitleConfigCompositionEnd"
+                />
+                <div
+                  v-if="titleConfigValidationMessage"
+                  class="mcr-title-config-alert"
+                  :class="{ 'mcr-title-config-alert--ok': titleConfigValidationValid }"
+                  role="status"
+                >
+                  {{ titleConfigValidationMessage }}
+                </div>
               </div>
-
-              <BlueprintField
-                v-model="config.title_config"
-                textarea
-                label="主副标题配置 (YAML)"
-                rows="16"
-                spellcheck="false"
-                class="font-mono mcr-config-editor"
-                :placeholder="titlePlaceholder"
-              />
               <div class="mcr-title-config-reference">
                 <div class="mcr-title-config-reference__label">格式参考</div>
                 <pre>{{ titleConfigReference }}</pre>
@@ -1083,6 +1089,12 @@ const activeRunLogName = ref('')
 const activeRunLogContent = ref('')
 const titleConfigValidationMessage = ref('')
 const titleConfigValidationValid = ref(false)
+const titleConfigEditorText = ref(String(config.value.title_config || ''))
+const titleConfigEditorFocused = ref(false)
+const titleConfigComposing = ref(false)
+const titleConfigEditorDirty = ref(false)
+let titleConfigValidationRevision = 0
+let suppressTitleConfigEditorWatch = false
 const titleTemplateLoading = ref(false)
 let titleConfigValidationTimer: number | null = null
 let configAutoSaveTimer: number | null = null
@@ -1251,7 +1263,12 @@ watch(
       ...defaults,
       ...normalizeConfigInput(val as MediaCoverGeneratorConfig),
     }
+    if (!titleConfigEditorFocused.value && !titleConfigEditorDirty.value) {
+      suppressTitleConfigEditorWatch = true
+      titleConfigEditorText.value = String(config.value.title_config || '')
+    }
     nextTick(() => {
+      suppressTitleConfigEditorWatch = false
       configDirty.value = false
       configSaveFailed.value = false
       suppressConfigAutoSave = false
@@ -1298,11 +1315,13 @@ watch(
 )
 
 async function validateTitleConfig(showSuccess = false) {
-  const titleConfig = config.value.title_config || ''
+  const titleConfig = titleConfigEditorText.value || ''
+  const revision = ++titleConfigValidationRevision
   titleConfigValidationMessage.value = ''
   titleConfigValidationValid.value = false
   if (!titleConfig.trim()) {
     titleConfigValidationValid.value = true
+    config.value.title_config = ''
     return true
   }
   try {
@@ -1317,9 +1336,13 @@ async function validateTitleConfig(showSuccess = false) {
     })
     const errors = Array.isArray(resp?.data?.errors) ? resp.data.errors : []
     const valid = Boolean(resp && resp.code === 0 && resp.data?.valid !== false && !errors.length)
+    if (revision !== titleConfigValidationRevision) return false
     titleConfigValidationValid.value = valid
     if (!valid) {
       titleConfigValidationMessage.value = errors[0] || resp?.msg || '标题配置 YAML 格式不正确'
+    } else {
+      config.value.title_config = titleConfig
+      if (showSuccess) titleConfigValidationMessage.value = ''
     }
     return valid
   } catch (error) {
@@ -1346,7 +1369,7 @@ async function appendMissingTitleTemplates() {
         reference?: string
       }
     }>('plugin/MediaCoverGenerator/title_config_template', {
-      title_config: config.value.title_config || '',
+      title_config: titleConfigEditorText.value || '',
       strict: config.value.title_config_strict,
       distinguish_same_name_libraries: Boolean(config.value.distinguish_same_name_libraries),
     })
@@ -1363,8 +1386,9 @@ async function appendMissingTitleTemplates() {
       titleConfigValidationValid.value = true
       return
     }
-    const current = String(config.value.title_config || '').trimEnd()
-    config.value.title_config = current ? `${current}\n\n${yaml}\n` : `${yaml}\n`
+    const current = String(titleConfigEditorText.value || '').trimEnd()
+    titleConfigEditorText.value = current ? `${current}\n\n${yaml}\n` : `${yaml}\n`
+    titleConfigEditorDirty.value = true
     titleConfigValidationMessage.value = `已添加 ${missing.length || yaml.split('\n\n').length} 个媒体库配置模板`
     titleConfigValidationValid.value = true
     scheduleTitleConfigValidation()
@@ -1381,18 +1405,34 @@ function scheduleTitleConfigValidation() {
   if (titleConfigValidationTimer !== null && typeof window !== 'undefined') {
     window.clearTimeout(titleConfigValidationTimer)
   }
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined' || titleConfigComposing.value) return
   titleConfigValidationTimer = window.setTimeout(() => {
     void validateTitleConfig(false)
   }, 500)
 }
 
-watch(
-  () => [config.value.title_config, config.value.title_config_strict] as const,
-  () => {
-    scheduleTitleConfigValidation()
-  },
-)
+function onTitleConfigCompositionEnd() {
+  titleConfigComposing.value = false
+  scheduleTitleConfigValidation()
+}
+
+function onTitleConfigCompositionStart() {
+  titleConfigComposing.value = true
+  titleConfigValidationRevision += 1
+  if (titleConfigValidationTimer !== null && typeof window !== 'undefined') {
+    window.clearTimeout(titleConfigValidationTimer)
+    titleConfigValidationTimer = null
+  }
+}
+
+watch(titleConfigEditorText, () => {
+  if (suppressTitleConfigEditorWatch) return
+  titleConfigEditorDirty.value = true
+  titleConfigValidationMessage.value = ''
+  scheduleTitleConfigValidation()
+})
+
+watch(() => config.value.title_config_strict, scheduleTitleConfigValidation)
 
 async function loadDynamicLibraryOptions() {
   optionsLoading.value = true
@@ -2343,7 +2383,9 @@ async function saveConfig(options: { auto?: boolean } = {}) {
       config.value = {
         ...defaults,
         ...normalizeConfigInput(resp.data.config),
+        title_config: titleConfigEditorText.value,
       }
+      titleConfigEditorDirty.value = false
       nextTick(() => {
         suppressConfigAutoSave = previousSuppressAutoSave
       })
@@ -3142,8 +3184,12 @@ async function deleteBackupItem(item: BackupItem) {
 }
 
 .mcr-title-config-alert {
-  margin: 0 0 12px;
-  padding: 10px 12px;
+  position: absolute;
+  z-index: 3;
+  right: 12px;
+  bottom: 12px;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 10px;
   border: 1px solid rgba(var(--mcr-rgb-error), 0.28);
   border-radius: 12px;
   background: rgba(var(--mcr-rgb-error), 0.1);
@@ -3151,6 +3197,10 @@ async function deleteBackupItem(item: BackupItem) {
   font-size: 12px;
   font-weight: 780;
   overflow-wrap: anywhere;
+}
+
+.mcr-title-config-editor-shell {
+  position: relative;
 }
 
 .mcr-title-config-alert--ok {

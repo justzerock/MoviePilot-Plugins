@@ -768,7 +768,7 @@ def _render_text_layer(
         config_bg_color,
         "#ffffff",
     )
-    return f'<g{_layer_transform(layer, scale_x, scale_y)} opacity="{opacity}"{filter_attr}><text font-family="{_font_family(layer)}" font-size="{font_size}" font-weight="700" fill="{_esc(text_color)}" text-anchor="{text_anchor}">{tspans}</text></g>'
+    return f'<g{_layer_transform(layer, scale_x, scale_y)} opacity="{opacity}"{filter_attr}><text font-family="{_font_family(layer)}" font-size="{font_size}" fill="{_esc(text_color)}" text-anchor="{text_anchor}">{tspans}</text></g>'
 
 
 def _render_text_layer_as_image(

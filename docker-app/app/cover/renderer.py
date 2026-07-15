@@ -3,7 +3,10 @@ from __future__ import annotations
 import base64
 import colorsys
 import io
+import logging
 import math
+import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
@@ -18,6 +21,7 @@ RESOLUTIONS = {
     "360p": (640, 360),
     "4k": (3840, 2160),
 }
+LOGGER = logging.getLogger("yahaha_cover_studio")
 
 
 class CoverRenderer:
@@ -51,7 +55,9 @@ class CoverRenderer:
             output_path = output_path.with_suffix(".png" if output_format == "png" else ".jpg")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        started = time.perf_counter()
         images = [self._open(path) for path in image_paths if path and path.exists()]
+        decoded_at = time.perf_counter()
         if not images:
             raise ValueError("No source images available")
 
@@ -66,6 +72,12 @@ class CoverRenderer:
                     canvas.save(output_path, save_format, quality=92, optimize=True)
                 else:
                     canvas.save(output_path, save_format, optimize=True)
+            finished = time.perf_counter()
+            LOGGER.info(
+                "封面渲染性能 style=%s images=%d decode_ms=%.1f render_encode_ms=%.1f total_ms=%.1f",
+                style, len(images), (decoded_at - started) * 1000,
+                (finished - decoded_at) * 1000, (finished - started) * 1000,
+            )
         finally:
             for image in images:
                 image.close()
@@ -80,7 +92,7 @@ class CoverRenderer:
         size: tuple[int, int],
         config: dict[str, Any],
     ) -> Image.Image:
-        if style == "custom_static":
+        if isinstance(config.get("custom_static_layout"), dict):
             return self._custom_static(images, title, subtitle, size, config)
         if style in {"single_2", "static_2"}:
             return self._single_2(images[0], title, subtitle, size, config)
@@ -206,6 +218,7 @@ class CoverRenderer:
             return None
         return None
 
+    @lru_cache(maxsize=96)
     def _font(self, size: int, preferred: str = "") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         candidates: list[Path] = []
         if preferred:

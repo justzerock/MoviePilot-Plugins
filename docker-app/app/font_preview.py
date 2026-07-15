@@ -104,7 +104,7 @@ class PreviewFontService:
         if not asset:
             return None
         source_sha = str(asset["source_sha256"])
-        family = f"YahahaPreview_{font_id}_{source_sha[:12]}"
+        family = f"YahahaPreview_{font_id}_{source_sha}"
         enabled = bool(config.get("preview_font_enabled", True))
         characters = collect_preview_characters(config)
         charset_hash = hashlib.sha256(characters.encode("utf-8")).hexdigest()[:16]
@@ -166,7 +166,8 @@ class PreviewFontService:
                 target = self._subset_path(asset, charset_hash)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 temp = target.with_suffix(".woff2.tmp")
-                font = TTFont(str(source), recalcBBoxes=False, recalcTimestamp=False)
+                font_kwargs = {"fontNumber": 0} if source.suffix.lower() == ".ttc" else {}
+                font = TTFont(str(source), recalcBBoxes=False, recalcTimestamp=False, **font_kwargs)
                 options = subset.Options()
                 options.flavor = "woff2"
                 options.desubroutinize = True

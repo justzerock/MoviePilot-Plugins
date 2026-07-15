@@ -342,7 +342,7 @@ function renderTextShape(
   ).join('')
   const family = getFontFamily(layer, text)
   const opacity = clamp(Number(layer.opacity ?? layer.transform?.opacity ?? 1), 0, 1) * clamp(fillOpacity, 0, 1)
-  return `<text font-family="${escapeXml(family)}" font-size="${fontSize}" font-weight="700" fill="${fill}" fill-opacity="${opacity}" text-anchor="${textAnchor}"${getLayerTransform(layer)}>${tspans}</text>`
+  return `<text font-family="${escapeXml(family)}" font-size="${fontSize}" fill="${fill}" fill-opacity="${opacity}" text-anchor="${textAnchor}"${getLayerTransform(layer)}>${tspans}</text>`
 }
 
 function hasTextMaskLayer(layers: TemplateLayer[], mode?: 'knockout-text' | 'show-text'): boolean {
@@ -527,7 +527,7 @@ function renderTextLayer(layer: CustomTitleLayer | CustomTextLayer, source: Prev
   ).join('')
   const family = getFontFamily(layer, text)
   const shadowNode = shadow
-    ? `<text font-family="${escapeXml(family)}" font-size="${fontSize}" font-weight="700" fill="${escapeXml(shadow.color)}" opacity="${shadow.opacity}" text-anchor="${textAnchor}" style="filter: blur(${shadow.blur}px);">${shadowTspans}</text>`
+    ? `<text font-family="${escapeXml(family)}" font-size="${fontSize}" fill="${escapeXml(shadow.color)}" opacity="${shadow.opacity}" text-anchor="${textAnchor}" style="filter: blur(${shadow.blur}px);">${shadowTspans}</text>`
     : ''
   const textColor = resolveTemplateColor(
     layer.colorSource || 'custom',
@@ -536,7 +536,7 @@ function renderTextLayer(layer: CustomTitleLayer | CustomTextLayer, source: Prev
     { blur: 50, colorRatio: 0.8, colorSource: 'custom', customColor: getThemeColor('--mcr-cover-text') },
     getThemeColor('--mcr-cover-text'),
   ) || getThemeColor('--mcr-cover-text')
-  return `<g${pointer}${getLayerTransform(layer)} opacity="${opacity}"${filter}>${shadowNode}<text font-family="${escapeXml(family)}" font-size="${fontSize}" font-weight="700" fill="${escapeXml(textColor)}" text-anchor="${textAnchor}">${tspans}</text></g>`
+  return `<g${pointer}${getLayerTransform(layer)} opacity="${opacity}"${filter}>${shadowNode}<text font-family="${escapeXml(family)}" font-size="${fontSize}" fill="${escapeXml(textColor)}" text-anchor="${textAnchor}">${tspans}</text></g>`
 }
 
 function renderSelection(layer: TemplateLayer | undefined) {

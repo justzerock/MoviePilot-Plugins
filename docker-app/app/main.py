@@ -27,10 +27,11 @@ from pydantic import BaseModel
 from .config import DATA_DIR, ensure_data_dirs, load_config, resolve_data_path, save_config
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .media_client import configured_clients
-from .services import library_title_payload, remove_history_item, slugify, title_for_library
+from .services import library_title_background, library_title_payload, remove_history_item, slugify, title_for_library
 from .time_utils import localize, now_local
 from .services import CoverService
 from .history_store import HistoryStore, sha256
+from .title_config import normalize_title_config
 from . import storage
 from .run_logs import APP_LOGGER, RunLog, clean_expired_logs, iter_logs, safe_log_path
 
@@ -129,7 +130,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.18")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.19")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -968,12 +969,14 @@ async def plugin_validate_title_config(payload: dict[str, Any] | None = None):
     raw = str(payload.get("title_config") or payload.get("yaml") or payload.get("content") or "")
     strict = parse_bool(payload.get("strict", payload.get("title_config_strict", False)))
     parsed, errors, processed_yaml = parse_title_config(raw, strict=strict)
+    valid = not errors or bool(parsed)
     return {
-        "code": 0 if not errors else 1,
-        "msg": "标题配置有效" if not errors else errors[0],
+        "code": 0 if valid else 1,
+        "msg": "标题配置有效" if valid else errors[0],
         "data": {
-            "valid": not errors,
-            "errors": errors,
+            "valid": valid,
+            "errors": [] if valid else errors,
+            "warnings": errors if valid else [],
             "parsed": parsed,
             "processed_yaml": processed_yaml,
             "strict": strict,
@@ -988,7 +991,7 @@ async def plugin_title_config_template(payload: dict[str, Any] | None = None):
     strict = parse_bool(payload.get("strict", payload.get("title_config_strict", False)))
     distinguish_same_name = parse_bool(payload.get("distinguish_same_name_libraries", False))
     current, errors, processed_yaml = parse_title_config(raw, strict=strict)
-    if errors:
+    if errors and not current:
         return {
             "code": 1,
             "msg": errors[0],
@@ -1813,66 +1816,8 @@ def parse_title_config(yaml_text: str, strict: bool = False) -> tuple[dict[str, 
             return {}, [], processed_yaml
         if not isinstance(title_config, dict):
             return {}, ["标题配置根节点必须是 YAML 对象。"], processed_yaml
-        filtered: dict[str, Any] = {}
-
-        def normalize_texts(raw_texts: Any) -> dict[str, str]:
-            if not isinstance(raw_texts, dict):
-                return {}
-            return {
-                str(text_key).strip(): str(text_val)
-                for text_key, text_val in raw_texts.items()
-                if str(text_key).strip() and text_val is not None
-            }
-
-        def collect_extra_texts(raw_map: dict[str, Any]) -> dict[str, str]:
-            texts = normalize_texts(raw_map.get("texts"))
-            for text_key, text_val in raw_map.items():
-                normalized_text_key = str(text_key).strip()
-                if normalized_text_key in KNOWN_TITLE_ENTRY_KEYS:
-                    continue
-                if normalized_text_key and isinstance(text_val, (str, int, float, bool)):
-                    texts.setdefault(normalized_text_key, str(text_val))
-            return texts
-
-        for key, value in title_config.items():
-            normalized_key = str(key).strip()
-            if not normalized_key:
-                errors.append(f"标题配置项键为空: {key} -> {value}")
-                continue
-            if isinstance(value, list) and len(value) >= 2 and isinstance(value[0], str) and isinstance(value[1], str):
-                entry: list[Any] = [value[0], value[1]]
-                bg_color = None
-                texts: dict[str, str] = {}
-                for item in value[2:]:
-                    if isinstance(item, str) and not bg_color:
-                        bg_color = item
-                        continue
-                    if isinstance(item, dict):
-                        if "texts" in item:
-                            texts.update(normalize_texts(item.get("texts")))
-                        texts.update(collect_extra_texts(item))
-                if isinstance(bg_color, str) and bg_color.strip():
-                    entry.append(bg_color.strip())
-                if texts:
-                    entry.append({"texts": texts})
-                filtered[normalized_key] = entry
-                continue
-            if isinstance(value, dict):
-                zh_title = str(value.get("title") or value.get("main") or value.get("zh") or value.get("name") or normalized_key)
-                en_title = str(value.get("subtitle") or value.get("sub") or value.get("en") or "")
-                bg_color = value.get("background") or value.get("bg") or value.get("color")
-                text_value = value.get("text") or value.get("custom_text") or value.get("content")
-                texts = collect_extra_texts(value)
-                if text_value is not None:
-                    texts.setdefault("default", str(text_value))
-                entry = [zh_title, en_title]
-                if isinstance(bg_color, str) and bg_color.strip():
-                    entry.append(bg_color.strip())
-                if texts:
-                    entry.append({"texts": texts})
-                filtered[normalized_key] = entry
-                continue
-            errors.append(f"标题配置项格式不正确: {normalized_key}。请使用列表格式 [- 主标题, - 副标题] 或字典格式 title/subtitle。")
+        filtered, item_warnings = normalize_title_config(title_config)
+        errors.extend(item_warnings)
         if raw_yaml.strip() and not filtered:
             errors.append("没有解析到任何有效媒体库配置。")
         return filtered, errors, processed_yaml
@@ -1909,7 +1854,11 @@ def preprocess_lenient_title_yaml(raw_yaml: str) -> str:
                 indent = "  "
             elif key_lookup in KNOWN_TITLE_ENTRY_KEYS:
                 indent = "  "
-            elif current_texts_open and str(value_part or "").strip():
+            elif (
+                current_texts_open
+                and str(value_part or "").strip()
+                and not str(value_part or "").lstrip().startswith(("[", "{"))
+            ):
                 indent = "    "
         elif current_library_open and current_texts_open and len(indent) < 4 and key_lookup not in KNOWN_TITLE_ENTRY_KEYS and str(value_part or "").strip():
             indent = "    "
@@ -2166,7 +2115,7 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         raw_title = incoming.get("title_config")
         if isinstance(raw_title, str):
             parsed, errors, _processed_yaml = parse_title_config(raw_title, strict=parse_bool(config.get("title_config_strict", False)))
-            config["title_config"] = parsed if not errors else raw_title
+            config["title_config"] = parsed if parsed or not raw_title.strip() else raw_title
         else:
             config["title_config"] = raw_title or {}
     if "cover_style_base" in incoming:
@@ -2464,7 +2413,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
             for index, path in enumerate(images)
         ],
         "custom_static_layout": preview_layout or config.get("custom_static_layout"),
-        "bg_color": style_config.get("background_color") or "#6f8090",
+        "bg_color": library_title_background(config, library, server) or style_config.get("background_color") or "#6f8090",
         "font_faces": service.preview_font_faces(preview_layout or config.get("custom_static_layout")),
     }
 

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 from .config import DATA_DIR, load_config, resolve_data_path, save_config
 from .cover import CoverRenderer
+from .cover.presets import create_preset_layout
 from .media_client import MediaLibrary, MediaServerClient, configured_clients
 from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .run_logs import APP_LOGGER
@@ -132,6 +135,21 @@ def library_title_payload(config: dict[str, Any], library_name: str, server_name
     if isinstance(raw, dict):
         return str(raw.get("title") or library_name), str(raw.get("subtitle") or ""), _title_entry_texts(raw)
     return library_name, "", {}
+
+
+def library_title_background(config: dict[str, Any], library_name: str, server_name: str = "") -> str | None:
+    title_config = config.get("title_config") if isinstance(config.get("title_config"), dict) else {}
+    normalized_library = _compact_title_config_key(library_name)
+    normalized_server = _compact_title_config_key(server_name)
+    for key, value in title_config.items():
+        candidate = _compact_title_config_key(key)
+        matches = candidate == normalized_library
+        if bool(config.get("distinguish_same_name_libraries", False)) and normalized_server:
+            matches = normalized_server in candidate and normalized_library in candidate
+        if matches and isinstance(value, dict):
+            background = value.get("background")
+            return str(background) if isinstance(background, str) and background else None
+    return None
 
 
 def title_for_library(config: dict[str, Any], library_name: str) -> tuple[str, str]:
@@ -504,7 +522,11 @@ class CoverService:
             if isinstance(template, dict) and str(template.get("id") or "") == scheme_id and isinstance(template.get("layout"), dict):
                 return "custom_static", template["layout"]
         known = {item["id"] for item in self.scheme_catalog()}
-        return (scheme_id if scheme_id in known else str((self.config.get("style_config") or {}).get("style") or "single_1")), None
+        known.update({"static_1", "static_2", "static_3", "static_4"})
+        style_name = scheme_id if scheme_id in known else str((self.config.get("style_config") or {}).get("style") or "single_1")
+        if style_name in {"single_1", "single_2", "multi_1", "static_1", "static_2", "static_3", "static_4"}:
+            return style_name, create_preset_layout(style_name)
+        return style_name, None
 
     def render_config(self, style_config: dict[str, Any], library_name: str, style_name: str, server_name: str = "", custom_layout: dict[str, Any] | None = None) -> dict[str, Any]:
         config = dict(style_config)
@@ -539,9 +561,12 @@ class CoverService:
                 config["main_font_size"] = config["main_title_font_size"]
         _title, _subtitle, custom_texts = library_title_payload(self.config, library_name, server_name)
         config["custom_texts"] = custom_texts
+        title_background = library_title_background(self.config, library_name, server_name)
+        if title_background:
+            config["background_color"] = title_background
         config["font_paths"] = self.build_font_paths()
         config.setdefault("font", config["font_paths"].get("main_title", ""))
-        if style_name == "custom_static":
+        if custom_layout is not None or style_name == "custom_static":
             layout = custom_layout or self.config.get("custom_static_layout")
             if not isinstance(layout, dict):
                 active_id = self.config.get("custom_static_active_id")
@@ -690,6 +715,7 @@ class CoverService:
         return [await self.generate_from_local(style)]
 
     async def generate_library(self, client: MediaServerClient, library: MediaLibrary, style: str | None = None, trigger: str = "manual") -> dict[str, Any]:
+        task_started = time.perf_counter()
         style_config = dict(self.config.get("style_config") or {})
         library_key = f"{client.server_id}:{library.id}"
         scheme_id = self.resolve_scheme_for_library(
@@ -760,10 +786,12 @@ class CoverService:
         if not image_paths:
             raise ValueError(f"No image sources available for {library.name}")
 
+        sources_ready = time.perf_counter()
         title, subtitle, _texts = library_title_payload(self.config, library.name, client.server_name)
         render_config = self.render_config(style_config, library.name, style_name, client.server_name, scheme_layout)
         output_path = output_dir / f"{slugify(library.name)}_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, title, subtitle, style_name, render_config, output_path)
+        rendered_at = time.perf_counter()
         uploaded = False
         upload_error = ""
         if bool(self.config.get("upload_after_generate", True)):
@@ -773,6 +801,15 @@ class CoverService:
             except Exception as exc:
                 upload_error = str(exc)
                 APP_LOGGER.warning("媒体库封面更新失败 server=%s library=%s: %s", client.server_name, library.name, exc)
+        uploaded_at = time.perf_counter()
+        APP_LOGGER.info(
+            "生成阶段耗时 server=%s library=%s source_ms=%.1f render_ms=%.1f upload_ms=%.1f total_ms=%.1f",
+            client.server_name, library.name,
+            (sources_ready - task_started) * 1000,
+            (rendered_at - sources_ready) * 1000,
+            (uploaded_at - rendered_at) * 1000,
+            (uploaded_at - task_started) * 1000,
+        )
         result = {
             "library": library.name,
             "library_id": library.id,
@@ -799,7 +836,7 @@ class CoverService:
             raise ValueError("本地图片模式未找到素材，请将图片放入 /app/data/input 或 /app/data/input/媒体库名")
         render_config = self.render_config(style_config, "本地封面", style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
         result = {
             "library": "local",
             "library_id": "",
@@ -831,7 +868,7 @@ class CoverService:
         title, subtitle = title_for_library(self.config, library_name)
         render_config = self.render_config(style_config, library_name, style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, title, subtitle, style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, title, subtitle, style_name, render_config, output_path)
         result = {
             "library": library_name,
             "library_id": slugify(library_name),
@@ -963,7 +1000,7 @@ class CoverService:
         image_paths = ensure_mock_images(input_dir, slugify(library["name"]), title, image_limit)
         render_config = self.render_config(style_config, library["name"], style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"{slugify(library['name'])}_{style_name}{self.output_suffix(render_config, style_name)}"
-        self.renderer().render(image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
         result = {
             "library": library["name"],
             "library_id": library["id"],
