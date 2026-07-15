@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, quote, unquote
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import defaultdict
 import pytz
 import yaml
@@ -125,7 +125,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.16"
+    plugin_version = "2.0.17"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -958,28 +958,84 @@ class YahahaCoverStudio(_PluginBase):
                 entries.append({"id": str(template["id"]), "name": str(template.get("name") or "自定义方案")})
         return entries
 
+    def __library_scheme_keys(self, service, library: Dict[str, Any]) -> Set[str]:
+        """Return every persisted spelling for a media-library rule.
+
+        Older plugin pages stored ``server-libraryId`` while the current UI can
+        restore ``server:libraryId``.  Some media-server helpers expose a
+        display name that differs from the dictionary key.  Treat these as the
+        same library so a saved assignment never becomes dependent on which
+        entry point triggered generation.
+        """
+        library_id = (
+            library.get("Id") if getattr(service, "type", "") == "emby"
+            else library.get("ItemId")
+        ) or library.get("id") or library.get("Name") or ""
+        library_name = library.get("Name") or library.get("name") or ""
+        server_names = {
+            str(getattr(service, "name", "") or "").strip(),
+            str(library.get("server") or "").strip(),
+            str(library.get("server_id") or "").strip(),
+        }
+        keys: Set[str] = set()
+        for server_name in server_names:
+            if not server_name:
+                continue
+            for value in (library_id, library_name):
+                value = str(value or "").strip()
+                if value:
+                    keys.update({f"{server_name}:{value}", f"{server_name}-{value}"})
+        for value in (library_id, library_name):
+            value = str(value or "").strip()
+            if value:
+                keys.add(value)
+        return keys
+
     def __library_scheme_key(self, service, library: Dict[str, Any]) -> str:
-        library_id = library.get("Id") if getattr(service, "type", "") == "emby" else library.get("ItemId")
-        return f"{getattr(service, 'name', '')}:{library_id or library.get('Name') or ''}"
+        keys = self.__library_scheme_keys(service, library)
+        return next((key for key in keys if ":" in key), next(iter(keys), ""))
 
     def __resolve_scheme_for_library(self, service, library: Dict[str, Any]) -> str:
-        key = self.__library_scheme_key(service, library)
-        legacy_key = key.replace(":", "-", 1)
+        keys = self.__library_scheme_keys(service, library)
         for rule in self._library_scheme_rules:
-            keys = {str(value) for value in rule.get("library_keys", [])}
-            if key in keys or legacy_key in keys:
+            rule_keys = {str(value).strip() for value in rule.get("library_keys", [])}
+            if keys.intersection(rule_keys):
                 return str(rule.get("scheme_id") or self._default_scheme_id or self._cover_style)
         return str(self._default_scheme_id or self._cover_style or "static_1")
 
-    def __apply_scheme_for_library(self, service, library: Dict[str, Any]) -> str:
+    def __scheme_runtime_for_library(self, service, library: Dict[str, Any]) -> Dict[str, Any]:
         scheme_id = self.__resolve_scheme_for_library(service, library)
-        template = next((item for item in self._custom_static_layouts or [] if isinstance(item, dict) and str(item.get("id")) == scheme_id), None)
+        template = next(
+            (
+                item for item in self._custom_static_layouts or []
+                if isinstance(item, dict) and str(item.get("id")) == scheme_id
+            ),
+            None,
+        )
         if isinstance(template, dict) and isinstance(template.get("layout"), dict):
-            self._cover_style = "static_custom"
-            self._custom_static_layout = template["layout"]
-        elif scheme_id in {item["id"] for item in self.__scheme_catalog()}:
-            self._cover_style = scheme_id
-        return scheme_id
+            return {
+                "scheme_id": scheme_id,
+                "cover_style": "static_custom",
+                "cover_style_base": "custom_static",
+                "cover_style_variant": "static",
+                "layout": template["layout"],
+            }
+        base, variant = self.__resolve_cover_style_ui(scheme_id)
+        return {
+            "scheme_id": scheme_id,
+            "cover_style": self.__compose_cover_style(base, variant),
+            "cover_style_base": base,
+            "cover_style_variant": variant,
+            "layout": self._custom_static_layout,
+        }
+
+    def __apply_scheme_for_library(self, service, library: Dict[str, Any]) -> str:
+        runtime = self.__scheme_runtime_for_library(service, library)
+        self._cover_style = runtime["cover_style"]
+        self._cover_style_base = runtime["cover_style_base"]
+        self._cover_style_variant = runtime["cover_style_variant"]
+        self._custom_static_layout = runtime["layout"]
+        return str(runtime["scheme_id"])
 
     def __resolve_cover_style_ui(self, cover_style: str) -> Tuple[str, str]:
         if cover_style == "static_custom":
@@ -4199,10 +4255,15 @@ class YahahaCoverStudio(_PluginBase):
 
             for preview_target in preview_targets:
                 service = preview_target["service"]
+                library = preview_target["library"]
                 library_name = preview_target["library_name"]
                 title = preview_target["title"]
                 config_bg_color = preview_target["config_bg_color"]
                 custom_texts = self.__get_custom_texts_from_config(library_name, service.name)
+                # A preview is a real view of this library's bound scheme, not
+                # merely the globally selected editing scheme.  Do not mutate
+                # runtime state here: generation can be running concurrently.
+                scheme_runtime = self.__scheme_runtime_for_library(service, library)
                 force = str(force_refresh).strip().lower() in {"1", "true", "yes", "on"}
                 if force and not preview_target.get("custom_images"):
                     cleared = self.__clear_preview_cache_for_library(library_name)
@@ -4233,15 +4294,16 @@ class YahahaCoverStudio(_PluginBase):
                 logger.info(
                     f"【YahahaCoverStudio】预览素材获取成功，媒体库: {service.name}：{library_name}，来源: {source_mode}"
                 )
-                preview_layout = self.__build_custom_static_text_layout(self._custom_static_layout, title, custom_texts)
+                preview_layout = self.__build_custom_static_text_layout(scheme_runtime["layout"], title, custom_texts)
                 return {
                     "code": 0,
                     "data": {
                         "server": service.name,
                         "library": library_name,
-                        "style": self._cover_style,
-                        "cover_style_base": self._cover_style_base,
-                        "cover_style_variant": self._cover_style_variant,
+                        "style": scheme_runtime["cover_style"],
+                        "scheme_id": scheme_runtime["scheme_id"],
+                        "cover_style_base": scheme_runtime["cover_style_base"],
+                        "cover_style_variant": scheme_runtime["cover_style_variant"],
                         "source_mode": source_mode,
                         "titles": {
                             "zh": title[0] if len(title) > 0 else "",
@@ -8058,12 +8120,22 @@ class YahahaCoverStudio(_PluginBase):
         logger.info(f"媒体库 {service.name}：{library_name} 开始准备更新封面")
         # All formal entry points converge here, so resolve the library rule
         # once and restore the global editing state afterwards.
-        previous_style, previous_layout = self._cover_style, self._custom_static_layout
+        previous_state = (
+            self._cover_style,
+            self._cover_style_base,
+            self._cover_style_variant,
+            self._custom_static_layout,
+        )
         scheme_id = self.__apply_scheme_for_library(service, library)
         try:
             return self.__update_library_with_scheme(service, library, scheme_id)
         finally:
-            self._cover_style, self._custom_static_layout = previous_style, previous_layout
+            (
+                self._cover_style,
+                self._cover_style_base,
+                self._cover_style_variant,
+                self._custom_static_layout,
+            ) = previous_state
 
     def __update_library_with_scheme(self, service, library, scheme_id: str):
         library_name = library['Name']

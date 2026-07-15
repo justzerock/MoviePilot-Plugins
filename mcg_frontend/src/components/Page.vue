@@ -3097,6 +3097,15 @@ async function loadStatusInner(): Promise<boolean> {
         servers: (data as any).selected_servers || [],
         libraries: (data as any).include_libraries || [],
         coversInput: (data as any).covers_input || '',
+        fonts: [
+          (data as any).main_title_font_preset || '',
+          (data as any).subtitle_font_preset || '',
+          (data as any).custom_text_font_preset || '',
+        ],
+        scheme: {
+          default: (data as any).default_scheme_id || '',
+          rules: (data as any).library_scheme_rules || [],
+        },
       }
       const wasGenerating = isGenerating.value
       const nextIsGenerating = Boolean(data.is_generating)

@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.16")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.17")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2265,6 +2265,8 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
         "custom_static_layout": config.get("custom_static_layout"),
         "custom_static_layouts": config.get("custom_static_layouts"),
         "custom_static_active_id": config.get("custom_static_active_id"),
+        "default_scheme_id": str(config.get("default_scheme_id") or style_config.get("style") or "single_1"),
+        "library_scheme_rules": config.get("library_scheme_rules") or [],
     }
 
 
@@ -2327,17 +2329,61 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     limit = max(1, min(60, required_items or int(style_config.get("image_limit") or 9)))
     requested_library = str(library or "")
     cache_library = cached_library_name(config, requested_library)
+    default_scheme_id = str(config.get("default_scheme_id") or style_config.get("style") or "single_1")
+    preview_scheme_id = default_scheme_id
+    preview_style_name, preview_layout = service.scheme_style_and_layout(preview_scheme_id)
+
+    def resolve_saved_library_scheme() -> None:
+        """Use the same per-library rule for cached previews and generation."""
+        nonlocal preview_scheme_id, preview_style_name, preview_layout
+        for item in config.get("all_libraries") or []:
+            if not isinstance(item, dict):
+                continue
+            values = {
+                str(item.get("value") or "").strip(),
+                str(item.get("id") or "").strip(),
+                str(item.get("name") or "").strip(),
+            }
+            if requested_library and requested_library not in values:
+                continue
+            library_id = str(item.get("id") or "").strip()
+            server_id = str(item.get("server_id") or item.get("server") or "").strip()
+            library_name = str(item.get("name") or cache_library or "").strip()
+            preview_scheme_id = service.resolve_scheme_for_library(
+                str(item.get("value") or f"{server_id}:{library_id}"),
+                library_name,
+                server_id,
+                str(item.get("server_name") or item.get("server") or ""),
+            )
+            preview_style_name, preview_layout = service.scheme_style_and_layout(preview_scheme_id)
+            return
+
+    resolve_saved_library_scheme()
     # Keep API titles, title mappings and cache directory lookup on the same human
     # readable library name. The selector can be the internal `server:id` value.
     if cache_library:
         library = cache_library
     if config.get("local_mode", False):
+        preview_scheme_id = service.resolve_scheme_for_library(
+            f"local:{slugify(cache_library or library)}",
+            cache_library or library,
+            "local",
+            "本地",
+        )
+        preview_style_name, preview_layout = service.scheme_style_and_layout(preview_scheme_id)
         images = service.local_images(cache_library, limit, include_mock=False)
         server = "local"
         source_mode = "custom" if configured_input else "local"
         if not images:
             images = service.local_images("", limit, include_mock=False)
     elif config.get("mock_enabled", True):
+        preview_scheme_id = service.resolve_scheme_for_library(
+            f"mock:{slugify(cache_library or library)}",
+            cache_library or library,
+            "mock",
+            "mock",
+        )
+        preview_style_name, preview_layout = service.scheme_style_and_layout(preview_scheme_id)
         images = ensure_mock_images(input_dir, slugify(library), title_for_library(config, library)[0], limit)
         server = "mock"
         source_mode = "custom"
@@ -2358,6 +2404,13 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                 client, media_library = await service.find_library(requested_library)
                 server = client.server_name
                 library = media_library.name
+                preview_scheme_id = service.resolve_scheme_for_library(
+                    f"{client.server_id}:{media_library.id}",
+                    media_library.name,
+                    client.server_id,
+                    client.server_name,
+                )
+                preview_style_name, preview_layout = service.scheme_style_and_layout(preview_scheme_id)
                 cache_dir = DATA_DIR / "tmp" / "preview_cache" / slugify(media_library.name)
                 if force_refresh and cache_dir.exists():
                     shutil.rmtree(cache_dir)
@@ -2390,11 +2443,12 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                 images = []
     preview_version = str(int(datetime.now(timezone.utc).timestamp() * 1000)) if force_refresh else ""
     title, subtitle, custom_texts = library_title_payload(config, library)
-    base, variant = STYLE_TO_PLUGIN.get(str(style_config.get("style") or "single_1"), ("static_1", "static"))
+    base, variant = STYLE_TO_PLUGIN.get(preview_style_name, ("static_1", "static"))
     return {
         "server": server,
         "library": library,
-        "style": style_config.get("style") or "single_1",
+        "style": preview_style_name,
+        "scheme_id": preview_scheme_id,
         "cover_style_base": base,
         "cover_style_variant": variant,
         "source_mode": source_mode,
@@ -2409,9 +2463,9 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
             }
             for index, path in enumerate(images)
         ],
-        "custom_static_layout": config.get("custom_static_layout"),
+        "custom_static_layout": preview_layout or config.get("custom_static_layout"),
         "bg_color": style_config.get("background_color") or "#6f8090",
-        "font_faces": service.preview_font_faces(config.get("custom_static_layout")),
+        "font_faces": service.preview_font_faces(preview_layout or config.get("custom_static_layout")),
     }
 
 

@@ -423,9 +423,44 @@ class CoverService:
                 entries.append({"id": str(template["id"]), "name": str(template.get("name") or "自定义方案")})
         return entries
 
-    def resolve_scheme_for_library(self, library_key: str) -> str:
+    def scheme_keys_for_library(
+        self,
+        library_key: str,
+        library_name: str = "",
+        server_id: str = "",
+        server_name: str = "",
+    ) -> set[str]:
+        """Normalize legacy and current media-library assignment keys."""
+        raw_key = str(library_key or "").strip()
+        keys = {raw_key} if raw_key else set()
+        server, separator, library_id = raw_key.partition(":")
+        if not separator:
+            server, separator, library_id = raw_key.partition("-")
+        server_values = {str(value).strip() for value in (server, server_id, server_name) if str(value).strip()}
+        library_values = {str(value).strip() for value in (library_id, library_name) if str(value).strip()}
+        for server_value in server_values:
+            for library_value in library_values:
+                keys.update({f"{server_value}:{library_value}", f"{server_value}-{library_value}"})
+        keys.update(library_values)
+        return keys
+
+    def resolve_scheme_for_library(
+        self,
+        library_key: str,
+        library_name: str = "",
+        server_id: str = "",
+        server_name: str = "",
+    ) -> str:
+        candidate_keys = self.scheme_keys_for_library(library_key, library_name, server_id, server_name)
         for rule in self.config.get("library_scheme_rules") or []:
-            if isinstance(rule, dict) and library_key in {str(value) for value in (rule.get("library_keys") or [])}:
+            if not isinstance(rule, dict):
+                continue
+            rule_keys = {
+                str(value).strip()
+                for value in (rule.get("library_keys") or [])
+                if str(value).strip()
+            }
+            if candidate_keys.intersection(rule_keys):
                 return str(rule.get("scheme_id") or "")
         return str(self.config.get("default_scheme_id") or (self.config.get("style_config") or {}).get("style") or "single_1")
 
@@ -622,7 +657,12 @@ class CoverService:
     async def generate_library(self, client: MediaServerClient, library: MediaLibrary, style: str | None = None, trigger: str = "manual") -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
         library_key = f"{client.server_id}:{library.id}"
-        scheme_id = self.resolve_scheme_for_library(library_key)
+        scheme_id = self.resolve_scheme_for_library(
+            library_key,
+            library.name,
+            client.server_id,
+            client.server_name,
+        )
         style_name, scheme_layout = self.scheme_style_and_layout(scheme_id)
         image_limit = self.image_limit_for_style(style_config, style_name)
         image_source = str(style_config.get("image_source") or "backdrop")
@@ -741,7 +781,12 @@ class CoverService:
 
     async def generate_local_library(self, library_name: str, style: str | None = None) -> dict[str, Any]:
         style_config = dict(self.config.get("style_config") or {})
-        scheme_id = self.resolve_scheme_for_library(f"local:{slugify(library_name)}")
+        scheme_id = self.resolve_scheme_for_library(
+            f"local:{slugify(library_name)}",
+            library_name,
+            "local",
+            "本地",
+        )
         style_name, scheme_layout = self.scheme_style_and_layout(scheme_id)
         output_dir = resolve_data_path(self.config.get("covers_output"), "/app/data/output")
         image_limit = self.image_limit_for_style(style_config, style_name)
