@@ -125,7 +125,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.17"
+    plugin_version = "2.0.18"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -2639,11 +2639,12 @@ class YahahaCoverStudio(_PluginBase):
                 "\n".join([
                     f"{template_name}:",
                     f"  title: {quote_yaml_value(library_name)}",
-                    "  subtitle: \"\"",
-                    "  background: \"\"",
+                    "  subtitle: \"副标题\"",
+                    "  background: \"#5f7185\"",
                     "  texts:",
-                    "    slogan: \"\"",
-                    "    note: \"\"",
+                    "    slogan: \"自定义文本\"",
+                    "    note: \"备注文本\"",
+                    "    any_key: \"任意自定义文本\"",
                 ])
                 for template_name, library_name in missing
             ]

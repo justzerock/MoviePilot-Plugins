@@ -77,25 +77,60 @@ def slugify(value: str) -> str:
     return safe or "library"
 
 
+def _compact_title_config_key(value: Any) -> str:
+    return re.sub(r"[^\w\u4e00-\u9fff]+", "", str(value or ""), flags=re.UNICODE).casefold()
+
+
+def _title_entry_texts(value: Any) -> dict[str, str]:
+    """Read custom text values from both legacy and normalized title entries."""
+    if isinstance(value, dict):
+        raw_texts = value.get("texts")
+        return {
+            str(key).strip(): str(text)
+            for key, text in raw_texts.items()
+            if str(key).strip() and text is not None
+        } if isinstance(raw_texts, dict) else {}
+    if not isinstance(value, list):
+        return {}
+
+    texts: dict[str, str] = {}
+    for item in value[2:]:
+        if not isinstance(item, dict):
+            continue
+        raw_texts = item.get("texts") if isinstance(item.get("texts"), dict) else item
+        for key, text in raw_texts.items():
+            if str(key).strip() and text is not None:
+                texts.setdefault(str(key).strip(), str(text))
+    return texts
+
+
 def library_title_payload(config: dict[str, Any], library_name: str, server_name: str = "") -> tuple[str, str, dict[str, str]]:
     title_config = config.get("title_config") or {}
     if isinstance(title_config, str):
         title_config = {}
     raw = title_config.get(library_name) or {}
     if bool(config.get("distinguish_same_name_libraries", False)) and server_name:
-        normalized_server = re.sub(r"[^\w\u4e00-\u9fff]+", "", server_name, flags=re.UNICODE).casefold()
-        normalized_library = re.sub(r"[^\w\u4e00-\u9fff]+", "", library_name, flags=re.UNICODE).casefold()
+        normalized_server = _compact_title_config_key(server_name)
+        normalized_library = _compact_title_config_key(library_name)
         for key, value in title_config.items():
-            normalized_key = re.sub(r"[^\w\u4e00-\u9fff]+", "", str(key), flags=re.UNICODE).casefold()
+            normalized_key = _compact_title_config_key(key)
             if normalized_server in normalized_key and normalized_library in normalized_key:
                 raw = value
                 break
+    if not raw:
+        normalized_library = _compact_title_config_key(library_name)
+        for key, value in title_config.items():
+            if _compact_title_config_key(key) == normalized_library:
+                raw = value
+                break
     if isinstance(raw, list):
-        texts = raw[2] if len(raw) > 2 and isinstance(raw[2], dict) else {}
-        return str(raw[0] if raw else library_name), str(raw[1] if len(raw) > 1 else ""), {str(k): str(v) for k, v in texts.items()}
+        return (
+            str(raw[0] if raw else library_name),
+            str(raw[1] if len(raw) > 1 else ""),
+            _title_entry_texts(raw),
+        )
     if isinstance(raw, dict):
-        texts = raw.get("texts") if isinstance(raw.get("texts"), dict) else {}
-        return str(raw.get("title") or library_name), str(raw.get("subtitle") or ""), {str(k): str(v) for k, v in texts.items()}
+        return str(raw.get("title") or library_name), str(raw.get("subtitle") or ""), _title_entry_texts(raw)
     return library_name, "", {}
 
 

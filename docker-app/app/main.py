@@ -129,7 +129,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.17")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.18")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2442,7 +2442,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
             except Exception:
                 images = []
     preview_version = str(int(datetime.now(timezone.utc).timestamp() * 1000)) if force_refresh else ""
-    title, subtitle, custom_texts = library_title_payload(config, library)
+    title, subtitle, custom_texts = library_title_payload(config, library, server)
     base, variant = STYLE_TO_PLUGIN.get(preview_style_name, ("static_1", "static"))
     return {
         "server": server,
