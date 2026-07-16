@@ -54,6 +54,7 @@ from app.plugins.yahahacoverstudio.style.style_animated_4 import create_style_an
 from app.plugins.yahahacoverstudio.utils.image_manager import ResolutionConfig, ImageResourceManager
 from app.plugins.yahahacoverstudio.history_store import HistoryStore
 from app.plugins.yahahacoverstudio.font_preview import PreviewFontService
+from app.plugins.yahahacoverstudio.font_resolution import ResolvedRenderText, resolve_render_text_and_font
 from app.plugins.yahahacoverstudio.title_config import normalize_title_config
 try:
     from app.plugins.yahahacoverstudio.utils.network_helper import NetworkHelper, validate_font_file
@@ -126,7 +127,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.21"
+    plugin_version = "2.0.22"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -237,6 +238,9 @@ class YahahaCoverStudio(_PluginBase):
     _custom_static_active_id: Optional[str] = None
     _preview_font_enabled = True
     _font_subset_enabled = True
+    _font_script_adaptation_enabled = True
+    _font_script_target = "auto"
+    _font_traditional_variant = "standard"
     _library_scheme_rules: List[Dict[str, Any]] = []
     _default_scheme_id = ""
     _preview_font_service = None
@@ -302,6 +306,13 @@ class YahahaCoverStudio(_PluginBase):
             self._custom_text_font_path = config.get("custom_text_font_path", self._subtitle_font_path)
             self._preview_font_enabled = bool(config.get("preview_font_enabled", True))
             self._font_subset_enabled = bool(config.get("font_subset_enabled", True))
+            self._font_script_adaptation_enabled = bool(config.get("font_script_adaptation_enabled", True))
+            self._font_script_target = str(config.get("font_script_target") or "auto")
+            if self._font_script_target not in {"auto", "simplified", "traditional"}:
+                self._font_script_target = "auto"
+            self._font_traditional_variant = str(config.get("font_traditional_variant") or "standard")
+            if self._font_traditional_variant not in {"standard", "taiwan", "hongkong"}:
+                self._font_traditional_variant = "standard"
             self._library_scheme_rules = self.__normalize_library_scheme_rules(config.get("library_scheme_rules"))
             self._cover_style = config.get("cover_style", "static_1")
 
@@ -1185,6 +1196,9 @@ class YahahaCoverStudio(_PluginBase):
             "custom_text_font_path": str(self._custom_text_font_path),
             "preview_font_enabled": self._preview_font_enabled,
             "font_subset_enabled": self._font_subset_enabled,
+            "font_script_adaptation_enabled": self._font_script_adaptation_enabled,
+            "font_script_target": self._font_script_target,
+            "font_traditional_variant": self._font_traditional_variant,
             "library_scheme_rules": self._library_scheme_rules,
             "default_scheme_id": self._default_scheme_id,
             "zh_font_path": str(self._main_title_font_path),
@@ -2388,6 +2402,9 @@ class YahahaCoverStudio(_PluginBase):
                 "custom_text_font_path": self._custom_text_font_path,
                 "preview_font_enabled": self._preview_font_enabled,
                 "font_subset_enabled": self._font_subset_enabled,
+                "font_script_adaptation_enabled": self._font_script_adaptation_enabled,
+                "font_script_target": self._font_script_target,
+                "font_traditional_variant": self._font_traditional_variant,
                 "library_scheme_rules": self._library_scheme_rules,
                 "default_scheme_id": self._default_scheme_id,
                 "cover_style": self._cover_style,
@@ -2509,6 +2526,13 @@ class YahahaCoverStudio(_PluginBase):
             self._custom_text_font_preset = str(raw.get("custom_text_font_preset") or self._custom_text_font_preset or self._subtitle_font_preset or "EmblemaOne")
             self._preview_font_enabled = as_bool(raw.get("preview_font_enabled"), bool(self._preview_font_enabled))
             self._font_subset_enabled = as_bool(raw.get("font_subset_enabled"), bool(self._font_subset_enabled))
+            self._font_script_adaptation_enabled = as_bool(raw.get("font_script_adaptation_enabled"), bool(self._font_script_adaptation_enabled))
+            self._font_script_target = str(raw.get("font_script_target") or self._font_script_target or "auto")
+            if self._font_script_target not in {"auto", "simplified", "traditional"}:
+                self._font_script_target = "auto"
+            self._font_traditional_variant = str(raw.get("font_traditional_variant") or self._font_traditional_variant or "standard")
+            if self._font_traditional_variant not in {"standard", "taiwan", "hongkong"}:
+                self._font_traditional_variant = "standard"
             self._library_scheme_rules = self.__normalize_library_scheme_rules(raw.get("library_scheme_rules"))
             self._default_scheme_id = str(raw.get("default_scheme_id") or self._default_scheme_id or self._cover_style or "static_1")
             self._main_title_font_custom = ""
@@ -2795,6 +2819,9 @@ class YahahaCoverStudio(_PluginBase):
             "custom_text_font_path",
             "preview_font_enabled",
             "font_subset_enabled",
+            "font_script_adaptation_enabled",
+            "font_script_target",
+            "font_traditional_variant",
             "library_scheme_rules",
             "default_scheme_id",
             "cover_style",
@@ -4221,6 +4248,9 @@ class YahahaCoverStudio(_PluginBase):
                     "cover_style_variant": self._cover_style_variant,
                     "preview_font_enabled": bool(self._preview_font_enabled),
                     "font_subset_enabled": bool(self._font_subset_enabled),
+                    "font_script_adaptation_enabled": bool(self._font_script_adaptation_enabled),
+                    "font_script_target": self._font_script_target,
+                    "font_traditional_variant": self._font_traditional_variant,
                     "library_scheme_rules": self._library_scheme_rules,
                     "default_scheme_id": self._default_scheme_id,
                     "scheme_catalog": self.__scheme_catalog(),
@@ -4308,6 +4338,11 @@ class YahahaCoverStudio(_PluginBase):
                     f"【YahahaCoverStudio】预览素材获取成功，媒体库: {service.name}：{library_name}，来源: {source_mode}"
                 )
                 preview_layout = self.__build_custom_static_text_layout(scheme_runtime["layout"], title, custom_texts)
+                rendered_title, rendered_custom_texts, rendered_layout, font_resolution = self.__resolve_render_text_payload(
+                    title,
+                    custom_texts,
+                    preview_layout,
+                )
                 return {
                     "code": 0,
                     "data": {
@@ -4319,15 +4354,20 @@ class YahahaCoverStudio(_PluginBase):
                         "cover_style_variant": scheme_runtime["cover_style_variant"],
                         "source_mode": source_mode,
                         "titles": {
+                            "zh": rendered_title[0] if len(rendered_title) > 0 else "",
+                            "en": rendered_title[1] if len(rendered_title) > 1 else "",
+                        },
+                        "original_titles": {
                             "zh": title[0] if len(title) > 0 else "",
                             "en": title[1] if len(title) > 1 else "",
                         },
-                        "custom_texts": custom_texts,
+                        "custom_texts": rendered_custom_texts,
+                        "font_resolution": font_resolution,
                         "title_config_version": self.__title_config_version(),
                         "images": images,
-                        "custom_static_layout": preview_layout,
+                        "custom_static_layout": rendered_layout or preview_layout,
                         "bg_color": config_bg_color,
-                        "font_faces": self.__build_preview_font_faces(preview_layout),
+                        "font_faces": self.__build_preview_font_faces(rendered_layout or preview_layout),
                     },
                 }
 
@@ -4426,18 +4466,21 @@ class YahahaCoverStudio(_PluginBase):
             "custom_text": self._custom_text_font_custom or self._custom_text_font_url,
         }
         aliases = {"main_title", "subtitle", "custom_text"}
+        alias_texts: Dict[str, str] = {}
         if isinstance(layout, dict):
             for layer in self.__iter_custom_text_layers(layout.get("layers") or []):
                 layer_type = str(layer.get("type") or "")
-                aliases.add(str(layer.get("fontFamily") or ("subtitle" if layer_type in ("subtitle", "title_en") else "custom_text" if layer_type == "text" else "main_title")))
+                alias = str(layer.get("fontFamily") or ("subtitle" if layer_type in ("subtitle", "title_en") else "custom_text" if layer_type == "text" else "main_title"))
+                aliases.add(alias)
+                alias_texts[alias] = alias_texts.get(alias, "") + str(layer.get("content") or layer.get("textStyle", {}).get("content") or "")
         for key in aliases:
-            path_value = semantic_paths.get(key) or self.__resolve_template_font_path(key)
+            path_value = self.__resolve_template_font_path(key, alias_texts.get(key, "")) or semantic_paths.get(key)
             if path_value and Path(path_value).is_file():
                 resolved_path = str(Path(path_value).resolve())
                 self._preview_font_paths[resolved_path] = resolved_path
                 assets = self.__preview_font_assets()
                 font_id = next((asset_id for asset_id, item in assets.items() if str(item.get("path")) == resolved_path), "")
-                info = self.__preview_font_info(font_id) if font_id else None
+                info = self.__preview_font_info(font_id, layout) if font_id else None
                 if info and info.get("url"):
                     font_faces[key] = info
                 else:
@@ -4488,10 +4531,25 @@ class YahahaCoverStudio(_PluginBase):
         paths = [Path(value) for value in (*self._preview_font_paths.values(), self._main_title_font_path, self._subtitle_font_path, self._custom_text_font_path) if value and Path(value).is_file()]
         return self._preview_font_service.assets(paths)
 
-    def __preview_font_config(self) -> Dict[str, Any]:
+    def __preview_font_config(self, layout: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        rendered_characters: List[str] = []
+        if isinstance(layout, dict):
+            def collect_layer_text(layers: List[Dict[str, Any]]):
+                for layer in layers or []:
+                    if not isinstance(layer, dict):
+                        continue
+                    if layer.get("type") == "group":
+                        collect_layer_text(layer.get("children") or [])
+                    else:
+                        rendered_characters.append(str(layer.get("content") or layer.get("textStyle", {}).get("content") or ""))
+            collect_layer_text(layout.get("layers") or [])
         return {
             "preview_font_enabled": self._preview_font_enabled,
             "font_subset_enabled": self._font_subset_enabled,
+            "font_script_adaptation_enabled": self._font_script_adaptation_enabled,
+            "font_script_target": self._font_script_target,
+            "font_traditional_variant": self._font_traditional_variant,
+            "preview_rendered_characters": "".join(rendered_characters),
             "title_config": self._title_config,
             "all_libraries": self._all_libraries,
             "custom_static_layout": self._custom_static_layout,
@@ -4520,13 +4578,13 @@ class YahahaCoverStudio(_PluginBase):
             f"?{'&'.join(query)}"
         )
 
-    def __preview_font_info(self, font_id: str) -> Optional[Dict[str, Any]]:
+    def __preview_font_info(self, font_id: str, layout: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         if not self._preview_font_service:
             return None
         return self._preview_font_service.info(
             font_id,
             self.__preview_font_assets(),
-            self.__preview_font_config(),
+            self.__preview_font_config(layout),
             self.__preview_font_file_url,
         )
 
@@ -4672,17 +4730,11 @@ class YahahaCoverStudio(_PluginBase):
             elif str(layer.get("type") or "") in ("main_title", "title_zh", "subtitle", "title_en", "text"):
                 yield layer
 
-    def __resolve_template_font_path(self, font_family: str, text_value: str = "") -> str:
+    def __resolve_requested_template_font_path(self, font_family: str) -> str:
         font_family = str(font_family or "main_title")
         custom_font_path = self.__resolve_custom_font_path(font_family)
         if custom_font_path:
             return str(custom_font_path)
-        semantic_family = self.__semantic_font_family_for_alias(font_family)
-        if self.__contains_cjk_text(text_value) and not self.__is_cjk_font_family(semantic_family):
-            fallback_font = self.__get_cjk_font_fallback()
-            if fallback_font:
-                logger.warning("文本包含中文但字体 %s 不含中文字符，使用中文字体回退: %s", semantic_family, fallback_font)
-                return fallback_font
         if font_family == "main_title":
             return str(self._main_title_font_path or "")
         if font_family == "subtitle":
@@ -4693,14 +4745,86 @@ class YahahaCoverStudio(_PluginBase):
         builtin_path = self.__ensure_builtin_font_path(font_family)
         if builtin_path:
             return builtin_path
-
-        if self.__contains_cjk_text(text_value):
-            fallback_font = self.__find_system_font_fallback("主标题")
-            if fallback_font:
-                logger.warning("字体 %s 获取失败且文本包含中文，使用系统中文字体回退: %s", font_family, fallback_font)
-                return fallback_font
         fallback_font = self.__find_system_font_fallback("副标题") or self.__find_system_font_fallback("主标题")
         return str(self._custom_text_font_path or self._subtitle_font_path or self._main_title_font_path or fallback_font or "")
+
+    def __resolve_template_text_and_font(self, font_family: str, text_value: Any) -> ResolvedRenderText:
+        requested = self.__resolve_requested_template_font_path(font_family)
+        fallback = self.__get_cjk_font_fallback() or requested
+        result = resolve_render_text_and_font(
+            text_value,
+            requested,
+            fallback,
+            adaptation_enabled=bool(self._font_script_adaptation_enabled),
+            target=self._font_script_target,
+            traditional_variant=self._font_traditional_variant,
+        )
+        if result.conversion_applied:
+            logger.info(
+                "字体简繁适配 font=%s profile=%s original=%s rendered=%s",
+                font_family,
+                result.conversion_profile,
+                result.original_text,
+                result.rendered_text,
+            )
+        elif result.used_fallback_font:
+            logger.warning(
+                "字体字形覆盖不足 font=%s missing=%s fallback=%s",
+                font_family,
+                "".join(result.missing_characters_before),
+                result.resolved_font_path,
+            )
+        return result
+
+    def __resolve_template_font_path(self, font_family: str, text_value: str = "") -> str:
+        return self.__resolve_template_text_and_font(font_family, text_value).resolved_font_path
+
+    def __resolve_render_text_payload(
+        self,
+        title: Tuple[str, str],
+        custom_texts: Optional[Dict[str, str]] = None,
+        layout: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Tuple[str, str], Dict[str, str], Optional[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+        main = self.__resolve_template_text_and_font("main_title", title[0] if title else "")
+        subtitle = self.__resolve_template_text_and_font("subtitle", title[1] if len(title) > 1 else "")
+        diagnostics: Dict[str, Dict[str, Any]] = {
+            "main_title": main.to_dict(),
+            "subtitle": subtitle.to_dict(),
+        }
+        rendered_custom: Dict[str, str] = {}
+        for key, value in (custom_texts or {}).items():
+            result = self.__resolve_template_text_and_font("custom_text", value)
+            rendered_custom[str(key)] = result.rendered_text
+            diagnostics[f"custom_text:{key}"] = result.to_dict()
+        rendered_layout = self.__normalize_custom_static_template(layout or {}) if isinstance(layout, dict) else None
+
+        def visit(layer: Dict[str, Any]) -> Dict[str, Any]:
+            item = dict(layer or {})
+            if item.get("type") == "group" and isinstance(item.get("children"), list):
+                item["children"] = [visit(child) for child in item.get("children") or [] if isinstance(child, dict)]
+                return item
+            layer_type = str(item.get("type") or "")
+            if layer_type not in ("main_title", "title_zh", "subtitle", "title_en", "text"):
+                return item
+            alias = str(item.get("fontFamily") or ("subtitle" if layer_type in ("subtitle", "title_en") else "custom_text" if layer_type == "text" else "main_title"))
+            if layer_type in ("main_title", "title_zh"):
+                value = main.rendered_text
+            elif layer_type in ("subtitle", "title_en"):
+                value = subtitle.rendered_text
+            elif item.get("contentSource") == "library":
+                value = rendered_custom.get(str(item.get("contentKey") or ""), str(item.get("content") or ""))
+            else:
+                value = str(item.get("content") or "")
+            result = self.__resolve_template_text_and_font(alias, value)
+            diagnostics[f"layer:{item.get('id') or len(diagnostics)}"] = result.to_dict()
+            item["content"] = result.rendered_text
+            style = item.get("textStyle") if isinstance(item.get("textStyle"), dict) else {}
+            item["textStyle"] = {**style, "content": result.rendered_text}
+            return item
+
+        if rendered_layout is not None:
+            rendered_layout["layers"] = [visit(layer) for layer in rendered_layout.get("layers") or [] if isinstance(layer, dict)]
+        return (main.rendered_text, subtitle.rendered_text), rendered_custom, rendered_layout, diagnostics
 
     def __build_template_font_paths(self, layout: Optional[Dict[str, Any]] = None, title: Tuple[str, str] = ("", "")) -> Dict[str, str]:
         font_paths: Dict[str, str] = {}
@@ -8322,6 +8446,9 @@ class YahahaCoverStudio(_PluginBase):
         main_title_font_family = animated_runtime_settings.get("main_title_font_preset", "main_title") if animated_runtime_settings else "main_title"
         subtitle_font_family = animated_runtime_settings.get("subtitle_font_preset", "subtitle") if animated_runtime_settings else "subtitle"
         custom_text_font_family = animated_runtime_settings.get("custom_text_font_preset", "custom_text") if animated_runtime_settings else "custom_text"
+        main_title_resolution = self.__resolve_template_text_and_font(main_title_font_family, title[0] if len(title) > 0 else "")
+        subtitle_resolution = self.__resolve_template_text_and_font(subtitle_font_family, title[1] if len(title) > 1 else "")
+        title = (main_title_resolution.rendered_text, subtitle_resolution.rendered_text)
         main_title_render_font_path = self.__resolve_template_font_path(main_title_font_family, title[0] if len(title) > 0 else "") or self.__resolve_template_font_path("main_title", title[0] if len(title) > 0 else "")
         subtitle_render_font_path = self.__resolve_template_font_path(subtitle_font_family, title[1] if len(title) > 1 else "") or self.__resolve_template_font_path("subtitle", title[1] if len(title) > 1 else "")
         custom_text_render_font_path = self.__resolve_template_font_path(custom_text_font_family, "")
@@ -8339,6 +8466,8 @@ class YahahaCoverStudio(_PluginBase):
         if static_preset_layout:
             static_preset_layout = self.__layout_with_resolved_custom_texts(static_preset_layout, custom_texts)
         resolved_custom_static_layout = self.__layout_with_resolved_custom_texts(self._custom_static_layout or {}, custom_texts)
+        title, custom_texts, static_preset_layout, _preset_font_resolution = self.__resolve_render_text_payload(title, custom_texts, static_preset_layout)
+        _custom_title, _custom_texts, resolved_custom_static_layout, _custom_font_resolution = self.__resolve_render_text_payload(title, custom_texts, resolved_custom_static_layout)
         static_template_font_paths = self.__build_template_font_paths(static_preset_layout or {}, title) if static_preset_layout else {}
         custom_template_font_paths = self.__build_template_font_paths(resolved_custom_static_layout or {}, title)
         font_size = (float(main_title_font_size), float(subtitle_font_size))

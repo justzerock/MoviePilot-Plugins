@@ -131,7 +131,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.21")
+app = FastAPI(title="Yahaha Cover Studio", version="2.0.22")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -2036,6 +2036,9 @@ def to_plugin_config(config: dict[str, Any]) -> dict[str, Any]:
         "custom_static_active_id": config.get("custom_static_active_id"),
         "preview_font_enabled": bool(config.get("preview_font_enabled", True)),
         "font_subset_enabled": bool(config.get("font_subset_enabled", True)),
+        "font_script_adaptation_enabled": bool(config.get("font_script_adaptation_enabled", True)),
+        "font_script_target": str(config.get("font_script_target") or "auto"),
+        "font_traditional_variant": str(config.get("font_traditional_variant") or "standard"),
         "library_scheme_rules": config.get("library_scheme_rules") or [],
         "default_scheme_id": str(config.get("default_scheme_id") or style_config.get("style") or "single_1"),
         "scheme_catalog": service.scheme_catalog(),
@@ -2101,6 +2104,9 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
         "style_naming_v2",
         "preview_font_enabled",
         "font_subset_enabled",
+        "font_script_adaptation_enabled",
+        "font_script_target",
+        "font_traditional_variant",
         "library_scheme_rules",
         "default_scheme_id",
         "custom_width",
@@ -2409,6 +2415,7 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     preview_version = str(int(datetime.now(timezone.utc).timestamp() * 1000)) if force_refresh else ""
     title_lookup_server = preview_server_name or server
     title, subtitle, custom_texts = library_title_payload(config, library, title_lookup_server)
+    resolved = service.resolve_render_payload(title, subtitle, custom_texts, preview_layout or config.get("custom_static_layout"))
     base, variant = STYLE_TO_PLUGIN.get(preview_style_name, ("static_1", "static"))
     return {
         "server": server,
@@ -2418,8 +2425,10 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         "cover_style_base": base,
         "cover_style_variant": variant,
         "source_mode": source_mode,
-        "titles": {"zh": title, "en": subtitle or ("Local Library" if config.get("local_mode", False) else ("Mock Library" if config.get("mock_enabled", True) else ""))},
-        "custom_texts": custom_texts,
+        "titles": {"zh": resolved["title"], "en": resolved["subtitle"] or ("Local Library" if config.get("local_mode", False) else ("Mock Library" if config.get("mock_enabled", True) else ""))},
+        "original_titles": {"zh": title, "en": subtitle},
+        "custom_texts": resolved["custom_texts"],
+        "font_resolution": resolved["diagnostics"],
         "title_config_version": title_config_version(config),
         "images": [
             {
@@ -2430,9 +2439,9 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
             }
             for index, path in enumerate(images)
         ],
-        "custom_static_layout": preview_layout or config.get("custom_static_layout"),
+        "custom_static_layout": resolved["layout"] or preview_layout or config.get("custom_static_layout"),
         "bg_color": library_title_background(config, library, title_lookup_server) or style_config.get("background_color") or "#6f8090",
-        "font_faces": service.preview_font_faces(preview_layout or config.get("custom_static_layout")),
+        "font_faces": service.preview_font_faces(resolved["layout"] or preview_layout or config.get("custom_static_layout"), resolved["font_paths"]),
     }
 
 

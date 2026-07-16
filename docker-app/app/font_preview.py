@@ -21,7 +21,7 @@ from typing import Any, Callable
 
 
 FONT_SUFFIXES = {".ttf", ".ttc", ".otf", ".woff", ".woff2"}
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 BASE_CHARACTERS = (
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     "，。！？：；、（）【】《》\"'“”‘’-_+&·/ \\n"
@@ -56,7 +56,7 @@ def collect_preview_characters(config: dict[str, Any]) -> str:
             for item in value:
                 visit(item)
 
-    for key in ("title_config", "custom_static_layout", "custom_static_layouts", "animated_settings", "all_libraries", "media_servers"):
+    for key in ("title_config", "custom_static_layout", "custom_static_layouts", "animated_settings", "all_libraries", "media_servers", "preview_rendered_characters"):
         visit(config.get(key))
     chars = "".join(_clean_characters(part) for part in parts)
     return "".join(sorted(set(chars)))
@@ -107,7 +107,8 @@ class PreviewFontService:
         family = f"YahahaPreview_{font_id}_{source_sha}"
         enabled = bool(config.get("preview_font_enabled", True))
         characters = collect_preview_characters(config)
-        charset_hash = hashlib.sha256(characters.encode("utf-8")).hexdigest()[:16]
+        cache_seed = "|".join((source_sha, str(config.get("font_script_adaptation_enabled", True)), str(config.get("font_script_target") or "auto"), str(config.get("font_traditional_variant") or "standard"), characters, str(SCHEMA_VERSION)))
+        charset_hash = hashlib.sha256(cache_seed.encode("utf-8")).hexdigest()[:16]
         if not enabled:
             return {"font_id": font_id, "font_family": family, "source_type": "disabled", "url": "", "format": "", "subset_status": "disabled", "charset_hash": charset_hash, "version": source_sha}
         if not bool(config.get("font_subset_enabled", True)):
@@ -138,7 +139,8 @@ class PreviewFontService:
         if not asset:
             return None
         characters = collect_preview_characters(config)
-        charset_hash = hashlib.sha256(characters.encode("utf-8")).hexdigest()[:16]
+        cache_seed = "|".join((str(asset["source_sha256"]), str(config.get("font_script_adaptation_enabled", True)), str(config.get("font_script_target") or "auto"), str(config.get("font_traditional_variant") or "standard"), characters, str(SCHEMA_VERSION)))
+        charset_hash = hashlib.sha256(cache_seed.encode("utf-8")).hexdigest()[:16]
         manifest = self._manifest(asset, charset_hash)
         return {"font_id": font_id, "charset_hash": charset_hash, "status": manifest.get("status", "pending"), "size_bytes": manifest.get("size_bytes", 0), "error": manifest.get("error")}
 

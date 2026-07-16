@@ -406,6 +406,11 @@
                   <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.preview_font_enabled" label="预览字体" hide-details /><p>在预览页和画布编辑器中加载实际字体，使预览更接近正式生成。</p></v-col>
                   <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.font_subset_enabled" :disabled="!config.preview_font_enabled" label="自动精简预览字体" hide-details /><p>只保留预览可能使用的文字，不影响正式生成的原始字体。</p></v-col>
                 </v-row>
+                <v-row class="mcr-form-grid mcr-form-grid--center yh-font-script-controls" align="center">
+                  <v-col cols="12" md="4" class="mcr-config-switch-col"><v-switch v-model="config.font_script_adaptation_enabled" label="简繁字体适配" hide-details /><p>字体缺字时才转换显示文本，标题配置原文保持不变。</p></v-col>
+                  <v-col cols="12" md="4"><BlueprintSelect v-model="config.font_script_target" :items="fontScriptTargetItems" :disabled="!config.font_script_adaptation_enabled" label="字体字形偏好" /></v-col>
+                  <v-col cols="12" md="4"><BlueprintSelect v-model="config.font_traditional_variant" :items="fontTraditionalVariantItems" :disabled="!config.font_script_adaptation_enabled || config.font_script_target === 'simplified'" label="繁体形式" /></v-col>
+                </v-row>
 
                 <input
                   ref="fontFileInputEl"
@@ -950,6 +955,9 @@ const defaults: MediaCoverGeneratorConfig = {
   custom_static_active_id: null,
   preview_font_enabled: true,
   font_subset_enabled: true,
+  font_script_adaptation_enabled: true,
+  font_script_target: 'auto',
+  font_traditional_variant: 'standard',
   library_scheme_rules: [],
   default_scheme_id: 'single_1',
 }
@@ -1016,6 +1024,16 @@ const monitorSourceItems = [
   { title: '自动识别 Webhook', value: 'webhook' },
   { title: 'Emby 新媒体已添加', value: 'emby' },
   { title: 'Jellyfin Item Added', value: 'jellyfin' },
+]
+const fontScriptTargetItems = [
+  { title: '自动匹配', value: 'auto' },
+  { title: '优先简体', value: 'simplified' },
+  { title: '优先繁体', value: 'traditional' },
+]
+const fontTraditionalVariantItems = [
+  { title: '通用繁体', value: 'standard' },
+  { title: '台湾繁体', value: 'taiwan' },
+  { title: '香港繁体', value: 'hongkong' },
 ]
 
 const mediaServerTypeItems = [
@@ -1238,6 +1256,9 @@ function normalizeConfigInput(input?: Partial<MediaCoverGeneratorConfig> | Recor
     backup_path: raw.backup_path ?? defaults.backup_path,
     preview_font_enabled: Boolean(raw.preview_font_enabled ?? defaults.preview_font_enabled),
     font_subset_enabled: Boolean(raw.font_subset_enabled ?? defaults.font_subset_enabled),
+    font_script_adaptation_enabled: Boolean(raw.font_script_adaptation_enabled ?? defaults.font_script_adaptation_enabled),
+    font_script_target: ['auto', 'simplified', 'traditional'].includes(String(raw.font_script_target)) ? raw.font_script_target : defaults.font_script_target,
+    font_traditional_variant: ['standard', 'taiwan', 'hongkong'].includes(String(raw.font_traditional_variant)) ? raw.font_traditional_variant : defaults.font_traditional_variant,
     library_scheme_rules: Array.isArray(raw.library_scheme_rules) ? raw.library_scheme_rules : [],
     default_scheme_id: raw.default_scheme_id ?? raw.style_config?.style ?? defaults.default_scheme_id,
     local_mode: localMode,

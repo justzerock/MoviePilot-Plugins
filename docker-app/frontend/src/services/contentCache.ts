@@ -3,8 +3,8 @@ const DB_VERSION = 1
 const STORE_NAME = 'entries'
 // Increment when a backend refresh changes the source image contract. This prevents
 // stale preview records from surviving an application update.
-export const PREVIEW_CACHE_SCHEMA = 6
-export const HISTORY_CACHE_SCHEMA = 1
+export const PREVIEW_CACHE_SCHEMA = 7
+export const HISTORY_CACHE_SCHEMA = 2
 const PREVIEW_MAX_ENTRIES = 30
 const HISTORY_MAX_ENTRIES = 8
 const PREVIEW_MAX_AGE = 7 * 24 * 60 * 60 * 1000
@@ -92,7 +92,7 @@ async function writeRecord(record: CacheRecord) {
         resolve()
       }
     } catch (error) {
-      console.warn('preview cache persistence failed', error)
+      console.warn(`${record.kind} cache persistence failed`, error)
       resolve()
     }
   })
@@ -220,10 +220,13 @@ export async function getPreviewCache<T>(baseKey: string, requiredItems: number)
   const records = (await readAll()).filter((item) => item.kind === 'preview' && item.schema === PREVIEW_CACHE_SCHEMA && item.baseKey === baseKey && item.capacity >= requiredItems && now - item.updatedAt <= PREVIEW_MAX_AGE).sort((a, b) => a.capacity - b.capacity || b.updatedAt - a.updatedAt)
   const match = records[0] as CacheRecord<T> | undefined
   if (!match) return null
+  const cachedPayload = match.payload as PreviewCacheRecord
+  const hasPendingSubset = Object.values(cachedPayload?.fontFaces || {}).some((face) => face.subsetStatus === 'pending' || face.subsetStatus === 'building')
+  if (hasPendingSubset) return null
   match.lastUsedAt = now
   memory.set(match.id, match)
   void writeRecord(match)
-  return previewCachePayload(match.payload as PreviewCacheRecord) as T
+  return previewCachePayload(cachedPayload) as T
 }
 
 export async function setPreviewCache(baseKey: string, requiredItems: number, payload: unknown) {
@@ -256,7 +259,9 @@ export async function getHistoryCache<T>(baseKey: string): Promise<T | null> {
 
 export async function setHistoryCache<T>(baseKey: string, payload: T) {
   const now = Date.now()
-  await writeRecord({ id: `history:v${HISTORY_CACHE_SCHEMA}:${baseKey}`, kind: 'history', schema: HISTORY_CACHE_SCHEMA, baseKey, capacity: Array.isArray(payload) ? payload.length : 1, updatedAt: now, lastUsedAt: now, payload })
+  const persistedPayload = toJsonValue(payload)
+  if (persistedPayload === undefined) return
+  await writeRecord({ id: `history:v${HISTORY_CACHE_SCHEMA}:${baseKey}`, kind: 'history', schema: HISTORY_CACHE_SCHEMA, baseKey, capacity: Array.isArray(payload) ? payload.length : 1, updatedAt: now, lastUsedAt: now, payload: persistedPayload })
   await prune('history', HISTORY_MAX_ENTRIES)
 }
 

@@ -27,7 +27,7 @@ def collect_characters(config: dict[str, Any]) -> str:
             for key, item in value.items(): values.append(str(key)); visit(item)
         elif isinstance(value, list):
             for item in value: visit(item)
-    for key in ("title_config", "all_libraries", "custom_static_layout", "custom_static_layouts", "animated_settings"):
+    for key in ("title_config", "all_libraries", "custom_static_layout", "custom_static_layouts", "animated_settings", "preview_rendered_characters"):
         visit(config.get(key))
     raw = unicodedata.normalize("NFC", "".join(values))
     return "".join(sorted({char for char in raw if not unicodedata.category(char).startswith("C") or char == "\n"}))
@@ -69,7 +69,8 @@ class PreviewFontService:
         item = assets.get(font_id)
         if not item: return None
         chars = collect_characters(config)
-        charset_hash = hashlib.sha256(chars.encode()).hexdigest()[:16]
+        cache_seed = "|".join((item["sha"], str(config.get("font_script_adaptation_enabled", True)), str(config.get("font_script_target") or "auto"), str(config.get("font_traditional_variant") or "standard"), chars, "2"))
+        charset_hash = hashlib.sha256(cache_seed.encode()).hexdigest()[:16]
         original_family = f"YahahaPreview_{font_id}_{item['sha']}"
         if not config.get("preview_font_enabled", True): return {"font_id": font_id, "font_family": original_family, "source_type": "disabled", "url": "", "format": "", "subset_status": "disabled", "charset_hash": charset_hash, "version": item["sha"]}
         if config.get("font_subset_enabled", True):
@@ -93,7 +94,9 @@ class PreviewFontService:
     def status(self, font_id: str, assets: dict[str, dict[str, Any]], config: dict[str, Any]):
         item = assets.get(font_id)
         if not item: return None
-        charset_hash = hashlib.sha256(collect_characters(config).encode()).hexdigest()[:16]
+        chars = collect_characters(config)
+        cache_seed = "|".join((item["sha"], str(config.get("font_script_adaptation_enabled", True)), str(config.get("font_script_target") or "auto"), str(config.get("font_traditional_variant") or "standard"), chars, "2"))
+        charset_hash = hashlib.sha256(cache_seed.encode()).hexdigest()[:16]
         payload = self._manifest(item, charset_hash)
         return {"font_id": font_id, "charset_hash": charset_hash, "status": payload.get("status", "pending"), "size_bytes": payload.get("size_bytes", 0), "error": payload.get("error")}
 
@@ -128,6 +131,6 @@ class PreviewFontService:
         except Exception: return {}
     def _write(self, item, charset_hash, data):
         path = self._manifest_path(item, charset_hash); path.parent.mkdir(parents=True, exist_ok=True); tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"schema_version": 1, "font_id": item["font_id"], "source_sha256": item["sha"], "charset_hash": charset_hash, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **data}, ensure_ascii=False), encoding="utf-8"); os.replace(tmp, path)
+        tmp.write_text(json.dumps({"schema_version": 2, "font_id": item["font_id"], "source_sha256": item["sha"], "charset_hash": charset_hash, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **data}, ensure_ascii=False), encoding="utf-8"); os.replace(tmp, path)
     def _log(self, level, message, *args):
         if self.logger and hasattr(self.logger, level): getattr(self.logger, level)(message, *args)

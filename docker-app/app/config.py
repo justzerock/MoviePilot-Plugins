@@ -58,6 +58,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "custom_text_font_custom": "",
     "preview_font_enabled": True,
     "font_subset_enabled": True,
+    "font_script_adaptation_enabled": True,
+    "font_script_target": "auto",
+    "font_traditional_variant": "standard",
     "library_scheme_rules": [],
     "default_scheme_id": "",
     "animation_duration": 8,
@@ -222,6 +225,11 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
     config["history_enabled"] = bool(config.get("history_enabled", config.get("save_recent_covers", True)))
     config["preview_font_enabled"] = bool(config.get("preview_font_enabled", True))
     config["font_subset_enabled"] = bool(config.get("font_subset_enabled", True))
+    config["font_script_adaptation_enabled"] = bool(config.get("font_script_adaptation_enabled", True))
+    if str(config.get("font_script_target") or "auto") not in {"auto", "simplified", "traditional"}:
+        config["font_script_target"] = "auto"
+    if str(config.get("font_traditional_variant") or "standard") not in {"standard", "taiwan", "hongkong"}:
+        config["font_traditional_variant"] = "standard"
     legacy_scheme = str((config.get("style_config") or {}).get("style") or "single_1")
     config["default_scheme_id"] = str(config.get("default_scheme_id") or legacy_scheme)
     rules: list[dict[str, Any]] = []

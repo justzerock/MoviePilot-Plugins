@@ -34,7 +34,7 @@ def _write(path: Path, value: dict[str, Any]) -> None:
 
 
 class HistoryStore:
-    def __init__(self, data_dir: Path, version: str = "2.0.21"):
+    def __init__(self, data_dir: Path, version: str = "2.0.22"):
         self.root = data_dir / "history"
         self.tmp = self.root / ".tmp"
         self.batches = self.root / "batches"

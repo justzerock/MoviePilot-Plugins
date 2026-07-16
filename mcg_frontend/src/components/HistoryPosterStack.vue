@@ -3,7 +3,7 @@
     ref="rootEl"
     class="yh-history-poster-stack"
     :class="[
-      `is-${phase}`,
+      `phase-${phase}`,
       { 'is-expanded': expanded, 'is-time-machine': mode === 'time-machine' },
     ]"
     :data-history-group="groupKey"
@@ -33,7 +33,7 @@
       class="yh-history-poster-stack__surface"
       :role="expanded ? 'group' : 'button'"
       :aria-label="expanded ? `${title} 的历史封面` : `展开 ${title} 的历史封面`"
-      @click.self="expanded ? emit('close') : emit('toggle')"
+      @click.self="expanded ? emit('close') : emit('toggle', anchorRect())"
     >
       <button
         v-for="(item, index) in items"
@@ -49,7 +49,7 @@
         :aria-selected="expanded ? selectedKeys.includes(selectionKey(item)) : undefined"
         :aria-label="expanded ? `选择 ${item.library || item.name || '封面'}` : `展开 ${title}`"
         :disabled="disabled"
-        @click.stop="expanded ? emit('select', item) : emit('toggle')"
+        @click.stop="expanded ? emit('select', item) : emit('toggle', anchorRect())"
       >
         <span class="yh-history-poster-stack__image-shell">
           <img
@@ -114,7 +114,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (event: 'toggle'): void
+  (event: 'toggle', anchor: { left: number; top: number; width: number; height: number } | null): void
   (event: 'close'): void
   (event: 'select', item: HistoryPosterItem): void
 }>()
@@ -155,7 +155,12 @@ function stackStyle(index: number) {
 
 function handlePrimaryAction() {
   if (props.expanded) return
-  emit('toggle')
+  emit('toggle', anchorRect())
+}
+
+function anchorRect() {
+  const rect = rootEl.value?.getBoundingClientRect()
+  return rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null
 }
 
 watch(

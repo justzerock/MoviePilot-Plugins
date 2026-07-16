@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import json
 import re
 import time
@@ -16,6 +17,7 @@ from .mock import MOCK_LIBRARIES, ensure_mock_images, mock_library_by_name
 from .run_logs import APP_LOGGER
 from .history_store import HistoryBatch, HistoryStore
 from .font_preview import PreviewFontService
+from .font_resolution import ResolvedRenderText, resolve_render_text_and_font
 
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
@@ -404,6 +406,78 @@ class CoverService:
                 font_paths[key] = resolved
         return {key: value for key, value in font_paths.items() if value}
 
+    def resolve_render_payload(
+        self,
+        title: str,
+        subtitle: str,
+        custom_texts: dict[str, str] | None = None,
+        layout: dict[str, Any] | None = None,
+        font_paths: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        paths = dict(font_paths or self.build_font_paths())
+        fallback = str(paths.get("chaohei") or paths.get("yasong") or paths.get("main_title") or "")
+        diagnostics: dict[str, dict[str, Any]] = {}
+
+        def resolve(alias: str, text: Any) -> ResolvedRenderText:
+            requested = str(paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index()) or paths.get("custom_text") or fallback)
+            result = resolve_render_text_and_font(
+                text,
+                requested,
+                fallback,
+                adaptation_enabled=bool(self.config.get("font_script_adaptation_enabled", True)),
+                target=str(self.config.get("font_script_target") or "auto"),
+                traditional_variant=str(self.config.get("font_traditional_variant") or "standard"),
+            )
+            if result.resolved_font_path:
+                paths[alias] = result.resolved_font_path
+            diagnostics[f"{alias}:{len(diagnostics)}"] = result.to_dict()
+            return result
+
+        resolved_title = resolve("main_title", title)
+        resolved_subtitle = resolve("subtitle", subtitle)
+        resolved_custom = {
+            str(key): resolve("custom_text", value).rendered_text
+            for key, value in (custom_texts or {}).items()
+        }
+        resolved_layout = deepcopy(layout) if isinstance(layout, dict) else layout
+
+        def visit(layers: list[Any]) -> None:
+            for layer in layers:
+                if not isinstance(layer, dict):
+                    continue
+                if str(layer.get("type") or "") == "group":
+                    visit(layer.get("children") or [])
+                    continue
+                layer_type = str(layer.get("type") or "")
+                if layer_type not in {"main_title", "title_zh", "subtitle", "title_en", "text"}:
+                    continue
+                alias = str(layer.get("fontFamily") or ("subtitle" if layer_type in {"subtitle", "title_en"} else "custom_text" if layer_type == "text" else "main_title"))
+                if layer_type in {"main_title", "title_zh"}:
+                    value = resolved_title.rendered_text
+                elif layer_type in {"subtitle", "title_en"}:
+                    value = resolved_subtitle.rendered_text
+                elif layer.get("contentSource") == "library":
+                    value = resolved_custom.get(str(layer.get("contentKey") or ""), str(layer.get("content") or ""))
+                else:
+                    value = str(layer.get("content") or "")
+                result = resolve(alias, value)
+                layer["content"] = result.rendered_text
+                text_style = layer.get("textStyle") if isinstance(layer.get("textStyle"), dict) else {}
+                layer["textStyle"] = {**text_style, "content": result.rendered_text}
+
+        if isinstance(resolved_layout, dict):
+            visit(resolved_layout.get("layers") or [])
+        return {
+            "original_title": str(title or ""),
+            "original_subtitle": str(subtitle or ""),
+            "title": resolved_title.rendered_text,
+            "subtitle": resolved_subtitle.rendered_text,
+            "custom_texts": resolved_custom,
+            "layout": resolved_layout,
+            "font_paths": paths,
+            "diagnostics": diagnostics,
+        }
+
     def preview_font_assets(self, paths: list[str] | None = None) -> dict[str, dict[str, Any]]:
         selected = paths or list(self._preview_font_paths)
         if not selected:
@@ -411,11 +485,11 @@ class CoverService:
             selected = [semantic.get(key, "") for key in ("main_title", "subtitle", "custom_text")]
         return self.preview_fonts.assets([Path(value) for value in set(selected) if value])
 
-    def preview_font_info(self, font_id: str) -> dict[str, Any] | None:
+    def preview_font_info(self, font_id: str, config_override: dict[str, Any] | None = None) -> dict[str, Any] | None:
         return self.preview_fonts.info(
             font_id,
             self.preview_font_assets(),
-            self.config,
+            config_override or self.config,
             lambda asset_id, variant, version: f"/api/fonts/{asset_id}/file?variant={variant}&v={version}",
         )
 
@@ -425,10 +499,10 @@ class CoverService:
     def preview_font_status(self, font_id: str) -> dict[str, Any] | None:
         return self.preview_fonts.status(font_id, self.preview_font_assets(), self.config)
 
-    def preview_font_faces(self, layout: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+    def preview_font_faces(self, layout: dict[str, Any] | None = None, resolved_paths: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
         if not bool(self.config.get("preview_font_enabled", True)):
             return {}
-        paths = self.build_font_paths()
+        paths = dict(resolved_paths or self.build_font_paths())
         aliases = {"main_title", "subtitle", "custom_text"}
 
         def visit(layers: list[Any]) -> None:
@@ -443,6 +517,19 @@ class CoverService:
 
         if isinstance(layout, dict):
             visit(layout.get("layers") or [])
+        preview_config = dict(self.config)
+        rendered_characters: list[str] = []
+        def collect_text(layers: list[Any]) -> None:
+            for layer in layers:
+                if not isinstance(layer, dict):
+                    continue
+                if str(layer.get("type") or "") == "group":
+                    collect_text(layer.get("children") or [])
+                else:
+                    rendered_characters.append(str(layer.get("content") or (layer.get("textStyle") or {}).get("content") or ""))
+        if isinstance(layout, dict):
+            collect_text(layout.get("layers") or [])
+        preview_config["preview_rendered_characters"] = "".join(rendered_characters)
         selected_paths = [paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index()) for alias in aliases]
         self._preview_font_paths.update(str(path) for path in selected_paths if path)
         assets = self.preview_font_assets(selected_paths)
@@ -455,7 +542,7 @@ class CoverService:
             path = paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index())
             if not path:
                 continue
-            info = self.preview_font_info(path_to_id.get(str(Path(path).resolve()), ""))
+            info = self.preview_font_info(path_to_id.get(str(Path(path).resolve()), ""), preview_config)
             if info and info.get("url"):
                 faces[alias] = info
         for semantic, preset in (
@@ -568,12 +655,10 @@ class CoverService:
             if "main_title_font_size" in config:
                 config["main_font_size"] = config["main_title_font_size"]
         _title, _subtitle, custom_texts = library_title_payload(self.config, library_name, server_name)
-        config["custom_texts"] = custom_texts
         title_background = library_title_background(self.config, library_name, server_name)
         if title_background:
             config["background_color"] = title_background
         config["font_paths"] = self.build_font_paths()
-        config.setdefault("font", config["font_paths"].get("main_title", ""))
         if custom_layout is not None or style_name == "custom_static":
             layout = custom_layout or self.config.get("custom_static_layout")
             if not isinstance(layout, dict):
@@ -584,6 +669,21 @@ class CoverService:
                         break
             if isinstance(layout, dict):
                 config["custom_static_layout"] = layout
+        resolved = self.resolve_render_payload(
+            _title,
+            _subtitle,
+            custom_texts,
+            config.get("custom_static_layout") if isinstance(config.get("custom_static_layout"), dict) else None,
+            config["font_paths"],
+        )
+        config["resolved_title"] = resolved["title"]
+        config["resolved_subtitle"] = resolved["subtitle"]
+        config["custom_texts"] = resolved["custom_texts"]
+        config["font_paths"] = resolved["font_paths"]
+        config["font_resolution"] = resolved["diagnostics"]
+        if isinstance(resolved.get("layout"), dict):
+            config["custom_static_layout"] = resolved["layout"]
+        config.setdefault("font", config["font_paths"].get("main_title", ""))
         return config
 
     def output_suffix(self, style_config: dict[str, Any], style_name: str = "") -> str:
@@ -798,7 +898,7 @@ class CoverService:
         title, subtitle, _texts = library_title_payload(self.config, library.name, client.server_name)
         render_config = self.render_config(style_config, library.name, style_name, client.server_name, scheme_layout)
         output_path = output_dir / f"{slugify(library.name)}_{style_name}{self.output_suffix(render_config, style_name)}"
-        await asyncio.to_thread(self.renderer().render, image_paths, title, subtitle, style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or title), str(render_config.get("resolved_subtitle") or subtitle), style_name, render_config, output_path)
         rendered_at = time.perf_counter()
         uploaded = False
         upload_error = ""
@@ -844,7 +944,7 @@ class CoverService:
             raise ValueError("本地图片模式未找到素材，请将图片放入 /app/data/input 或 /app/data/input/媒体库名")
         render_config = self.render_config(style_config, "本地封面", style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
-        await asyncio.to_thread(self.renderer().render, image_paths, "本地封面", "Local Library", style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or "本地封面"), str(render_config.get("resolved_subtitle") or "Local Library"), style_name, render_config, output_path)
         result = {
             "library": "local",
             "library_id": "",
@@ -876,7 +976,7 @@ class CoverService:
         title, subtitle = title_for_library(self.config, library_name)
         render_config = self.render_config(style_config, library_name, style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
-        await asyncio.to_thread(self.renderer().render, image_paths, title, subtitle, style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or title), str(render_config.get("resolved_subtitle") or subtitle), style_name, render_config, output_path)
         result = {
             "library": library_name,
             "library_id": slugify(library_name),
@@ -1008,7 +1108,7 @@ class CoverService:
         image_paths = ensure_mock_images(input_dir, slugify(library["name"]), title, image_limit)
         render_config = self.render_config(style_config, library["name"], style_name, custom_layout=scheme_layout)
         output_path = output_dir / f"{slugify(library['name'])}_{style_name}{self.output_suffix(render_config, style_name)}"
-        await asyncio.to_thread(self.renderer().render, image_paths, title, subtitle or "Mock Library", style_name, render_config, output_path)
+        await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or title), str(render_config.get("resolved_subtitle") or subtitle or "Mock Library"), style_name, render_config, output_path)
         result = {
             "library": library["name"],
             "library_id": library["id"],

@@ -67,6 +67,9 @@ export interface YahahaCoverStudioConfig {
   custom_static_active_id?: string | null
   preview_font_enabled?: boolean
   font_subset_enabled?: boolean
+  font_script_adaptation_enabled?: boolean
+  font_script_target?: 'auto' | 'simplified' | 'traditional'
+  font_traditional_variant?: 'standard' | 'taiwan' | 'hongkong'
   library_scheme_rules?: LibrarySchemeRule[]
   default_scheme_id?: string
   scheme_catalog?: SchemeCatalogItem[]

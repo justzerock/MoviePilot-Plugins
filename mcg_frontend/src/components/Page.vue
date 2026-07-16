@@ -699,17 +699,6 @@
               </div>
 
               <Teleport to="body">
-                <nav ref="timeMachineTimelineEl" v-if="pageTab === 'history-tab' && historyGroupMode === 'time-machine' && groupedHistory.length" class="mcr-time-machine-timeline" :style="timeMachineTimelineStyle" :data-mcr-theme="isDark ? 'dark' : 'light'" aria-label="历史时间轴">
-                  <div v-for="group in groupedHistory" :key="group.key" class="mcr-time-machine-node-row">
-                    <button type="button" class="mcr-time-machine-node" :class="{ 'is-active': activeTimeRecordId === group.key }" :aria-current="activeTimeRecordId === group.key ? 'true' : undefined" @click="scrollToTimeRecord(group.key)">
-                      <i aria-hidden="true" /><span>{{ group.title }}</span>
-                    </button>
-                    <button v-if="activeTimeRecordId === group.key" type="button" class="mcr-time-machine-restore" @click.stop="restoreHistoryBatch(group.key, group.title)">回到此时</button>
-                  </div>
-                </nav>
-              </Teleport>
-
-              <Teleport to="body">
                 <div
                   v-if="expandedHistoryGroupId && selectedHistoryPaths.length"
                   class="mcr-history-floating-actions"
@@ -770,20 +759,27 @@
                       v-for="group in groupedHistory"
                       :key="group.key"
                       class="mcr-history-group"
-                      :class="{ 'mcr-history-group--time-machine': historyGroupMode === 'time-machine', 'is-active': activeTimeRecordId === group.key, 'is-expanded': expandedHistoryGroupId === group.key, 'is-dimmed': Boolean(expandedHistoryGroupId && expandedHistoryGroupId !== group.key) }"
+                      :class="{ 'mcr-history-group--time-machine': historyGroupMode === 'time-machine', [`is-${historyRecordSide(group.key)}`]: historyGroupMode === 'time-machine', 'is-active': activeTimeRecordId === group.key, 'is-dimmed': Boolean(expandedHistoryGroupId && expandedHistoryGroupId !== group.key) }"
                       :id="`time-record-${group.key}`"
                     >
+                      <aside v-if="historyGroupMode === 'time-machine'" class="mcr-time-machine-meta">
+                        <strong>{{ group.fullTitle }}</strong>
+                        <span>{{ group.title }}</span>
+                        <button type="button" :disabled="controlsLocked || Boolean(restoringBatchId)" @click.stop="restoreHistoryBatch(group.key, group.fullTitle)">回溯</button>
+                      </aside>
+                      <button v-if="historyGroupMode === 'time-machine'" type="button" class="mcr-time-machine-marker" :class="{ 'is-active': activeTimeRecordId === group.key }" :aria-current="activeTimeRecordId === group.key ? 'true' : undefined" :aria-label="`定位到 ${group.fullTitle}`" @click="scrollToTimeRecord(group.key)"><i aria-hidden="true" /></button>
                       <HistoryPosterStack
+                        class="mcr-time-machine-poster"
                         :group-key="group.key"
                         :title="group.title"
                         :items="group.items"
-                        :expanded="expandedHistoryGroupId === group.key"
+                        :expanded="false"
                         :phase="historyGroupPhase(group.key)"
                         :selected-keys="selectedHistoryPaths"
                         :stack-limit="historyStackLimit"
                         :mode="historyGroupMode"
                         :disabled="controlsLocked"
-                        @toggle="openHistorySnapshot(group)"
+                        @toggle="openHistorySnapshot(group, $event)"
                         @close="closeHistorySnapshot()"
                         @select="toggleHistorySelection"
                       />
@@ -792,6 +788,7 @@
                   <div v-else class="mcr-history-empty">还没有可以回到的时间<br><small>生成并保存封面后，历史记录会显示在这里。</small></div>
                 </div>
               </Transition>
+              <HistoryExpansionLayer :open="Boolean(expandedHistoryGroupId && selectedHistorySnapshot)" :title="selectedHistorySnapshot?.fullTitle || selectedHistorySnapshot?.title || ''" :items="expandedHistoryItems" :selected-keys="selectedHistoryPaths" :anchor-rect="historyExpansionAnchor" :theme="isDark ? 'dark' : 'light'" @close="closeHistorySnapshot()" @select="toggleHistorySelection" />
             </v-window-item>
           </v-window>
         </v-card-text>
@@ -1161,6 +1158,7 @@ import AsyncStatusDots from './AsyncStatusDots.vue'
 import CustomLayoutEditor from './CustomLayoutEditor.vue'
 import GeneratePreviewSimulation from './GeneratePreviewSimulation.vue'
 import HistoryPosterStack from './HistoryPosterStack.vue'
+import HistoryExpansionLayer from './HistoryExpansionLayer.vue'
 import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
@@ -1359,6 +1357,9 @@ const restoringBatchId = ref('')
 const activeTimeRecordId = ref('')
 const selectedHistorySnapshot = ref<(HistoryGroup & { fullTitle: string }) | null>(null)
 const expandedHistoryGroupId = ref('')
+const historyExpansionAnchor = ref<{ left: number; top: number; width: number; height: number } | null>(null)
+let historyExpansionReturnFocus: HTMLElement | null = null
+const historyRecordSides = reactive(new Map<string, 'left' | 'right'>())
 const historyExpansionPhase = ref<'collapsed' | 'expanding' | 'expanded' | 'collapsing'>('collapsed')
 const historyViewScrollPositions = reactive<Record<'library' | 'time-machine', number>>({
   library: 0,
@@ -2490,37 +2491,8 @@ const expandedHistoryItems = computed(() => selectedHistorySnapshot.value?.items
 let timeRecordObserver: IntersectionObserver | null = null
 let timeRecordClickLockUntil = 0
 let timeMachineFrame = 0
-let timeMachineResizeObserver: ResizeObserver | null = null
 let timeMachineScrollRoot: HTMLElement | null = null
 const historyGroupsEl = ref<HTMLElement | null>(null)
-const timeMachineTimelineEl = ref<HTMLElement | null>(null)
-const timeMachineTimelineStyle = ref<Record<string, string>>({ left: '12px', top: '80px' })
-watch(historyGroupsEl, (element) => {
-  timeMachineResizeObserver?.disconnect()
-  timeMachineResizeObserver = null
-  if (element && typeof ResizeObserver !== 'undefined') {
-    timeMachineResizeObserver = new ResizeObserver(updateTimeMachineTimelinePosition)
-    timeMachineResizeObserver.observe(element)
-  }
-  updateTimeMachineTimelinePosition()
-})
-function updateTimeMachineTimelinePosition() {
-  if (!historyGroupsEl.value || historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
-  const rect = historyGroupsEl.value.getBoundingClientRect()
-  const compact = window.innerWidth < 768
-  const width = compact ? 122 : 190
-  const padding = compact ? 6 : 14
-  const desired = rect.right + (compact ? 8 : 24)
-  const left = Math.min(Math.max(desired, padding), Math.max(padding, window.innerWidth - width - padding))
-  const timelineHeight = Math.min(timeMachineTimelineEl.value?.offsetHeight || window.innerHeight * 0.5, window.innerHeight * 0.72)
-  const visibleTop = Math.max(12, rect.top)
-  const visibleBottom = Math.min(window.innerHeight - 12, rect.bottom)
-  const preferredCenter = (visibleTop + Math.max(visibleTop, visibleBottom)) / 2
-  const minCenter = 12 + timelineHeight / 2
-  const maxCenter = Math.max(minCenter, window.innerHeight - 12 - timelineHeight / 2)
-  const top = Math.min(Math.max(preferredCenter, minCenter), maxCenter)
-  timeMachineTimelineStyle.value = { left: `${Math.round(left)}px`, width: `${width}px`, right: 'auto', top: `${Math.round(top)}px` }
-}
 function updateTimeMachineDepth() {
   historyStackLimit.value = isMobileViewport() ? 3 : 5
   if (historyGroupMode.value !== 'time-machine' || pageTab.value !== 'history-tab') return
@@ -2535,7 +2507,7 @@ function updateTimeMachineDepth() {
 }
 function scheduleTimeMachineDepth() {
   if (timeMachineFrame) return
-  timeMachineFrame = window.requestAnimationFrame(() => { timeMachineFrame = 0; updateTimeMachineDepth(); updateTimeMachineTimelinePosition() })
+  timeMachineFrame = window.requestAnimationFrame(() => { timeMachineFrame = 0; updateTimeMachineDepth() })
 }
 function observeTimeRecords() {
   timeRecordObserver?.disconnect()
@@ -2559,7 +2531,7 @@ function observeTimeRecords() {
   }, { root: timeMachineScrollRoot, rootMargin: '-32% 0px -32% 0px', threshold: [0, 0.1, 0.4] })
   elements.forEach((element) => timeRecordObserver?.observe(element))
 }
-watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(() => { observeTimeRecords(); updateTimeMachineTimelinePosition() }))
+watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(observeTimeRecords))
 watch([historyGroupMode, pageTab, groupedHistory], () => void nextTick(scheduleTimeMachineDepth))
 
 function resolveHistoryScrollRoot(target: HTMLElement) {
@@ -2609,7 +2581,6 @@ async function changeHistoryView(value: 'library' | 'time-machine' | null) {
   await nextTick()
   restoreHistoryScrollTop(historyViewScrollPositions[value])
   observeTimeRecords()
-  updateTimeMachineTimelinePosition()
 }
 
 function scrollToTimeRecord(id: string) {
@@ -2620,7 +2591,11 @@ function scrollToTimeRecord(id: string) {
   if (target) scrollHistoryElementToCenter(target)
 }
 
-function openHistorySnapshot(group: HistoryGroup) {
+function historyRecordSide(groupKey: string) {
+  return historyRecordSides.get(groupKey) || 'left'
+}
+
+function openHistorySnapshot(group: HistoryGroup, anchor: { left: number; top: number; width: number; height: number } | null = null) {
   if (expandedHistoryGroupId.value === group.key) {
     closeHistorySnapshot()
     return
@@ -2631,9 +2606,13 @@ function openHistorySnapshot(group: HistoryGroup) {
     timeRecordClickLockUntil = Date.now() + 720
   }
   selectedHistorySnapshot.value = group
+  const scrollTopBeforeExpand = currentHistoryScrollTop()
+  historyExpansionReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  historyExpansionAnchor.value = anchor
   expandedHistoryGroupId.value = group.key
   historyExpansionPhase.value = 'expanding'
   void nextTick(() => window.requestAnimationFrame(() => {
+    restoreHistoryScrollTop(scrollTopBeforeExpand)
     if (expandedHistoryGroupId.value === group.key) historyExpansionPhase.value = 'expanded'
   }))
 }
@@ -2644,7 +2623,10 @@ function closeHistorySnapshot(immediate = false) {
     expandedHistoryGroupId.value = ''
     historyExpansionPhase.value = 'collapsed'
     selectedHistorySnapshot.value = null
+    historyExpansionAnchor.value = null
     selectedHistoryPaths.value = []
+    historyExpansionReturnFocus?.focus({ preventScroll: true })
+    historyExpansionReturnFocus = null
     return
   }
   const closingId = expandedHistoryGroupId.value
@@ -2654,7 +2636,10 @@ function closeHistorySnapshot(immediate = false) {
     if (expandedHistoryGroupId.value !== closingId) return
     expandedHistoryGroupId.value = ''
     selectedHistorySnapshot.value = null
+    historyExpansionAnchor.value = null
     historyExpansionPhase.value = 'collapsed'
+    historyExpansionReturnFocus?.focus({ preventScroll: true })
+    historyExpansionReturnFocus = null
   }, 280)
 }
 
@@ -3922,6 +3907,17 @@ watch(pageTab, (nextTab) => {
 })
 
 watch(groupedHistory, (groups) => {
+  groups.forEach((group, index) => {
+    if (historyRecordSides.has(group.key)) return
+    const previous = groups.slice(0, index).reverse().find((item) => historyRecordSides.has(item.key))
+    const next = groups.slice(index + 1).find((item) => historyRecordSides.has(item.key))
+    const neighborSide = previous
+      ? historyRecordSides.get(previous.key)
+      : next
+        ? historyRecordSides.get(next.key)
+        : undefined
+    historyRecordSides.set(group.key, neighborSide ? (neighborSide === 'left' ? 'right' : 'left') : (index % 2 === 0 ? 'left' : 'right'))
+  })
   if (!expandedHistoryGroupId.value) return
   const current = groups.find((group) => group.key === expandedHistoryGroupId.value)
   if (!current?.items.length) {
@@ -4000,7 +3996,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   timeRecordObserver?.disconnect()
-	  timeMachineResizeObserver?.disconnect()
   componentActive = false
   if (typeof window !== 'undefined') {
     pageThemeMediaQuery?.removeEventListener?.('change', syncSystemTheme)
@@ -9461,9 +9456,6 @@ onBeforeUnmount(() => {
   transform: translateY(0) scale(1);
   filter: none;
 }
-.mcr-history-groups--library > .mcr-history-group.is-expanded {
-  grid-column: 1 / -1;
-}
 .mcr-history-group.is-dimmed {
   opacity: .46;
 }
@@ -9594,6 +9586,85 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .mcr-history-group,
   .mcr-time-machine-node i { transition: none; }
+}
+/* Central time-machine layout. The source card remains in-flow while the expansion layer floats. */
+.mcr-history-groups--time-machine {
+  width: min(100%, 1120px);
+  margin-inline: auto;
+  padding-right: 0 !important;
+  gap: 10px !important;
+}
+.mcr-history-groups--library {
+  width: min(100%, 1180px);
+  margin-inline: auto;
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center !important;
+}
+.mcr-history-groups--library > .mcr-history-group {
+  width: min(270px, 100%);
+  flex: 0 1 270px;
+}
+.mcr-history-group--time-machine {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 176px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+  grid-template-areas: "poster axis meta";
+  align-items: center;
+  margin: 0 !important;
+  transform: none !important;
+}
+.mcr-history-group--time-machine.is-right { grid-template-areas: "meta axis poster"; }
+.mcr-time-machine-poster { grid-area: poster; width: min(100%, 430px); justify-self: center; }
+.mcr-time-machine-meta { grid-area: meta; min-width: 0; display: grid; justify-items: start; gap: 5px; padding: 14px 18px; }
+.mcr-history-group--time-machine.is-right .mcr-time-machine-meta { justify-items: end; text-align: right; }
+.mcr-time-machine-meta strong { max-width: 100%; overflow: hidden; color: var(--color-text-main); font-size: clamp(15px, 1.6vw, 20px); font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.mcr-time-machine-meta span { color: var(--color-text-muted); font-size: 12px; font-weight: 700; }
+.mcr-time-machine-meta button { min-height: 38px; margin-top: 4px; padding: 7px 13px; border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface)); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.mcr-time-machine-marker { grid-area: axis; position: relative; align-self: stretch; width: 100%; min-height: 176px; display: grid; place-items: center; border: 0; background: transparent; color: var(--color-text-muted); cursor: pointer; }
+.mcr-time-machine-marker::before { content: ''; position: absolute; top: -12px; bottom: -12px; left: 50%; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--color-border) 88%, transparent); transform: translateX(-50%); }
+.mcr-time-machine-marker i { position: relative; z-index: 1; width: 12px; height: 12px; border: 2px solid var(--color-surface); border-radius: 50%; background: currentColor; box-shadow: 0 0 0 1px var(--color-border); transition: width 180ms ease, height 180ms ease, color 180ms ease, box-shadow 180ms ease; }
+.mcr-time-machine-marker.is-active { color: var(--color-primary); }
+.mcr-time-machine-marker.is-active i { width: 19px; height: 19px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 15%, transparent); }
+.mcr-time-machine-marker:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary) 44%, transparent); outline-offset: -8px; border-radius: 16px; }
+.mcr-history-group.is-dimmed { opacity: .58; }
+@media (max-width: 768px) {
+  .mcr-history-group--time-machine { min-height: 140px; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
+  .mcr-time-machine-marker { min-height: 140px; }
+  .mcr-time-machine-poster { width: min(100%, 240px); }
+  .mcr-time-machine-meta { gap: 3px; padding: 8px 5px; }
+  .mcr-time-machine-meta strong { font-size: 13px; }
+  .mcr-time-machine-meta span { font-size: 10px; }
+  .mcr-time-machine-meta button { min-height: 40px; padding: 6px 9px; font-size: 11px; }
+  .mcr-history-groups--library { gap: 9px !important; }
+  .mcr-history-groups--library > .mcr-history-group { width: calc((100% - 9px) / 2); flex-basis: calc((100% - 9px) / 2); }
+}
+@media (max-width: 600px) {
+  .mcr-history-group--time-machine,
+  .mcr-history-group--time-machine.is-right {
+    min-height: 210px;
+    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "axis meta"
+      "axis poster";
+  }
+  .mcr-time-machine-marker { min-height: 210px; grid-row: 1 / -1; }
+  .mcr-time-machine-meta,
+  .mcr-history-group--time-machine.is-right .mcr-time-machine-meta {
+    justify-items: start;
+    padding: 8px 8px 2px;
+    text-align: left;
+  }
+  .mcr-time-machine-poster { width: min(100%, 320px); justify-self: start; }
+}
+@media (max-width: 360px) {
+  .mcr-history-group--time-machine,
+  .mcr-history-group--time-machine.is-right { grid-template-columns: 38px minmax(0, 1fr); }
+  .mcr-time-machine-meta { padding-inline: 2px; }
+  .mcr-time-machine-meta strong { font-size: 12px; }
 }
 
 @media (max-width: 600px) {
