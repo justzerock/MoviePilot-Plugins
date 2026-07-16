@@ -458,6 +458,14 @@ class CoverService:
             info = self.preview_font_info(path_to_id.get(str(Path(path).resolve()), ""))
             if info and info.get("url"):
                 faces[alias] = info
+        for semantic, preset in (
+            ("main_title", self.config.get("main_title_font_preset")),
+            ("subtitle", self.config.get("subtitle_font_preset")),
+            ("custom_text", self.config.get("custom_text_font_preset")),
+        ):
+            preset_alias = str(preset or "").strip()
+            if preset_alias and semantic in faces:
+                faces[preset_alias] = dict(faces[semantic])
         return faces
 
     def scheme_catalog(self) -> list[dict[str, str]]:

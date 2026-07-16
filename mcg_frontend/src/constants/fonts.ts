@@ -29,8 +29,17 @@ export function clearPreviewFontFamily(fontFamily: string) {
 }
 
 export function getTemplateFontFaceName(fontFamily?: string | null) {
-  const loaded = previewFontFamilies.get(normalizedFontKey(fontFamily))
+  const key = normalizedFontKey(fontFamily)
+  const loaded = previewFontFamilies.get(key)
   if (loaded) return loaded
+  // Layouts saved before semantic font aliases were introduced may still
+  // contain concrete preset names such as `chaohei`. When that preset was not
+  // returned separately, use the currently configured semantic font instead
+  // of silently falling back to a stale static family.
+  if (isCjkFontFamily(key)) {
+    const semanticMainTitle = previewFontFamilies.get('main_title')
+    if (semanticMainTitle) return semanticMainTitle
+  }
   if (fontFamily === 'subtitle') return 'McrSubtitleFont'
   if (fontFamily === 'custom_text') return 'McrCustomTextFont'
   if (!fontFamily || fontFamily === 'main_title') return 'McrMainTitleFont'
@@ -60,7 +69,8 @@ export function isCjkFontFamily(fontFamily?: string | null) {
 
 export function getTemplateFontFamilyStack(fontFamily?: string | null, text?: string | null) {
   const primary = getTemplateFontFaceName(fontFamily || 'main_title')
-  const systemCjk = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "WenQuanYi Zen Hei"'
-  const cjkFallback = containsCjkText(text) ? 'McrFont_chaohei, McrFont_yasong, ' : ''
-  return `${primary}, ${cjkFallback}${systemCjk}, sans-serif`
+  const stack = [primary]
+  if (containsCjkText(text)) stack.push('McrFont_chaohei', 'McrFont_yasong')
+  stack.push('"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"Noto Sans CJK SC"', '"WenQuanYi Zen Hei"', 'sans-serif')
+  return [...new Set(stack)].join(', ')
 }

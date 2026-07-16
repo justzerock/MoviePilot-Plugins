@@ -41,7 +41,14 @@ export async function ensurePreviewFont(alias: string, source?: FontSource): Pro
     return true
   }
   const existing = pending.get(key)
-  if (existing) return existing
+  if (existing) {
+    return existing.then((success) => {
+      // Different layer aliases can resolve to the same physical font. The
+      // shared request still needs to bind the loaded family to every alias.
+      if (success) applyPreviewFontFamily(alias, family)
+      return success
+    })
+  }
   // Quote URLs so plugin query strings and encoded file names are accepted by
   // the CSS parser used by FontFace on Safari as well as Chromium.
   const escapedUrl = String(url).replace(/\\/g, '\\\\').replace(/"/g, '\\"')

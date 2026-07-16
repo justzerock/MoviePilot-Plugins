@@ -1,38 +1,276 @@
 <template>
-  <Teleport to="body"><nav class="yh-settings-anchor" :style="{ left: `${navLeft}px` }" :data-mcr-theme="theme" aria-label="设置分组导航">
-    <v-tooltip v-for="section in sections" :key="section.id" location="end" :open-delay="220">
-      <template #activator="{ props: tooltipProps }"><button v-bind="tooltipProps" type="button" class="yh-settings-anchor__button" :class="{ 'is-active': activeId === section.id }" :aria-label="`跳转到${section.label}`" :aria-current="activeId === section.id ? 'true' : undefined" @click="scrollToSection(section.id)"><span class="yh-settings-anchor__line" aria-hidden="true" /></button></template>
-      <span>{{ section.label }}</span>
-    </v-tooltip>
-  </nav></Teleport>
+  <Teleport to="body">
+    <nav
+      v-if="navigationEnabled"
+      class="yh-settings-anchor"
+      :style="{ left: `${navLeft}px` }"
+      :data-mcr-theme="theme"
+      aria-label="设置分组导航"
+    >
+      <v-tooltip v-for="section in sections" :key="section.id" location="end" :open-delay="220">
+        <template #activator="{ props: tooltipProps }">
+          <button
+            v-bind="tooltipProps"
+            type="button"
+            class="yh-settings-anchor__button"
+            :class="{ 'is-active': activeId === section.id }"
+            :aria-label="`跳转到${section.label}`"
+            :aria-current="activeId === section.id ? 'true' : undefined"
+            @click="scrollToSection(section.id)"
+          >
+            <span class="yh-settings-anchor__line" aria-hidden="true" />
+          </button>
+        </template>
+        <span>{{ section.label }}</span>
+      </v-tooltip>
+    </nav>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
 export interface SettingsAnchorSection { id: string; label: string }
-const props = withDefaults(defineProps<{ sections: SettingsAnchorSection[]; contentElement?: HTMLElement | null; scrollContainer?: HTMLElement | null; topOffset?: number; theme?: 'light' | 'dark' }>(), { contentElement: null, scrollContainer: null, topOffset: 96, theme: 'light' })
+
+const props = withDefaults(defineProps<{
+  sections: SettingsAnchorSection[]
+  contentElement?: HTMLElement | null
+  scrollContainer?: HTMLElement | null
+  topOffset?: number
+  theme?: 'light' | 'dark'
+  desktopMinWidth?: number
+}>(), {
+  contentElement: null,
+  scrollContainer: null,
+  topOffset: 96,
+  theme: 'light',
+  desktopMinWidth: 1024,
+})
+
 const activeId = ref(props.sections[0]?.id || '')
 const navLeft = ref(12)
+const navigationEnabled = ref(false)
 const navWidth = 36
 const viewportPadding = 12
+const anchorGap = 18
 let observer: IntersectionObserver | null = null
 let resizeObserver: ResizeObserver | null = null
 let scrollRoot: HTMLElement | null = null
 let targetId = ''
 let releaseFrame = 0
 let releaseDeadline = 0
+let scrollFrame = 0
+
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
-function observedElements() { return props.sections.map((section) => document.getElementById(section.id)).filter((element): element is HTMLElement => Boolean(element)) }
-function resolveScrollRoot() { scrollRoot = props.scrollContainer || null }
-function updatePosition() { const rect = props.contentElement?.getBoundingClientRect(); const desired = rect ? rect.left - navWidth - 18 : viewportPadding; navLeft.value = Math.round(clamp(desired, viewportPadding, Math.max(viewportPadding, window.innerWidth - navWidth - viewportPadding))) }
-function isAtBottom() { return scrollRoot ? scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2 : window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2 }
-function releaseProgrammaticScroll() { if (!targetId) return; const target = document.getElementById(targetId); const nearTarget = Boolean(target && Math.abs(target.getBoundingClientRect().top - props.topOffset) < 4); if (nearTarget || performance.now() >= releaseDeadline) { targetId = ''; releaseFrame = 0; return }; releaseFrame = requestAnimationFrame(releaseProgrammaticScroll) }
-function cancelProgrammaticScroll() { targetId = ''; if (releaseFrame) cancelAnimationFrame(releaseFrame); releaseFrame = 0 }
-function setupObserver() { observer?.disconnect(); resolveScrollRoot(); updatePosition(); const elements = observedElements(); if (!elements.length || typeof IntersectionObserver === 'undefined') return; observer = new IntersectionObserver((entries) => { if (targetId) return; if (isAtBottom() && props.sections.length) { activeId.value = props.sections.at(-1)?.id || activeId.value; return }; const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => Math.abs(a.boundingClientRect.top - props.topOffset) - Math.abs(b.boundingClientRect.top - props.topOffset)); if (visible[0]?.target.id) activeId.value = visible[0].target.id }, { root: scrollRoot, rootMargin: `-${props.topOffset}px 0px -62% 0px`, threshold: [0, .05, .25, .6] }); elements.forEach((element) => observer?.observe(element)) }
-function scrollToSection(id: string) { const target = document.getElementById(id); if (!target) return; cancelProgrammaticScroll(); activeId.value = id; targetId = id; releaseDeadline = performance.now() + 1400; if (scrollRoot) { const rootRect = scrollRoot.getBoundingClientRect(); const targetTop = scrollRoot.scrollTop + target.getBoundingClientRect().top - rootRect.top - props.topOffset; const maxTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight); scrollRoot.scrollTo({ top: clamp(targetTop, 0, maxTop), behavior: 'smooth' }) } else { const targetTop = target.getBoundingClientRect().top + window.scrollY - props.topOffset; const maxTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight); window.scrollTo({ top: clamp(targetTop, 0, maxTop), behavior: 'smooth' }) }; releaseFrame = requestAnimationFrame(releaseProgrammaticScroll) }
-watch(() => [props.sections, props.scrollContainer, props.contentElement], () => void nextTick(setupObserver), { deep: true })
-onMounted(() => void nextTick(() => { setupObserver(); if (typeof ResizeObserver !== 'undefined' && props.contentElement) { resizeObserver = new ResizeObserver(updatePosition); resizeObserver.observe(props.contentElement) } window.addEventListener('resize', updatePosition); window.addEventListener('wheel', cancelProgrammaticScroll, { passive: true }); window.addEventListener('touchstart', cancelProgrammaticScroll, { passive: true }); window.addEventListener('pointerdown', cancelProgrammaticScroll, { passive: true }) }))
-onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); cancelProgrammaticScroll(); window.removeEventListener('resize', updatePosition); window.removeEventListener('wheel', cancelProgrammaticScroll); window.removeEventListener('touchstart', cancelProgrammaticScroll); window.removeEventListener('pointerdown', cancelProgrammaticScroll) })
+
+function observedElements() {
+  return props.sections
+    .map((section) => document.getElementById(section.id))
+    .filter((element): element is HTMLElement => Boolean(element))
+}
+
+function isScrollable(element: HTMLElement) {
+  const style = window.getComputedStyle(element)
+  const overflowY = style.overflowY
+  return /(auto|scroll|overlay)/.test(overflowY) && element.scrollHeight > element.clientHeight + 2
+}
+
+function resolveScrollRoot() {
+  if (props.scrollContainer && isScrollable(props.scrollContainer)) {
+    scrollRoot = props.scrollContainer
+    return
+  }
+  let current: HTMLElement | null = props.contentElement || null
+  while (current && current !== document.body && current !== document.documentElement) {
+    if (isScrollable(current)) {
+      scrollRoot = current
+      return
+    }
+    current = current.parentElement
+  }
+  scrollRoot = null
+}
+
+function updatePosition() {
+  if (!navigationEnabled.value) return
+  const rect = props.contentElement?.getBoundingClientRect()
+  const desiredLeft = rect ? rect.left - navWidth - anchorGap : viewportPadding
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - navWidth - viewportPadding)
+  navLeft.value = Math.round(clamp(desiredLeft, viewportPadding, maxLeft))
+}
+
+function currentScrollTop() {
+  return scrollRoot ? scrollRoot.scrollTop : window.scrollY
+}
+
+function maxScrollTop() {
+  return scrollRoot
+    ? Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight)
+    : Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+}
+
+function sectionDistanceFromAnchor(target: HTMLElement) {
+  const targetRect = target.getBoundingClientRect()
+  if (!scrollRoot) return targetRect.top - props.topOffset
+  const rootRect = scrollRoot.getBoundingClientRect()
+  return targetRect.top - rootRect.top - props.topOffset
+}
+
+function targetScrollTop(target: HTMLElement) {
+  return clamp(currentScrollTop() + sectionDistanceFromAnchor(target), 0, maxScrollTop())
+}
+
+function isAtBottom() {
+  return currentScrollTop() >= maxScrollTop() - 2
+}
+
+function refreshActiveSection() {
+  if (!navigationEnabled.value || targetId) return
+  const elements = observedElements()
+  if (!elements.length) return
+  if (isAtBottom()) {
+    activeId.value = props.sections.at(-1)?.id || activeId.value
+    return
+  }
+  const nearest = elements
+    .map((element) => ({ element, distance: Math.abs(sectionDistanceFromAnchor(element)) }))
+    .sort((a, b) => a.distance - b.distance)[0]
+  if (nearest?.element.id) activeId.value = nearest.element.id
+}
+
+function scheduleScrollUpdate() {
+  if (scrollFrame) return
+  scrollFrame = window.requestAnimationFrame(() => {
+    scrollFrame = 0
+    refreshActiveSection()
+    updatePosition()
+  })
+}
+
+function finishProgrammaticScroll() {
+  if (!targetId) return
+  targetId = ''
+  if (releaseFrame) window.cancelAnimationFrame(releaseFrame)
+  releaseFrame = 0
+  refreshActiveSection()
+}
+
+function monitorProgrammaticScroll() {
+  if (!targetId) return
+  const target = document.getElementById(targetId)
+  const nearTarget = Boolean(target && Math.abs(sectionDistanceFromAnchor(target)) <= 3)
+  const atBoundary = currentScrollTop() <= 1 || isAtBottom()
+  if (nearTarget || atBoundary || performance.now() >= releaseDeadline) {
+    finishProgrammaticScroll()
+    return
+  }
+  releaseFrame = window.requestAnimationFrame(monitorProgrammaticScroll)
+}
+
+function cancelProgrammaticScroll() {
+  finishProgrammaticScroll()
+}
+
+function scrollToSection(id: string) {
+  const target = document.getElementById(id)
+  if (!target) return
+  finishProgrammaticScroll()
+  unbindScrollTarget()
+  resolveScrollRoot()
+  bindScrollTarget()
+  activeId.value = id
+  targetId = id
+  releaseDeadline = performance.now() + 1800
+  const top = targetScrollTop(target)
+  if (scrollRoot) scrollRoot.scrollTo({ top, behavior: 'smooth' })
+  else window.scrollTo({ top, behavior: 'smooth' })
+  releaseFrame = window.requestAnimationFrame(monitorProgrammaticScroll)
+}
+
+function bindScrollTarget() {
+  if (scrollRoot) {
+    scrollRoot.addEventListener('scroll', scheduleScrollUpdate, { passive: true })
+    scrollRoot.addEventListener('scrollend', finishProgrammaticScroll)
+  } else {
+    window.addEventListener('scroll', scheduleScrollUpdate, { passive: true })
+    window.addEventListener('scrollend', finishProgrammaticScroll)
+  }
+}
+
+function unbindScrollTarget() {
+  scrollRoot?.removeEventListener('scroll', scheduleScrollUpdate)
+  scrollRoot?.removeEventListener('scrollend', finishProgrammaticScroll)
+  window.removeEventListener('scroll', scheduleScrollUpdate)
+  window.removeEventListener('scrollend', finishProgrammaticScroll)
+}
+
+function syncResizeObserver() {
+  if (!navigationEnabled.value || typeof ResizeObserver === 'undefined' || !props.contentElement) {
+    resizeObserver?.disconnect()
+    resizeObserver = null
+    return
+  }
+  if (resizeObserver) return
+  resizeObserver = new ResizeObserver(handleResize)
+  resizeObserver.observe(props.contentElement)
+}
+
+function setupNavigation() {
+  const shouldEnable = window.innerWidth >= props.desktopMinWidth
+  navigationEnabled.value = shouldEnable
+  observer?.disconnect()
+  observer = null
+  unbindScrollTarget()
+  if (!shouldEnable) {
+    finishProgrammaticScroll()
+    syncResizeObserver()
+    return
+  }
+  resolveScrollRoot()
+  bindScrollTarget()
+  updatePosition()
+  const elements = observedElements()
+  if (elements.length && typeof IntersectionObserver !== 'undefined') {
+    observer = new IntersectionObserver(() => refreshActiveSection(), {
+      root: scrollRoot,
+      rootMargin: `-${props.topOffset}px 0px -58% 0px`,
+      threshold: [0, 0.05, 0.25, 0.6],
+    })
+    elements.forEach((element) => observer?.observe(element))
+  }
+  refreshActiveSection()
+  syncResizeObserver()
+}
+
+function handleResize() {
+  void nextTick(setupNavigation)
+}
+
+watch(
+  () => [props.sections, props.scrollContainer, props.contentElement, props.topOffset, props.desktopMinWidth],
+  () => void nextTick(setupNavigation),
+  { deep: true },
+)
+
+onMounted(() => void nextTick(() => {
+  setupNavigation()
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('wheel', cancelProgrammaticScroll, { passive: true })
+  window.addEventListener('touchstart', cancelProgrammaticScroll, { passive: true })
+  window.addEventListener('pointerdown', cancelProgrammaticScroll, { passive: true })
+}))
+
+onBeforeUnmount(() => {
+  observer?.disconnect()
+  resizeObserver?.disconnect()
+  unbindScrollTarget()
+  finishProgrammaticScroll()
+  if (scrollFrame) window.cancelAnimationFrame(scrollFrame)
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('wheel', cancelProgrammaticScroll)
+  window.removeEventListener('touchstart', cancelProgrammaticScroll)
+  window.removeEventListener('pointerdown', cancelProgrammaticScroll)
+})
 </script>
 
 <style scoped>
@@ -44,6 +282,5 @@ onBeforeUnmount(() => { observer?.disconnect(); resizeObserver?.disconnect(); ca
 .yh-settings-anchor__button:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary, #4f8cff) 42%, transparent); outline-offset: -3px; border-radius: 10px; }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__line { background: rgba(235,235,245,.22); }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__button.is-active .yh-settings-anchor__line { background: var(--color-primary, #6ea2ff); }
-@media (max-width: 480px) { .yh-settings-anchor { display: none; } }
 @media (prefers-reduced-motion: reduce) { .yh-settings-anchor__line { transition: none; } }
 </style>

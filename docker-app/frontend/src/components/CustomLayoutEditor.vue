@@ -1975,7 +1975,6 @@ function getKonvaTextConfig(layer: CustomTitleLayer | CustomTextLayer) {
     align: layer.textAlign || 'center',
     verticalAlign: 'middle',
     fontSize: Math.max(12, layer.fontSize || 60),
-    fontStyle: 'bold',
     fontFamily: getKonvaFontFamily(fontFamily, getLayerPreviewText(layer)),
     lineHeight: 1.1,
     letterSpacing: isSubtitle ? 3 : 0,

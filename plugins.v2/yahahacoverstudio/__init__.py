@@ -126,7 +126,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.19"
+    plugin_version = "2.0.21"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4166,6 +4166,14 @@ class YahahaCoverStudio(_PluginBase):
             logger.error(f"恢复历史批次失败: {e}", exc_info=True)
             return {"code": 1, "msg": f"恢复历史批次失败: {e}"}
 
+    def __title_config_version(self) -> str:
+        payload = {
+            "title_config": self._current_config or self._title_config or {},
+            "distinguish_same_name_libraries": bool(self._distinguish_same_name_libraries),
+        }
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
+
     def api_status(self):
         """返回封面生成相关的状态与初始化告警(供前端 setupWarnings 使用)"""
         try:
@@ -4188,6 +4196,7 @@ class YahahaCoverStudio(_PluginBase):
                 "data": {
                     "warnings": warnings,
                     "enabled": bool(self._enabled),
+                    "title_config_version": self.__title_config_version(),
                     "plugin_version": self.plugin_version,
                     "auto_save_config": bool(self._auto_save_config),
                     "has_selected_servers": bool(self._selected_servers),
@@ -4314,6 +4323,7 @@ class YahahaCoverStudio(_PluginBase):
                             "en": title[1] if len(title) > 1 else "",
                         },
                         "custom_texts": custom_texts,
+                        "title_config_version": self.__title_config_version(),
                         "images": images,
                         "custom_static_layout": preview_layout,
                         "bg_color": config_bg_color,
@@ -4455,6 +4465,19 @@ class YahahaCoverStudio(_PluginBase):
                     "version": digest,
                 }
 
+        # Older custom layouts store the selected preset key (for example
+        # ``chaohei``) instead of the semantic ``main_title`` alias. Point
+        # both names at the same loaded face so those layouts do not fall back
+        # to a static CSS family after the font request succeeds.
+        for semantic, preset in (
+            ("main_title", self._main_title_font_preset),
+            ("subtitle", self._subtitle_font_preset),
+            ("custom_text", self._custom_text_font_preset),
+        ):
+            preset_alias = str(preset or "").strip()
+            if preset_alias and semantic in font_faces:
+                font_faces[preset_alias] = dict(font_faces[semantic])
+
         # Do not preload every built-in/custom font. The active semantic font
         # map lets both preview surfaces load only what this layout uses.
         return font_faces
@@ -4476,6 +4499,27 @@ class YahahaCoverStudio(_PluginBase):
             "animated_settings": self._animated_settings,
         }
 
+    @staticmethod
+    def __preview_font_file_url(asset_id: str, variant: str, version: str) -> str:
+        """Build a browser-loadable font URL accepted by MoviePilot auth.
+
+        FontFace performs its own request and cannot inherit the Authorization
+        header used by the host plugin API client. MoviePilot also accepts its
+        API token through the ``apikey`` query parameter, which keeps this
+        binary resource compatible with its service worker font cache.
+        """
+        query = [
+            f"variant={quote(str(variant or 'original'), safe='')}",
+            f"v={quote(str(version or ''), safe='')}",
+        ]
+        api_token = str(settings.API_TOKEN or "").strip()
+        if api_token:
+            query.append(f"apikey={quote(api_token, safe='')}")
+        return (
+            f"/api/v1/plugin/YahahaCoverStudio/fonts/{quote(str(asset_id), safe='')}/file"
+            f"?{'&'.join(query)}"
+        )
+
     def __preview_font_info(self, font_id: str) -> Optional[Dict[str, Any]]:
         if not self._preview_font_service:
             return None
@@ -4483,7 +4527,7 @@ class YahahaCoverStudio(_PluginBase):
             font_id,
             self.__preview_font_assets(),
             self.__preview_font_config(),
-            lambda asset_id, variant, version: f"/api/v1/plugin/YahahaCoverStudio/fonts/{asset_id}/file?variant={quote(variant)}&v={quote(version)}",
+            self.__preview_font_file_url,
         )
 
     def api_preview_font(self, font_id: str):

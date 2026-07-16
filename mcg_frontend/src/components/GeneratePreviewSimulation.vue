@@ -624,7 +624,7 @@ function measureTextWidth(text: string, layer: CustomTitleLayer | CustomTextLaye
   if (!context) {
     return text.length * Math.max(12, layer.fontSize || 60) * 0.55
   }
-  context.font = `700 ${Math.max(12, layer.fontSize || 60)}px ${getPreviewFontFamily(normalizeLayerEffects(layer).fontFamily, text)}`
+  context.font = `${Math.max(12, layer.fontSize || 60)}px ${getPreviewFontFamily(normalizeLayerEffects(layer).fontFamily, text)}`
   return context.measureText(text).width
 }
 

@@ -323,6 +323,7 @@ export interface PreviewSourcePayload {
   source_mode: PreviewSourceMode
   titles: PreviewTitles
   custom_texts?: Record<string, string>
+  title_config_version?: string
   images: PreviewSourceImage[]
   custom_static_layout?: CustomStaticLayout | null
   bg_color?: string | null
@@ -346,6 +347,7 @@ export interface SimulationParams {
 export interface StatusPayload {
   warnings: string[]
   enabled: boolean
+  title_config_version?: string
   auto_save_config?: boolean
   has_selected_servers: boolean
   servers_ready: boolean
