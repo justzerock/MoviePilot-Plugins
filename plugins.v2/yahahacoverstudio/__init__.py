@@ -127,7 +127,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.0.22"
+    plugin_version = "2.2.3"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -801,16 +801,21 @@ class YahahaCoverStudio(_PluginBase):
         if not should_refresh:
             return self._servers or {}, self._all_libraries or []
 
+        all_servers = self.mediaserver_helper.get_services() or {}
         if self._selected_servers:
-            servers = self.mediaserver_helper.get_services(
-                name_filters=self._selected_servers
-            )
+            selected_names = {str(item) for item in self._selected_servers if str(item)}
+            servers = {
+                server: service
+                for server, service in all_servers.items()
+                if str(server) in selected_names
+                or str(getattr(service, "name", "")) in selected_names
+            }
         else:
-            servers = self.mediaserver_helper.get_services()
+            servers = all_servers
 
         all_libraries: List[Dict[str, Any]] = []
-        if servers:
-            for server, service in servers.items():
+        if all_servers:
+            for server, service in all_servers.items():
                 try:
                     if not service or service.instance.is_inactive():
                         logger.info(f"媒体服务器 {server} 未连接")

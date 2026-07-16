@@ -174,8 +174,8 @@ function onInput(event: Event) {
 /* Studio control skin. Kept in this component so every page exits the old blueprint look. */
 .mcr-blueprint-field {
   color: var(--mcr-color-on-surface);
-  font-family: 'Geist', 'Be Vietnam Pro', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
-    ui-sans-serif, system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC',
+    'Helvetica Neue', Arial, sans-serif;
 }
 
 .mcr-blueprint-field__label {
@@ -193,7 +193,9 @@ function onInput(event: Event) {
   background: var(--mcr-color-surface-container-lowest);
   background-image: none;
   color: var(--mcr-color-on-surface);
-  box-shadow: none;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
   caret-color: var(--mcr-color-primary-container);
   font-family: inherit;
 }
@@ -203,9 +205,9 @@ function onInput(event: Event) {
 }
 
 .mcr-blueprint-field__control:focus {
-  border-color: rgba(var(--mcr-rgb-primary-container), 0.74);
+  border-color: rgba(0, 122, 255, 0.70);
   background: var(--mcr-color-surface-container-lowest);
-  box-shadow: 0 0 0 4px rgba(var(--mcr-rgb-primary-container), 0.11);
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.14);
 }
 
 .mcr-blueprint-field__hint {

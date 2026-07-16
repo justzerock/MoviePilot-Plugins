@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const page = readFileSync(new URL('../src/components/Page.vue', import.meta.url), 'utf8')
+const config = readFileSync(new URL('../src/components/Config.vue', import.meta.url), 'utf8')
 const navigation = readFileSync(new URL('../src/components/SettingsAnchorNav.vue', import.meta.url), 'utf8')
 const posterStack = readFileSync(new URL('../src/components/HistoryPosterStack.vue', import.meta.url), 'utf8')
 const expansionLayer = readFileSync(new URL('../src/components/HistoryExpansionLayer.vue', import.meta.url), 'utf8')
+const dateTime = readFileSync(new URL('../src/utils/dateTime.ts', import.meta.url), 'utf8')
 const contentCache = readFileSync(new URL('../src/services/contentCache.ts', import.meta.url), 'utf8')
+const pluginBackend = readFileSync(new URL('../../plugins.v2/yahahacoverstudio/__init__.py', import.meta.url), 'utf8')
 
 test('history defaults to the time-machine view and expands in place', () => {
   assert.match(page, /historyGroupMode = ref<'library' \| 'time-machine'>\('time-machine'\)/)
@@ -28,6 +31,13 @@ test('time-machine uses a central alternating axis with stable sides', () => {
   assert.match(page, /is-right \{ grid-template-areas: "meta axis poster"/)
   assert.match(page, /historyRecordSides\.has\(group\.key\)/)
   assert.match(page, /neighborSide === 'left' \? 'right' : 'left'/)
+  assert.match(page, /formatTimelineDate\(timestamp\)/)
+  assert.match(page, /formatTimelineClock\(timestamp\)/)
+  assert.match(dateTime, /export function formatTimelineClock/)
+  assert.match(page, /border-top: 1px dashed/)
+  assert.doesNotMatch(page, /historySortMode/)
+  assert.doesNotMatch(page, /mcr-history-sort/)
+  assert.match(posterStack, /v-if="mode !== 'time-machine' \|\| expanded"/)
 })
 
 test('collapsed preview count is independent from the real cover total', () => {
@@ -40,8 +50,13 @@ test('collapsed preview count is independent from the real cover total', () => {
 test('history expansion is one fixed page layer and never a dialog or grid reflow', () => {
   assert.match(page, /<HistoryExpansionLayer/)
   assert.match(page, /:expanded="false"/)
+  assert.match(page, /v-if="expandedHistoryGroupId && selectedHistoryPaths\.length"/)
+  assert.match(page, /\.mcr-history-floating-actions \{\s*z-index: 2147483200 !important;/)
   assert.match(expansionLayer, /<Teleport to="body">/)
   assert.match(expansionLayer, /position:\s*fixed;\s*inset:\s*0/)
+  assert.match(expansionLayer, /canRestore/)
+  assert.match(expansionLayer, /emit\('restore'\)/)
+  assert.match(page, /:can-restore="historyGroupMode === 'time-machine'"/)
   assert.doesNotMatch(expansionLayer, /<v-dialog/)
   assert.doesNotMatch(expansionLayer, /grid-column:\s*1\s*\/\s*-1/)
 })
@@ -49,10 +64,40 @@ test('history expansion is one fixed page layer and never a dialog or grid reflo
 test('settings navigation resolves one real scroll root and is not mounted on mobile', () => {
   assert.match(navigation, /v-if="navigationEnabled"/)
   assert.match(navigation, /function resolveScrollRoot\(\)/)
+  assert.match(navigation, /closest<HTMLElement>\('\.mcr-config-app, \.mcr-frame'\)/)
+  assert.match(navigation, /const minLeft = Math\.max\(viewportPadding, \(hostRect\?\.left \?\? 0\) \+ 8\)/)
   assert.match(navigation, /scrollRoot \? scrollRoot\.scrollTop : window\.scrollY/)
   assert.match(navigation, /root: scrollRoot/)
+  assert.match(navigation, /props\.contentElement\?\.querySelector<HTMLElement>/)
+  assert.match(navigation, /@pointerdown\.prevent/)
+  const scrollHandler = navigation.match(/function scrollToSection\(id: string\) \{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.match(scrollHandler, /if \(scrollRoot && !scrollRoot\.isConnected\)/)
   assert.doesNotMatch(navigation, /scrollIntoView/)
   assert.doesNotMatch(navigation, /window\.scrollY \+ scrollRoot\.scrollTop/)
+})
+
+test('loading title breathes with opacity only', () => {
+  const keyframes = page.match(/@keyframes yh-title-breathe \{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.match(keyframes, /opacity/)
+  assert.doesNotMatch(keyframes, /scale|transform/)
+  assert.match(page, /will-change: opacity/)
+})
+
+test('configuration controls stay compact and generation progress belongs to the run button', () => {
+  assert.match(config, /class="mcr-config-scheme-rule__fields"/)
+  assert.match(config, /class="mcr-config-scheme-rule__remove"/)
+  assert.match(config, /class="mcr-font-switch-card"/)
+  assert.match(config, /configGenerationProgressCount/)
+  assert.match(page, /generationProgressCount/)
+  assert.doesNotMatch(page, /backendBusyLabel/)
+  assert.doesNotMatch(page, /<AsyncStatusDots v-if="backendBusy"/)
+})
+
+test('plugin status exposes all libraries while selected servers still limit generation', () => {
+  assert.match(pluginBackend, /all_servers = self\.mediaserver_helper\.get_services\(\) or \{\}/)
+  assert.match(pluginBackend, /for server, service in all_servers\.items\(\):/)
+  assert.match(pluginBackend, /self\._servers = servers/)
+  assert.match(pluginBackend, /self\._all_libraries = all_libraries/)
 })
 
 test('history cache strips Vue proxies before IndexedDB persistence', () => {

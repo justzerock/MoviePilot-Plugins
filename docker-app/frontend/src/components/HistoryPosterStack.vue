@@ -13,7 +13,7 @@
     @keydown.space.prevent="handlePrimaryAction"
     @keydown.esc.prevent="emit('close')"
   >
-    <header class="yh-history-poster-stack__header">
+    <header v-if="mode !== 'time-machine' || expanded" class="yh-history-poster-stack__header">
       <div class="yh-history-poster-stack__heading">
         <strong :title="title">{{ title }}</strong>
         <span>{{ items.length }} 张</span>
@@ -187,7 +187,14 @@ watch(
   border: 1px solid transparent;
   border-radius: 18px;
   outline: none;
-  transition: background-color 260ms ease, border-color 260ms ease, box-shadow 260ms ease;
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    transform 120ms ease-out;
+}
+.yh-history-poster-stack:active:not(.is-expanded) {
+  transform: scale(0.99);
 }
 .yh-history-poster-stack:focus-visible {
   border-color: color-mix(in srgb, var(--color-primary) 52%, transparent);
@@ -238,16 +245,28 @@ watch(
   place-items: center;
   border: 1px solid var(--color-border);
   border-radius: 11px;
-  background: color-mix(in srgb, var(--color-surface) 84%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
   color: var(--color-text-secondary);
   cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 5px 14px color-mix(in srgb, var(--color-shadow) 58%, transparent);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  transition:
+    transform 100ms ease-out,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+.yh-history-poster-stack__close:active {
+  transform: scale(0.94);
 }
 .yh-history-poster-stack__surface {
   position: relative;
   min-width: 0;
   height: calc(var(--history-poster-width) * .5625 + 18px);
   cursor: pointer;
-  transition: height 280ms ease;
+  transition: height 300ms cubic-bezier(.2,.78,.25,1);
 }
 .yh-history-poster-stack.is-expanded .yh-history-poster-stack__surface {
   height: auto;
@@ -273,7 +292,12 @@ watch(
   box-shadow: 0 8px 20px var(--color-shadow);
   transform: translate(var(--history-stack-offset-x-current), var(--history-stack-offset-y-current)) rotate(var(--history-stack-rotation-current));
   transform-origin: center;
-  transition: transform 280ms cubic-bezier(.2,.75,.25,1), width 280ms ease, box-shadow 220ms ease, border-color 180ms ease, opacity 180ms ease;
+  transition:
+    transform 300ms cubic-bezier(.2,.78,.25,1),
+    width 300ms cubic-bezier(.2,.78,.25,1),
+    box-shadow 220ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease;
 }
 .yh-history-poster-stack:not(.is-expanded):hover .yh-history-poster-stack__poster {
   transform: translate(var(--history-stack-hover-x-current), var(--history-stack-offset-y-current)) rotate(var(--history-stack-rotation-current));

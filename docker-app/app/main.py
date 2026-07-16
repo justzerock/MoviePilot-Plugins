@@ -131,7 +131,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.0.22")
+app = FastAPI(title="Yahaha Cover Studio", version="2.2.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

@@ -716,8 +716,8 @@ html.dark .mcr-blueprint-select__hint,
 /* Final studio select skin, overriding the legacy blueprint defaults above. */
 .mcr-blueprint-select {
   color: var(--mcr-color-on-surface);
-  font-family: 'Geist', 'Be Vietnam Pro', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
-    ui-sans-serif, system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC',
+    'Helvetica Neue', Arial, sans-serif;
 }
 
 .mcr-blueprint-select__label {
@@ -735,14 +735,16 @@ html.dark .mcr-blueprint-select__hint,
   background: var(--mcr-color-surface-container-lowest);
   background-image: none;
   color: var(--mcr-color-on-surface);
-  box-shadow: none;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
   font-family: inherit;
 }
 
 .mcr-blueprint-select__control:focus {
-  border-color: rgba(var(--mcr-rgb-primary-container), 0.74);
+  border-color: rgba(0, 122, 255, 0.70);
   background: var(--mcr-color-surface-container-lowest);
-  box-shadow: 0 0 0 4px rgba(var(--mcr-rgb-primary-container), 0.11);
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.14);
 }
 
 .mcr-blueprint-select__hint {

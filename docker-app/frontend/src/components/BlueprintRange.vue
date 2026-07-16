@@ -130,22 +130,25 @@ function onNumberChange(event: Event) {
   color: var(--color-text-main, var(--mcr-color-on-surface));
   font-family: inherit;
   box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.035),
     inset 0 1px 0 rgba(var(--color-rgb-surface, 255, 255, 255), 0.42),
-    0 8px 18px rgba(var(--color-rgb-shadow, 47, 76, 128), 0.05);
+    0 5px 14px rgba(var(--color-rgb-shadow, 47, 76, 128), 0.045);
   transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    background-color 160ms ease;
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background-color 220ms ease;
 }
 
-.blueprint-range:hover {
-  border-color: rgba(var(--color-rgb-primary, 79, 140, 255), 0.34);
+@media (hover: hover) and (pointer: fine) {
+  .blueprint-range:hover {
+    border-color: rgba(0, 122, 255, 0.30);
+  }
 }
 
 .blueprint-range:focus-within {
-  border-color: rgba(var(--color-rgb-primary, 79, 140, 255), 0.68);
+  border-color: rgba(0, 122, 255, 0.68);
   box-shadow:
-    0 0 0 3px rgba(var(--color-rgb-primary, 79, 140, 255), 0.12),
+    0 0 0 4px rgba(0, 122, 255, 0.14),
     inset 0 1px 0 rgba(var(--color-rgb-surface, 255, 255, 255), 0.42);
 }
 
@@ -203,7 +206,7 @@ function onNumberChange(event: Event) {
   border: 0;
   border-radius: 9px;
   outline: none;
-  background: rgba(var(--color-rgb-primary, 79, 140, 255), 0.08);
+  background: rgba(120, 120, 128, 0.10);
   color: var(--color-text-main, var(--mcr-color-on-surface));
   text-align: right;
   font: inherit;
@@ -229,7 +232,7 @@ function onNumberChange(event: Event) {
   margin: 0;
   appearance: none;
   border-radius: 10px;
-  background: rgba(var(--color-rgb-primary, 79, 140, 255), 0.08);
+  background: rgba(0, 122, 255, 0.08);
   cursor: pointer;
   touch-action: pan-y;
   user-select: none;
@@ -257,7 +260,7 @@ function onNumberChange(event: Event) {
   appearance: none;
   border: 0;
   border-radius: 3px;
-  background: rgba(0, 122, 255, 0.72);
+  background: rgba(0, 122, 255, 0.82);
   box-shadow:
     0 0 0 4px rgba(0, 122, 255, 0.07),
     0 4px 12px rgba(0, 122, 255, 0.12);
@@ -285,7 +288,7 @@ function onNumberChange(event: Event) {
   height: 24px;
   border: 0;
   border-radius: 3px;
-  background: rgba(0, 122, 255, 0.72);
+  background: rgba(0, 122, 255, 0.82);
   box-shadow:
     0 0 0 4px rgba(0, 122, 255, 0.07),
     0 4px 12px rgba(0, 122, 255, 0.12);
@@ -307,6 +310,20 @@ function onNumberChange(event: Event) {
     0 4px 14px rgba(var(--color-rgb-primary, 79, 140, 255), 0.24);
 }
 
+.blueprint-range__input:active::-webkit-slider-thumb {
+  background: #007aff;
+  box-shadow:
+    0 0 0 6px rgba(0, 122, 255, 0.12),
+    0 5px 16px rgba(0, 122, 255, 0.24);
+}
+
+.blueprint-range__input:active::-moz-range-thumb {
+  background: #007aff;
+  box-shadow:
+    0 0 0 6px rgba(0, 122, 255, 0.12),
+    0 5px 16px rgba(0, 122, 255, 0.24);
+}
+
 :global([data-mcr-theme="dark"]) .blueprint-range,
 :global(.v-theme--dark) .blueprint-range {
   border-color: var(--color-border, rgba(230, 236, 245, 0.12));
@@ -323,7 +340,7 @@ function onNumberChange(event: Event) {
 :global([data-mcr-theme="dark"]) .blueprint-range__value,
 :global(.v-theme--dark) .blueprint-range__value {
   border-color: transparent;
-  background: rgba(var(--color-rgb-surface-soft, 30, 42, 66), 0.92);
+  background: rgba(120, 120, 128, 0.20);
   color: var(--color-text-main, var(--mcr-color-on-surface));
 }
 
@@ -331,12 +348,18 @@ function onNumberChange(event: Event) {
 :global(.v-theme--dark) .blueprint-range__input,
 :global([data-mcr-theme="dark"]) .blueprint-range__input::-moz-range-track,
 :global(.v-theme--dark) .blueprint-range__input::-moz-range-track {
-  background: rgba(110, 162, 255, 0.13);
+  background: rgba(10, 132, 255, 0.13);
 }
 
 :global([data-mcr-theme="dark"]) .blueprint-range__input::-webkit-slider-thumb,
 :global(.v-theme--dark) .blueprint-range__input::-webkit-slider-thumb {
-  background: rgba(10, 132, 255, 0.78);
+  background: rgba(10, 132, 255, 0.88);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blueprint-range {
+    transition-duration: 1ms;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

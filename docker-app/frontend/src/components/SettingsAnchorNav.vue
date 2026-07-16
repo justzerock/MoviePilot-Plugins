@@ -16,6 +16,7 @@
             :class="{ 'is-active': activeId === section.id }"
             :aria-label="`跳转到${section.label}`"
             :aria-current="activeId === section.id ? 'true' : undefined"
+            @pointerdown.prevent
             @click="scrollToSection(section.id)"
           >
             <span class="yh-settings-anchor__line" aria-hidden="true" />
@@ -63,9 +64,14 @@ let scrollFrame = 0
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
 
+function findSectionElement(id: string) {
+  return props.contentElement?.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+    || document.getElementById(id)
+}
+
 function observedElements() {
   return props.sections
-    .map((section) => document.getElementById(section.id))
+    .map((section) => findSectionElement(section.id))
     .filter((element): element is HTMLElement => Boolean(element))
 }
 
@@ -94,9 +100,19 @@ function resolveScrollRoot() {
 function updatePosition() {
   if (!navigationEnabled.value) return
   const rect = props.contentElement?.getBoundingClientRect()
-  const desiredLeft = rect ? rect.left - navWidth - anchorGap : viewportPadding
-  const maxLeft = Math.max(viewportPadding, window.innerWidth - navWidth - viewportPadding)
-  navLeft.value = Math.round(clamp(desiredLeft, viewportPadding, maxLeft))
+  const host = props.contentElement?.closest<HTMLElement>('.mcr-config-app, .mcr-frame')
+  const hostRect = host?.getBoundingClientRect()
+  const minLeft = Math.max(viewportPadding, (hostRect?.left ?? 0) + 8)
+  const maxLeft = Math.max(
+    minLeft,
+    Math.min(
+      window.innerWidth - navWidth - viewportPadding,
+      (hostRect?.right ?? window.innerWidth) - navWidth - 8,
+    ),
+  )
+  const outsideLeft = rect ? rect.left - navWidth - anchorGap : minLeft
+  const desiredLeft = outsideLeft >= minLeft ? outsideLeft : minLeft
+  navLeft.value = Math.round(clamp(desiredLeft, minLeft, maxLeft))
 }
 
 function currentScrollTop() {
@@ -157,7 +173,7 @@ function finishProgrammaticScroll() {
 
 function monitorProgrammaticScroll() {
   if (!targetId) return
-  const target = document.getElementById(targetId)
+  const target = findSectionElement(targetId)
   const nearTarget = Boolean(target && Math.abs(sectionDistanceFromAnchor(target)) <= 3)
   const atBoundary = currentScrollTop() <= 1 || isAtBottom()
   if (nearTarget || atBoundary || performance.now() >= releaseDeadline) {
@@ -172,12 +188,14 @@ function cancelProgrammaticScroll() {
 }
 
 function scrollToSection(id: string) {
-  const target = document.getElementById(id)
+  const target = findSectionElement(id)
   if (!target) return
   finishProgrammaticScroll()
-  unbindScrollTarget()
-  resolveScrollRoot()
-  bindScrollTarget()
+  if (scrollRoot && !scrollRoot.isConnected) {
+    unbindScrollTarget()
+    resolveScrollRoot()
+    bindScrollTarget()
+  }
   activeId.value = id
   targetId = id
   releaseDeadline = performance.now() + 1800
@@ -275,12 +293,13 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .yh-settings-anchor { position: fixed; top: 50%; z-index: 2147483000; width: 36px; height: max-content; margin: 0; padding: 4px 0; background: transparent; pointer-events: auto; transform: translateY(-50%); }
-.yh-settings-anchor__button { width: 34px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
-.yh-settings-anchor__line { width: 16px; height: 2px; border-radius: 999px; background: rgba(60,60,67,.25); transition: width 180ms ease, opacity 180ms ease, background-color 180ms ease, transform 180ms ease; }
+.yh-settings-anchor__button { width: 34px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 10px; background: transparent; cursor: pointer; touch-action: manipulation; transition: transform 100ms ease-out, background-color 180ms ease; }
+.yh-settings-anchor__button:active { transform: scale(.94); background: rgba(0,122,255,.08); }
+.yh-settings-anchor__line { width: 16px; height: 2px; border-radius: 999px; background: rgba(60,60,67,.25); transition: width 220ms cubic-bezier(.2,.78,.25,1), opacity 180ms ease, background-color 180ms ease, transform 220ms cubic-bezier(.2,.78,.25,1); }
 .yh-settings-anchor__button:hover .yh-settings-anchor__line, .yh-settings-anchor__button:focus-visible .yh-settings-anchor__line { width: 24px; background: rgba(60,60,67,.55); }
-.yh-settings-anchor__button.is-active .yh-settings-anchor__line { width: 32px; background: var(--color-primary, #4f8cff); opacity: 1; transform: translateX(2px); }
+.yh-settings-anchor__button.is-active .yh-settings-anchor__line { width: 32px; background: #007aff; opacity: 1; transform: translateX(2px); }
 .yh-settings-anchor__button:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-primary, #4f8cff) 42%, transparent); outline-offset: -3px; border-radius: 10px; }
 :global([data-mcr-theme="dark"]) .yh-settings-anchor__line { background: rgba(235,235,245,.22); }
-:global([data-mcr-theme="dark"]) .yh-settings-anchor__button.is-active .yh-settings-anchor__line { background: var(--color-primary, #6ea2ff); }
+:global([data-mcr-theme="dark"]) .yh-settings-anchor__button.is-active .yh-settings-anchor__line { background: #0a84ff; }
 @media (prefers-reduced-motion: reduce) { .yh-settings-anchor__line { transition: none; } }
 </style>

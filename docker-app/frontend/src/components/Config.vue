@@ -27,8 +27,7 @@
                   <span class="yh-run-progress" aria-hidden="true" />
                   <span class="yh-run-content">
                     <v-icon :icon="isGenerating ? 'mdi-stop-circle-outline' : 'mdi-play-circle-outline'" size="24" />
-                    <span v-if="isGenerating" class="yh-run-text">生成中</span>
-                    <span v-if="isGenerating" class="yh-run-percent">{{ configGenerationProgressPercent }}%</span>
+                    <span v-if="isGenerating" class="yh-run-count">{{ configGenerationProgressCount }}</span>
                   </span>
                 </button>
                 <v-btn
@@ -326,8 +325,11 @@
                 </div>
                 <div v-if="!config.library_scheme_rules?.length" class="yh-scheme-assignment__empty">暂无指定媒体库，全部使用默认方案。</div>
                 <div v-for="(rule, index) in config.library_scheme_rules" :key="rule.id" class="yh-scheme-assignment">
-                  <div class="yh-scheme-assignment__head"><strong>指定方案 {{ index + 1 }}</strong><button type="button" class="yh-scheme-assignment__remove" title="删除规则" @click="removeSchemeRule(index)"><v-icon icon="mdi-close" size="17" /></button></div>
-                  <v-row class="mcr-form-grid"><v-col cols="12" md="4"><BlueprintSelect v-model="rule.scheme_id" :items="schemeItems" label="封面方案" /></v-col><v-col cols="12" md="8"><BlueprintSelect v-model="rule.library_keys" :items="ruleLibraryItems(index)" multiple label="媒体库" hint="已在其他规则中分配的媒体库不会重复显示" /></v-col></v-row>
+                  <div class="yh-scheme-assignment__fields">
+                    <BlueprintSelect v-model="rule.scheme_id" :items="schemeItems" label="封面方案" />
+                    <BlueprintSelect v-model="rule.library_keys" :items="ruleLibraryItems(index)" multiple label="媒体库" hint="已在其他规则中分配的媒体库不会重复显示" />
+                    <button type="button" class="yh-scheme-assignment__remove" :title="`删除指定方案 ${index + 1}`" @click="removeSchemeRule(index)"><v-icon icon="mdi-close" size="17" /></button>
+                  </div>
                 </div>
               </section>
 
@@ -402,12 +404,27 @@
                     />
                   </v-col>
                 </v-row>
-                <v-row class="mcr-form-grid mcr-form-grid--center yh-font-preview-controls" align="center">
-                  <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.preview_font_enabled" label="预览字体" hide-details /><p>在预览页和画布编辑器中加载实际字体，使预览更接近正式生成。</p></v-col>
-                  <v-col cols="12" md="6" class="mcr-config-switch-col"><v-switch v-model="config.font_subset_enabled" :disabled="!config.preview_font_enabled" label="自动精简预览字体" hide-details /><p>只保留预览可能使用的文字，不影响正式生成的原始字体。</p></v-col>
+                <v-row class="mcr-form-grid mcr-form-grid--center yh-font-preview-controls mcr-font-switch-grid" align="center">
+                  <v-col cols="12" md="6">
+                    <div class="mcr-font-switch-card">
+                      <v-switch v-model="config.preview_font_enabled" label="预览字体" hide-details />
+                      <p>预览页与画布使用当前所选字体。</p>
+                    </div>
+                  </v-col>
+                  <v-col cols="12" md="6">
+                    <div class="mcr-font-switch-card">
+                      <v-switch v-model="config.font_subset_enabled" :disabled="!config.preview_font_enabled" label="自动精简预览字体" hide-details />
+                      <p>按当前文字生成轻量字体子集。</p>
+                    </div>
+                  </v-col>
                 </v-row>
                 <v-row class="mcr-form-grid mcr-form-grid--center yh-font-script-controls" align="center">
-                  <v-col cols="12" md="4" class="mcr-config-switch-col"><v-switch v-model="config.font_script_adaptation_enabled" label="简繁字体适配" hide-details /><p>字体缺字时才转换显示文本，标题配置原文保持不变。</p></v-col>
+                  <v-col cols="12" md="4">
+                    <div class="mcr-font-switch-card">
+                      <v-switch v-model="config.font_script_adaptation_enabled" label="简繁字体适配" hide-details />
+                      <p>缺字时适配字形，不修改配置原文。</p>
+                    </div>
+                  </v-col>
                   <v-col cols="12" md="4"><BlueprintSelect v-model="config.font_script_target" :items="fontScriptTargetItems" :disabled="!config.font_script_adaptation_enabled" label="字体字形偏好" /></v-col>
                   <v-col cols="12" md="4"><BlueprintSelect v-model="config.font_traditional_variant" :items="fontTraditionalVariantItems" :disabled="!config.font_script_adaptation_enabled || config.font_script_target === 'simplified'" label="繁体形式" /></v-col>
                 </v-row>
@@ -828,6 +845,7 @@
 
 <script setup lang="ts">
 import '../styles/figmaTheme.css'
+import '../styles/applePolish.css'
 import { PROGRAM_VERSION, UI_REV } from '../constants/ui'
 import { MCR_CONTROL_DEFAULTS } from '../constants/uiDefaults'
 import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
@@ -998,6 +1016,12 @@ const configGenerationProgressPercent = computed(() => {
     return Math.max(0, Math.min(100, raw))
   }
   return isGenerating.value ? 12 : 0
+})
+const configGenerationProgressCount = computed(() => {
+  if (generationTotal.value > 0) {
+    return `${Math.min(Math.max(0, generationCurrent.value || 0), generationTotal.value)}/${generationTotal.value}`
+  }
+  return '准备中'
 })
 const configRunButtonProgressStyle = computed(() => ({
   '--yh-run-progress': `${configGenerationProgressPercent.value}%`,
@@ -6149,5 +6173,75 @@ html.dark .mcr-config-shell .yh-settings-en span,
   .mcr-title-config-heading .mcr-title-config-template-btn { flex: 0 0 auto; }
   .mcr-title-config-toolbar { grid-template-columns: 1fr; }
   .mcr-title-config-toolbar .mcr-title-config-mode { min-width: 0; }
+}
+
+.yh-scheme-assignment__fields {
+  display: grid;
+  grid-template-columns: minmax(180px, .72fr) minmax(280px, 1.28fr) 42px;
+  align-items: start;
+  gap: 12px;
+}
+
+.yh-scheme-assignment__remove {
+  align-self: center;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-soft);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.mcr-font-switch-card {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface-soft);
+}
+
+.mcr-font-switch-card :deep(.v-input) {
+  width: 100%;
+}
+
+.mcr-font-switch-card p {
+  margin: 0 0 0 52px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.mcr-config-shell .yh-run-count {
+  min-width: 42px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .yh-scheme-assignment__fields {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+
+  .yh-scheme-assignment__fields > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .yh-scheme-assignment__fields > :nth-child(2) {
+    grid-column: 1;
+  }
+
+  .yh-scheme-assignment__remove {
+    grid-column: 2;
+  }
 }
 </style>

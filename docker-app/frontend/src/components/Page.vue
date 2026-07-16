@@ -32,7 +32,7 @@
                       <v-icon icon="mdi-crown" size="24" />
                     </span>
                   </button>
-                  <h1 class="yh-brand-title" aria-label="呀哈哈封面工坊 Yahaha Cover Studio">
+                  <h1 class="yh-brand-title" :class="{ 'is-loading': titleLoading }" aria-label="呀哈哈封面工坊 Yahaha Cover Studio">
                     <span class="yh-brand-en-big" aria-hidden="true">
                       <span class="yh-brand-en-pc">Yahaha Cover Studio</span>
                       <span class="yh-brand-en-mobile">
@@ -83,8 +83,7 @@
                     <span class="yh-run-progress" aria-hidden="true" />
                     <span class="yh-run-content">
                       <v-icon :icon="isGenerating ? 'mdi-stop-circle-outline' : 'mdi-play-circle-outline'" size="24" />
-                      <span v-if="isGenerating" class="yh-run-text">生成中</span>
-                      <span v-if="isGenerating" class="yh-run-percent">{{ generationProgressPercent }}%</span>
+                      <span v-if="isGenerating" class="yh-run-count">{{ generationProgressCount }}</span>
                     </span>
                   </button>
                   <v-btn
@@ -100,12 +99,11 @@
                   </v-btn>
                 </div>
                 <div class="yh-preview-chips" aria-label="当前参数">
-                  <span :class="{ 'is-disabled': !programEnabled }">程序{{ programEnabled ? '已启用' : '已停用' }}</span>
+                  <span class="yh-status-chip" :class="{ 'is-disabled': !programEnabled }">程序{{ programEnabled ? '已启用' : '已停用' }}</span>
                   <span>{{ currentStyleLabel }}</span>
                   <span>{{ currentVariantLabel }}</span>
                   <span>{{ sourceModeLabel }}</span>
                   <span v-if="sourceSortLocked">最新入库排序已锁定</span>
-                  <AsyncStatusDots v-if="backendBusy" :label="backendBusyLabel" />
                 </div>
                 <div
                   class="mcr-page-tabs-shell"
@@ -658,7 +656,6 @@
                       class="mcr-collapsible-heading__icon"
                       aria-hidden="true"
                     />
-                    <AsyncStatusDots v-if="backendBusy" :label="backendBusyLabel" />
                   </div>
                 </div>
                 <Transition name="mcr-heading-tools">
@@ -667,12 +664,6 @@
                       <v-btn value="library" class="mcr-button mcr-button--ghost mcr-history-mode-button" :class="{ 'mcr-history-mode-button--active': historyGroupMode === 'library' }">媒体库</v-btn>
                       <v-btn value="time-machine" class="mcr-button mcr-button--ghost mcr-history-mode-button" :class="{ 'mcr-history-mode-button--active': historyGroupMode === 'time-machine' }">时光机</v-btn>
                     </v-btn-toggle>
-                    <BlueprintSelect
-                      v-model="historySortMode"
-                      :items="historySortItems"
-                      class="mcr-control mcr-history-sort"
-                      :disabled="controlsLocked"
-                    />
                   </div>
                 </Transition>
               </div>
@@ -741,7 +732,7 @@
                       :class="{ 'mcr-history-group--time-machine': historyGroupMode === 'time-machine', [`is-${historyRecordSide(group.key)}`]: historyGroupMode === 'time-machine', 'is-active': activeTimeRecordId === group.key, 'is-dimmed': Boolean(expandedHistoryGroupId && expandedHistoryGroupId !== group.key) }"
                       :id="`time-record-${group.key}`"
                     >
-                      <aside v-if="historyGroupMode === 'time-machine'" class="mcr-time-machine-meta"><strong>{{ group.fullTitle }}</strong><span>{{ group.title }}</span><button type="button" :disabled="controlsLocked || Boolean(restoringBatchId)" @click.stop="restoreHistoryBatch(group.key, group.fullTitle)">回溯</button></aside>
+                      <aside v-if="historyGroupMode === 'time-machine'" class="mcr-time-machine-meta"><strong>{{ group.dateLabel || group.title }}</strong><span>{{ group.timeLabel }}</span></aside>
                       <button v-if="historyGroupMode === 'time-machine'" type="button" class="mcr-time-machine-marker" :class="{ 'is-active': activeTimeRecordId === group.key }" :aria-current="activeTimeRecordId === group.key ? 'true' : undefined" :aria-label="`定位到 ${group.fullTitle}`" @click="scrollToTimeRecord(group.key)"><i aria-hidden="true" /></button>
                       <HistoryPosterStack
                         class="mcr-time-machine-poster"
@@ -763,7 +754,7 @@
                   <div v-else class="mcr-history-empty">还没有可以回到的时间<br><small>生成并保存封面后，历史记录会显示在这里。</small></div>
                 </div>
               </Transition>
-              <HistoryExpansionLayer :open="Boolean(expandedHistoryGroupId && selectedHistorySnapshot)" :title="selectedHistorySnapshot?.fullTitle || selectedHistorySnapshot?.title || ''" :items="expandedHistoryItems" :selected-keys="selectedHistoryPaths" :anchor-rect="historyExpansionAnchor" :theme="isDark ? 'dark' : 'light'" @close="closeHistorySnapshot()" @select="toggleHistorySelection" />
+              <HistoryExpansionLayer :open="Boolean(expandedHistoryGroupId && selectedHistorySnapshot)" :title="selectedHistorySnapshot?.fullTitle || selectedHistorySnapshot?.title || ''" :items="expandedHistoryItems" :selected-keys="selectedHistoryPaths" :anchor-rect="historyExpansionAnchor" :theme="isDark ? 'dark' : 'light'" :can-restore="historyGroupMode === 'time-machine'" :restoring="Boolean(restoringBatchId)" @restore="applySelectedHistorySnapshot" @close="closeHistorySnapshot()" @select="toggleHistorySelection" />
             </v-window-item>
           </v-window>
         </v-card-text>
@@ -1123,6 +1114,7 @@
 
 <script setup lang="ts">
 import '../styles/figmaTheme.css'
+import '../styles/applePolish.css'
 import { MCR_CONTROL_DEFAULTS } from '../constants/uiDefaults'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { PropType } from 'vue'
@@ -1137,7 +1129,7 @@ import HistoryExpansionLayer from './HistoryExpansionLayer.vue'
 import ViewportSaveToast from './ViewportSaveToast.vue'
 import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
 import { getThemeColor } from '../utils/themeColors'
-import { formatDateTime, formatTimelineTime } from '../utils/dateTime'
+import { formatTimelineClock, formatTimelineDate } from '../utils/dateTime'
 import { getHistoryCache, getPreviewCache, invalidatePreviewCache, setHistoryCache, setPreviewCache, stableCacheSignature } from '../services/contentCache'
 import { images } from '../assets/base64/images.js'
 import {
@@ -1324,7 +1316,7 @@ interface HistoryItem {
   library_key?: string
 }
 
-interface HistoryGroup { key: string; title: string; fullTitle: string; items: HistoryItem[] }
+interface HistoryGroup { key: string; title: string; fullTitle: string; dateLabel?: string; timeLabel?: string; items: HistoryItem[] }
 
 const history = ref<HistoryItem[]>([])
 const historyGroupMode = ref<'library' | 'time-machine'>('time-machine')
@@ -1343,7 +1335,6 @@ const historyViewScrollPositions = reactive<Record<'library' | 'time-machine', n
 const restoreConfirmDialog = ref(false)
 const pendingHistoryRestore = ref<{ batchId: string; label: string } | null>(null)
 const historyStackLimit = ref(5)
-const historySortMode = ref<'newest' | 'oldest' | 'name'>('newest')
 const selectedHistoryPaths = ref<string[]>([])
 const donationAvatarIcon = computed(() =>
   donationAvatarSource.value === 'mp' ? 'mdi-account-circle-outline' : 'mdi-image-filter-hdr-outline',
@@ -1362,34 +1353,12 @@ const editDialog = ref(false)
 const isEditingLayout = ref(false)
 const controlsLocked = computed(() => isGenerating.value || generatingNow.value || !statusLoaded.value)
 const resourceSkeletonActive = computed(() => previewSourcesLoading.value || !statusLoaded.value)
-const backendBusy = computed(() =>
+const titleLoading = computed(() =>
   statusLoading.value
   || historyLoading.value
   || backendPreviewLoading.value
-  || previewSourcesLoading.value
-  || styleUpdating.value
-  || layoutPersisting.value
-  || animatedSettingsSaving.value
-  || renderOptionsSaving.value
-  || generatingNow.value,
+  || previewSourcesLoading.value,
 )
-const backendBusyLabel = computed(() => {
-  if (isGenerating.value) {
-    if (generationTotal.value > 0) {
-      return `正在生成 ${generationCurrent.value || 0}/${generationTotal.value}`
-    }
-    return generationLabel.value || '正在生成'
-  }
-  if (generatingNow.value) return '正在执行'
-  if (renderOptionsSaving.value) return '保存素材'
-  if (animatedSettingsSaving.value) return '保存参数'
-  if (layoutPersisting.value) return '保存布局'
-  if (styleUpdating.value) return '切换方案'
-  if (historyLoading.value) return '加载历史'
-  if (backendPreviewLoading.value) return '渲染预览'
-  if (previewSourcesLoading.value) return '加载素材'
-  return '同步数据'
-})
 
 const prefersDark = ref(false)
 const hostThemeVersion = ref(0)
@@ -2359,6 +2328,12 @@ const generationProgressPercent = computed(() => {
   }
   return isGenerating.value ? 12 : 0
 })
+const generationProgressCount = computed(() => {
+  if (generationTotal.value > 0) {
+    return `${Math.min(Math.max(0, generationCurrent.value || 0), generationTotal.value)}/${generationTotal.value}`
+  }
+  return '准备中'
+})
 const runButtonProgressStyle = computed(() => ({
   '--yh-run-progress': `${generationProgressPercent.value}%`,
 }))
@@ -2429,34 +2404,31 @@ const autoImageCountLabel = computed(() => `${autoImageCount.value || activeImag
 const activeServerLabel = computed(() => previewSource.value?.server || '--')
 const activeLibraryLabel = computed(() => previewSource.value?.library || '--')
 const activeImageCount = computed(() => previewSource.value?.images?.length || 0)
-const historySortItems = [
-  { title: '最新优先', value: 'newest' },
-  { title: '最早优先', value: 'oldest' },
-  { title: '名称排序', value: 'name' },
-]
-const sortedHistory = computed(() => {
-  const items = [...history.value]
-  if (historySortMode.value === 'oldest') {
-    return items.sort((a, b) => (Number(a.mtime_ts || 0) - Number(b.mtime_ts || 0)))
-  }
-  if (historySortMode.value === 'name') {
-    return items.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh-Hans-CN'))
-  }
-  return items.sort((a, b) => (Number(b.mtime_ts || 0) - Number(a.mtime_ts || 0)))
-})
+const chronologicalHistory = computed(() =>
+  [...history.value].sort((a, b) => Number(b.mtime_ts || 0) - Number(a.mtime_ts || 0)),
+)
 const groupedHistory = computed(() => {
   const groups = new Map<string, HistoryGroup>()
-  for (const item of sortedHistory.value) {
+  for (const item of chronologicalHistory.value) {
     const libraryName = item.library || '未识别媒体库'
     const libraryIdentity = item.library_key || `${item.server || 'unknown'}:${libraryName}`
     const key = historyGroupMode.value === 'library' ? `library:${libraryIdentity}` : (item.batch_id || item.date || 'legacy')
     const timestamp = item.created_at || item.mtime || item.date || ''
-    const title = historyGroupMode.value === 'library' ? libraryName : formatTimelineTime(timestamp)
+    const dateLabel = formatTimelineDate(timestamp)
+    const timeLabel = formatTimelineClock(timestamp)
+    const title = historyGroupMode.value === 'library' ? libraryName : dateLabel
     const fullTitle = historyGroupMode.value === 'library'
       ? `${item.server || '未知服务器'} · ${libraryName}`
-      : formatDateTime(timestamp)
+      : `${dateLabel} ${timeLabel}`
     if (!groups.has(key)) {
-      groups.set(key, { key, title, fullTitle, items: [] })
+      groups.set(key, {
+        key,
+        title,
+        fullTitle,
+        dateLabel: historyGroupMode.value === 'time-machine' ? dateLabel : undefined,
+        timeLabel: historyGroupMode.value === 'time-machine' ? timeLabel : undefined,
+        items: [],
+      })
     }
     groups.get(key)?.items.push(item)
   }
@@ -5579,10 +5551,6 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.mcr-history-sort {
-  width: 132px;
-}
-
 .mcr-history-groups {
   display: grid;
   gap: 20px;
@@ -6638,19 +6606,6 @@ onBeforeUnmount(() => {
   min-height: 38px;
 }
 
-.mcr-history-sort {
-  width: 168px;
-  min-width: 168px;
-  flex: 0 0 168px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-.mcr-history-sort :deep(.mcr-blueprint-select__control) {
-  min-height: 40px;
-}
-
 .mcr-history-floating-actions {
   position: fixed;
   z-index: 2400;
@@ -7029,16 +6984,10 @@ onBeforeUnmount(() => {
   -webkit-text-fill-color: var(--mcr-color-on-surface) !important;
 }
 
-.mcr-control,
-.mcr-history-sort {
+.mcr-control {
   border-radius: 12px;
   background: var(--mcr-color-surface-container-lowest);
   border-color: rgba(var(--mcr-rgb-outline-variant), 0.72);
-}
-
-.mcr-history-sort {
-  background: transparent;
-  border: 0;
 }
 
 .mcr-page-shell :deep(.mcr-blueprint-field),
@@ -7144,8 +7093,7 @@ onBeforeUnmount(() => {
 .mcr-page-shell[data-mcr-theme="dark"] .blueprint-preview-bay,
 .mcr-page-shell[data-mcr-theme="dark"] .mcr-history-header,
 .mcr-page-shell[data-mcr-theme="dark"] .mcr-history-card,
-.mcr-page-shell[data-mcr-theme="dark"] .mcr-control,
-.mcr-page-shell[data-mcr-theme="dark"] .mcr-history-sort {
+.mcr-page-shell[data-mcr-theme="dark"] .mcr-control {
   border-color: rgba(var(--mcr-rgb-outline-variant), 0.86) !important;
   background: rgba(var(--mcr-rgb-surface-container-low), 0.88) !important;
   color: var(--mcr-color-on-surface) !important;
@@ -7180,12 +7128,6 @@ onBeforeUnmount(() => {
   border-color: rgba(var(--mcr-rgb-surface-container-lowest), 0.22) !important;
   background: rgba(var(--mcr-rgb-shadow), 0.56) !important;
   color: rgba(var(--mcr-rgb-on-surface), 0.94) !important;
-}
-
-.mcr-page-shell[data-mcr-theme="dark"] .mcr-history-sort {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
 }
 
 .mcr-page-shell[data-mcr-theme="dark"] .mcr-history-floating-actions,
@@ -9593,6 +9535,7 @@ onBeforeUnmount(() => {
 .mcr-time-machine-meta button { min-height: 38px; margin-top: 4px; padding: 7px 13px; border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface)); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
 .mcr-time-machine-marker { grid-area: axis; position: relative; align-self: stretch; width: 100%; min-height: 176px; display: grid; place-items: center; border: 0; background: transparent; color: var(--color-text-muted); cursor: pointer; }
 .mcr-time-machine-marker::before { content: ''; position: absolute; top: -12px; bottom: -12px; left: 50%; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--color-border) 88%, transparent); transform: translateX(-50%); }
+.mcr-time-machine-marker::after { content: ''; position: absolute; top: 50%; left: -40px; right: -40px; border-top: 1px dashed color-mix(in srgb, var(--color-text-muted) 42%, transparent); transform: translateY(-50%); }
 .mcr-time-machine-marker i { position: relative; z-index: 1; width: 12px; height: 12px; border: 2px solid var(--color-surface); border-radius: 50%; background: currentColor; box-shadow: 0 0 0 1px var(--color-border); transition: width 180ms ease, height 180ms ease, color 180ms ease, box-shadow 180ms ease; }
 .mcr-time-machine-marker.is-active { color: var(--color-primary); }
 .mcr-time-machine-marker.is-active i { width: 19px; height: 19px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 15%, transparent); }
@@ -9605,7 +9548,7 @@ onBeforeUnmount(() => {
   .mcr-time-machine-meta { gap: 3px; padding: 8px 5px; }
   .mcr-time-machine-meta strong { font-size: 13px; }
   .mcr-time-machine-meta span { font-size: 10px; }
-  .mcr-time-machine-meta button { min-height: 40px; padding: 6px 9px; font-size: 11px; }
+  .mcr-time-machine-marker::after { left: -24px; right: -24px; }
   .mcr-history-groups--library { gap: 9px !important; }
   .mcr-history-groups--library > .mcr-history-group { width: calc((100% - 9px) / 2); flex-basis: calc((100% - 9px) / 2); }
 }
@@ -10273,6 +10216,65 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
   .mcr-page-shell .mcr-history-card__media,
   .mcr-page-shell .mcr-history-card__image {
     min-height: 108px !important;
+  }
+}
+
+.mcr-page-shell .yh-brand-title.is-loading {
+  animation: yh-title-breathe 1.35s ease-in-out infinite alternate;
+  will-change: opacity;
+}
+
+@keyframes yh-title-breathe {
+  from { opacity: .62; }
+  to { opacity: 1; }
+}
+
+.mcr-page-shell .yh-run-count {
+  min-width: 42px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.mcr-page-shell .yh-preview-chips > .yh-status-chip,
+.mcr-page-shell .yh-preview-chips > .yh-status-chip:first-child {
+  border-color: rgba(223, 232, 246, 0.86);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--yahaha-muted);
+}
+
+.mcr-page-shell[data-mcr-theme="dark"] .yh-preview-chips > .yh-status-chip,
+.mcr-page-shell[data-mcr-theme="dark"] .yh-preview-chips > .yh-status-chip:first-child {
+  border-color: rgba(230, 236, 245, 0.12);
+  background: rgba(30, 42, 66, 0.72);
+  color: #c7d0e3;
+}
+
+.mcr-history-floating-actions {
+  z-index: 2147483200 !important;
+}
+
+.mcr-time-machine-meta {
+  gap: 8px;
+}
+
+.mcr-time-machine-meta strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.mcr-time-machine-meta button {
+  transition: transform 100ms ease-out, background-color 180ms ease, border-color 180ms ease;
+}
+
+.mcr-time-machine-meta button:active {
+  transform: scale(.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mcr-page-shell .yh-brand-title.is-loading {
+    animation: none;
+    opacity: .82;
+    transform: none;
   }
 }
 </style>

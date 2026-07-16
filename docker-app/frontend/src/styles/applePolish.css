@@ -1,0 +1,622 @@
+/*
+ * Shared Apple-inspired interaction polish.
+ * This layer intentionally avoids layout and rendering rules so preview and
+ * cover generation behavior remain unchanged.
+ */
+[data-mcr-theme] {
+  --yh-apple-blue: #007aff;
+  --yh-apple-blue-hover: #0b84ff;
+  --yh-apple-blue-pressed: #0068d9;
+  --yh-apple-red: #ff3b30;
+  --yh-apple-material: rgba(255, 255, 255, 0.82);
+  --yh-apple-material-strong: rgba(255, 255, 255, 0.94);
+  --yh-apple-material-soft: rgba(242, 242, 247, 0.78);
+  --yh-apple-border: rgba(60, 60, 67, 0.14);
+  --yh-apple-border-strong: rgba(60, 60, 67, 0.22);
+  --yh-apple-label: #1d1d1f;
+  --yh-apple-secondary-label: rgba(60, 60, 67, 0.78);
+  --yh-apple-tertiary-label: rgba(60, 60, 67, 0.54);
+  --yh-apple-shadow-small:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 6px 18px rgba(28, 39, 61, 0.07);
+  --yh-apple-shadow-medium:
+    0 2px 6px rgba(0, 0, 0, 0.05),
+    0 16px 38px rgba(28, 39, 61, 0.10);
+  --yh-apple-focus-ring: 0 0 0 4px rgba(0, 122, 255, 0.16);
+  --yh-apple-response-fast: 120ms;
+  --yh-apple-response: 220ms;
+  --yh-apple-ease: cubic-bezier(0.2, 0.78, 0.25, 1);
+  --mcr-font-body:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "PingFang SC",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  --mcr-font-display:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "PingFang SC",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  font-optical-sizing: auto;
+}
+
+[data-mcr-theme="dark"],
+html.dark [data-mcr-theme],
+.v-theme--dark [data-mcr-theme] {
+  --yh-apple-blue: #0a84ff;
+  --yh-apple-blue-hover: #2492ff;
+  --yh-apple-blue-pressed: #0071e3;
+  --yh-apple-red: #ff453a;
+  --yh-apple-material: rgba(28, 28, 30, 0.78);
+  --yh-apple-material-strong: rgba(36, 36, 38, 0.94);
+  --yh-apple-material-soft: rgba(44, 44, 46, 0.72);
+  --yh-apple-border: rgba(255, 255, 255, 0.12);
+  --yh-apple-border-strong: rgba(255, 255, 255, 0.20);
+  --yh-apple-label: #f5f5f7;
+  --yh-apple-secondary-label: rgba(235, 235, 245, 0.76);
+  --yh-apple-tertiary-label: rgba(235, 235, 245, 0.48);
+  --yh-apple-shadow-small:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 20px rgba(0, 0, 0, 0.22);
+  --yh-apple-shadow-medium:
+    0 2px 8px rgba(0, 0, 0, 0.22),
+    0 18px 44px rgba(0, 0, 0, 0.30);
+  --yh-apple-focus-ring: 0 0 0 4px rgba(10, 132, 255, 0.20);
+}
+
+[data-mcr-theme] :where(button, [role="button"], input, select, textarea) {
+  font-family: var(--mcr-font-body);
+}
+
+[data-mcr-theme] :where(.mcr-title, .mcr-panel__title, .mcr-config-section-card__title) {
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+[data-mcr-theme] :where(.mcr-panel__copy, .mcr-config-section-card__copy, .mcr-hint) {
+  line-height: 1.5;
+}
+
+/* Calm, layered surfaces. */
+[data-mcr-theme] :where(
+  .mcr-panel,
+  .mcr-config-section-card,
+  .mcr-config-card,
+  .mcr-history-restore-confirm
+) {
+  border-color: var(--yh-apple-border) !important;
+  box-shadow: var(--yh-apple-shadow-small) !important;
+}
+
+[data-mcr-theme] :where(.mcr-config-topbar, .mcr-page-header, .mcr-footer-actions) {
+  border-color: var(--yh-apple-border) !important;
+  background-color: var(--yh-apple-material) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    var(--yh-apple-shadow-small) !important;
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+/* Buttons respond on pointer-down and preserve a clear action hierarchy. */
+[data-mcr-theme] :where(
+  .mcr-button,
+  .yh-btn,
+  .yh-icon-btn,
+  .yh-run-btn,
+  .mcr-history-card__action,
+  .mcr-history-floating-actions .v-btn
+) {
+  touch-action: manipulation;
+  transform-origin: center;
+  transition:
+    transform var(--yh-apple-response-fast) ease-out,
+    background-color var(--yh-apple-response) ease,
+    border-color var(--yh-apple-response) ease,
+    color var(--yh-apple-response) ease,
+    box-shadow var(--yh-apple-response) ease,
+    opacity var(--yh-apple-response) ease !important;
+}
+
+[data-mcr-theme] :where(
+  .mcr-button,
+  .yh-btn,
+  .yh-icon-btn,
+  .yh-run-btn,
+  .mcr-history-card__action
+):active:not(:disabled, .v-btn--disabled) {
+  transform: scale(0.97) !important;
+  transition-duration: 80ms !important;
+}
+
+[data-mcr-theme] :where(
+  .mcr-button,
+  .yh-btn,
+  .yh-icon-btn,
+  .yh-run-btn,
+  .mcr-history-card__action
+):focus-visible {
+  outline: none !important;
+  box-shadow: var(--yh-apple-focus-ring), var(--yh-apple-shadow-small) !important;
+}
+
+[data-mcr-theme].mcr-page-shell :where(.mcr-button--primary, .mcr-button--active, .mcr-button--apple-primary),
+[data-mcr-theme].mcr-config-shell :where(.mcr-button--primary, .mcr-button--active, .mcr-button--apple-primary),
+[data-mcr-theme] :where(.yh-btn-primary, .yh-run-btn) {
+  border-color: var(--yh-apple-blue) !important;
+  background: var(--yh-apple-blue) !important;
+  background-image: none !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow:
+    0 1px 2px rgba(0, 64, 128, 0.10),
+    0 8px 20px rgba(0, 122, 255, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+}
+
+[data-mcr-theme] :where(.mcr-button--primary, .mcr-button--active, .mcr-button--apple-primary, .yh-btn-primary, .yh-run-btn):hover {
+  border-color: var(--yh-apple-blue-hover) !important;
+  background: var(--yh-apple-blue-hover) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow:
+    0 1px 2px rgba(0, 64, 128, 0.10),
+    0 10px 24px rgba(0, 122, 255, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24) !important;
+}
+
+[data-mcr-theme] :where(.mcr-button--primary, .mcr-button--active, .mcr-button--apple-primary, .yh-btn-primary, .yh-run-btn):active {
+  border-color: var(--yh-apple-blue-pressed) !important;
+  background: var(--yh-apple-blue-pressed) !important;
+}
+
+[data-mcr-theme].mcr-page-shell :where(.mcr-button--ghost, .mcr-button--soft, .mcr-button--dark-neutral),
+[data-mcr-theme].mcr-config-shell :where(.mcr-button--ghost, .mcr-button--soft, .mcr-button--dark-neutral),
+[data-mcr-theme] :where(.yh-btn-secondary, .yh-icon-btn) {
+  border-color: var(--yh-apple-border) !important;
+  background: var(--yh-apple-material-strong) !important;
+  background-image: none !important;
+  color: var(--yh-apple-secondary-label) !important;
+  -webkit-text-fill-color: var(--yh-apple-secondary-label) !important;
+  box-shadow: var(--yh-apple-shadow-small) !important;
+}
+
+[data-mcr-theme] :where(.mcr-button--ghost, .mcr-button--soft, .mcr-button--dark-neutral, .yh-btn-secondary, .yh-icon-btn):hover {
+  border-color: rgba(0, 122, 255, 0.24) !important;
+  background: color-mix(in srgb, var(--yh-apple-material-strong) 88%, var(--yh-apple-blue) 12%) !important;
+  color: var(--yh-apple-blue) !important;
+  -webkit-text-fill-color: var(--yh-apple-blue) !important;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 10px 24px rgba(28, 39, 61, 0.10) !important;
+}
+
+[data-mcr-theme] :where(.mcr-button--danger, .mcr-config-cache-danger) {
+  border-color: color-mix(in srgb, var(--yh-apple-red) 22%, transparent) !important;
+  background: color-mix(in srgb, var(--yh-apple-red) 12%, var(--yh-apple-material-strong)) !important;
+  color: var(--yh-apple-red) !important;
+  -webkit-text-fill-color: var(--yh-apple-red) !important;
+  box-shadow: none !important;
+}
+
+[data-mcr-theme] :where(.mcr-button, .yh-btn, .yh-icon-btn).v-btn--disabled,
+[data-mcr-theme] :where(.mcr-button, .yh-btn, .yh-icon-btn, .yh-run-btn):disabled {
+  transform: none !important;
+  opacity: 0.48 !important;
+  box-shadow: none !important;
+}
+
+[data-mcr-theme] :where(.mcr-button, .yh-btn, .yh-icon-btn) :where(.v-btn__overlay, .v-btn__underlay) {
+  opacity: 0 !important;
+}
+
+/* Segmented controls: neutral rail, selected blue capsule, no glow. */
+[data-mcr-theme] :where(.mcr-tabs, .yh-segment) {
+  border: 1px solid var(--yh-apple-border) !important;
+  border-radius: 15px !important;
+  background: color-mix(in srgb, var(--yh-apple-material-soft) 92%, transparent) !important;
+  background-image: none !important;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+}
+
+[data-mcr-theme] :where(.mcr-tabs, .yh-segment)::before {
+  filter: none !important;
+  box-shadow: none !important;
+}
+
+[data-mcr-theme] :where(.mcr-tab, .yh-segment-item, .mcr-config-top-tab) {
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--yh-apple-secondary-label) !important;
+  -webkit-text-fill-color: var(--yh-apple-secondary-label) !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  transition:
+    color var(--yh-apple-response) ease,
+    background-color var(--yh-apple-response) ease,
+    transform var(--yh-apple-response-fast) ease-out !important;
+}
+
+[data-mcr-theme] :where(.mcr-tab, .yh-segment-item, .mcr-config-top-tab):active {
+  transform: scale(0.98);
+}
+
+[data-mcr-theme].mcr-page-shell :where(.mcr-tab--active, .v-tab.v-tab--selected),
+[data-mcr-theme].mcr-config-shell :where(.mcr-tab--active, .v-tab.v-tab--selected, .yh-segment-item.is-active, .mcr-config-top-tab.is-active) {
+  border-color: transparent !important;
+  background: var(--yh-apple-blue) !important;
+  background-image: none !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  text-shadow: none !important;
+  box-shadow:
+    0 1px 2px rgba(0, 64, 128, 0.12),
+    0 5px 14px rgba(0, 122, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+}
+
+[data-mcr-theme].mcr-page-shell .mcr-page-tabs--hero :where(.mcr-tab--active, .v-tab.v-tab--selected),
+[data-mcr-theme].mcr-config-shell .yh-segment :where(.yh-segment-item.is-active, .mcr-config-top-tab.is-active) {
+  border-color: transparent !important;
+  background: var(--yh-apple-blue) !important;
+  background-image: none !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  text-shadow: none !important;
+  box-shadow:
+    0 1px 2px rgba(0, 64, 128, 0.12),
+    0 5px 14px rgba(0, 122, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+}
+
+[data-mcr-theme].mcr-config-shell .yh-segment :where(.yh-segment-item, .mcr-config-top-tab):not(.is-active) {
+  border-color: transparent !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--yh-apple-secondary-label) !important;
+  -webkit-text-fill-color: var(--yh-apple-secondary-label) !important;
+  box-shadow: none !important;
+}
+
+.mcr-config-shell[data-mcr-theme][data-mcr-theme] .yh-segment .mcr-config-top-tab.is-active {
+  border-color: var(--yh-apple-blue) !important;
+  background: var(--yh-apple-blue) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+  box-shadow:
+    0 1px 2px rgba(0, 64, 128, 0.12),
+    0 5px 14px rgba(0, 122, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+}
+
+.mcr-page-shell[data-mcr-theme][data-mcr-theme] :where(
+  .mcr-page-tabs-indicator,
+  .mcr-page-tabs--hero::after
+) {
+  background: var(--yh-apple-blue) !important;
+  box-shadow: none !important;
+}
+
+/* Form controls use soft inset depth and a single focus ring. */
+[data-mcr-theme] :where(
+  .v-field,
+  .mcr-blueprint-field__control,
+  .mcr-blueprint-select__control,
+  .mcr-blueprint-select__multi-trigger
+) {
+  border-color: var(--yh-apple-border) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--yh-apple-material-strong) 94%, transparent) !important;
+  background-image: none !important;
+  color: var(--yh-apple-label) !important;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+  transition:
+    border-color var(--yh-apple-response) ease,
+    background-color var(--yh-apple-response) ease,
+    box-shadow var(--yh-apple-response) ease !important;
+}
+
+[data-mcr-theme] :where(
+  .v-field--focused,
+  .mcr-blueprint-field__control:focus-within,
+  .mcr-blueprint-select__control:focus,
+  .mcr-blueprint-select__multi-trigger--open
+) {
+  border-color: color-mix(in srgb, var(--yh-apple-blue) 72%, transparent) !important;
+  box-shadow: var(--yh-apple-focus-ring) !important;
+}
+
+[data-mcr-theme] :where(.v-label, .v-field-label, .mcr-blueprint-field__label, .mcr-blueprint-select__label) {
+  color: var(--yh-apple-secondary-label) !important;
+  letter-spacing: 0 !important;
+}
+
+[data-mcr-theme] :where(input::placeholder, textarea::placeholder) {
+  color: var(--yh-apple-tertiary-label) !important;
+  opacity: 1;
+}
+
+/* iOS-like switches without changing their component footprint. */
+[data-mcr-theme] :where(.v-switch__track) {
+  border: 0 !important;
+  background: rgba(120, 120, 128, 0.24) !important;
+  opacity: 1 !important;
+  box-shadow: inset 0 0 0 0.5px rgba(60, 60, 67, 0.12) !important;
+  transition:
+    background-color var(--yh-apple-response) ease,
+    box-shadow var(--yh-apple-response) ease !important;
+}
+
+[data-mcr-theme] :where(.v-selection-control--dirty .v-switch__track) {
+  background: var(--yh-apple-blue) !important;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 64, 128, 0.12) !important;
+}
+
+.mcr-config-shell[data-mcr-theme][data-mcr-theme] .v-selection-control--dirty .v-switch__track,
+.mcr-page-shell[data-mcr-theme][data-mcr-theme] .v-selection-control--dirty .v-switch__track {
+  background: var(--yh-apple-blue) !important;
+  box-shadow: inset 0 0 0 0.5px rgba(0, 64, 128, 0.12) !important;
+}
+
+[data-mcr-theme] :where(.v-switch__thumb) {
+  background: #fff !important;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.14),
+    0 3px 8px rgba(0, 0, 0, 0.16) !important;
+  transition:
+    transform var(--yh-apple-response) var(--yh-apple-ease),
+    box-shadow var(--yh-apple-response) ease !important;
+}
+
+[data-mcr-theme] :where(.v-switch:active .v-switch__thumb) {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.16),
+    0 4px 10px rgba(0, 0, 0, 0.20) !important;
+}
+
+/* Popovers materialize from their anchor instead of appearing as flat boxes. */
+.mcr-blueprint-select__popover {
+  border-color: var(--yh-apple-border) !important;
+  background: var(--yh-apple-material-strong) !important;
+  box-shadow: var(--yh-apple-shadow-medium) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+  animation: yh-apple-materialize var(--yh-apple-response) var(--yh-apple-ease) both;
+}
+
+.mcr-blueprint-select__popover--top {
+  transform-origin: center bottom;
+}
+
+.mcr-blueprint-select__popover--bottom {
+  transform-origin: center top;
+}
+
+.mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition:
+    background-color var(--yh-apple-response-fast) ease,
+    color var(--yh-apple-response-fast) ease,
+    transform var(--yh-apple-response-fast) ease-out !important;
+}
+
+.mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option):active {
+  transform: scale(0.985);
+}
+
+.mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option:hover) {
+  background: color-mix(in srgb, var(--yh-apple-blue) 9%, transparent) !important;
+}
+
+.mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option--active) {
+  background: color-mix(in srgb, var(--yh-apple-blue) 14%, transparent) !important;
+  color: var(--yh-apple-blue) !important;
+  -webkit-text-fill-color: var(--yh-apple-blue) !important;
+}
+
+/* Floating history detail uses a thicker material than small popovers. */
+.yh-history-expansion__dismiss {
+  background: rgba(0, 0, 0, 0.18) !important;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.yh-history-expansion__panel {
+  border-color: rgba(255, 255, 255, 0.66) !important;
+  border-radius: 22px !important;
+  background: rgba(245, 245, 247, 0.78) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 24px 64px rgba(28, 39, 61, 0.20) !important;
+  backdrop-filter: blur(30px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(150%) !important;
+}
+
+[data-mcr-theme="dark"].yh-history-expansion .yh-history-expansion__panel {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(28, 28, 30, 0.82) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    0 28px 72px rgba(0, 0, 0, 0.44) !important;
+}
+
+.yh-history-expansion__header {
+  border-color: var(--yh-apple-border) !important;
+}
+
+.yh-history-expansion__header > button,
+.yh-history-poster-stack__close {
+  touch-action: manipulation;
+  transition:
+    transform 100ms ease-out,
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease !important;
+}
+
+.yh-history-expansion__header > button:active,
+.yh-history-poster-stack__close:active {
+  transform: scale(0.94);
+}
+
+.yh-history-expansion__card {
+  border-color: var(--yh-apple-border) !important;
+  box-shadow: var(--yh-apple-shadow-small) !important;
+  transition:
+    transform 120ms ease-out,
+    border-color 200ms ease,
+    background-color 200ms ease,
+    box-shadow 200ms ease !important;
+}
+
+.yh-history-expansion__card:active {
+  transform: scale(0.985);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .yh-history-expansion__card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--yh-apple-shadow-medium) !important;
+  }
+}
+
+.yh-history-expansion-enter-active,
+.yh-history-expansion-leave-active {
+  transition:
+    opacity 240ms ease,
+    backdrop-filter 240ms ease !important;
+}
+
+.yh-history-expansion-enter-active .yh-history-expansion__panel,
+.yh-history-expansion-leave-active .yh-history-expansion__panel {
+  transition:
+    transform 320ms var(--yh-apple-ease),
+    opacity 220ms ease,
+    backdrop-filter 260ms ease !important;
+}
+
+.yh-history-expansion-enter-from .yh-history-expansion__panel,
+.yh-history-expansion-leave-to .yh-history-expansion__panel {
+  opacity: 0 !important;
+  transform:
+    translate(var(--yh-expand-from-x), var(--yh-expand-from-y))
+    scale(0.82) !important;
+  backdrop-filter: blur(10px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
+}
+
+/* Cards lift only for precise pointers; touch receives press feedback. */
+[data-mcr-theme] :where(.mcr-scheme-row, .mcr-history-card, .yh-history-poster-stack__poster) {
+  transition:
+    transform var(--yh-apple-response) var(--yh-apple-ease),
+    border-color var(--yh-apple-response) ease,
+    background-color var(--yh-apple-response) ease,
+    box-shadow var(--yh-apple-response) ease,
+    opacity var(--yh-apple-response) ease !important;
+}
+
+[data-mcr-theme] :where(.mcr-scheme-row, .mcr-history-card, .yh-history-poster-stack__poster):active {
+  transform: scale(0.985);
+  transition-duration: 90ms !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-mcr-theme] :where(.mcr-scheme-row, .mcr-history-card):hover {
+    transform: translateY(-2px);
+    box-shadow: var(--yh-apple-shadow-medium) !important;
+  }
+}
+
+[data-mcr-theme] :where(.mcr-scheme-row--active, .mcr-history-card--selected) {
+  border-color: color-mix(in srgb, var(--yh-apple-blue) 70%, transparent) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--yh-apple-blue) 14%, transparent),
+    var(--yh-apple-shadow-small) !important;
+}
+
+@keyframes yh-apple-materialize {
+  from {
+    opacity: 0;
+    transform: translateY(var(--yh-materialize-offset, -4px)) scale(0.985);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+  }
+}
+
+.mcr-blueprint-select__popover--top {
+  --yh-materialize-offset: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-mcr-theme] *,
+  [data-mcr-theme] *::before,
+  [data-mcr-theme] *::after {
+    scroll-behavior: auto !important;
+  }
+
+  [data-mcr-theme] :where(
+    .mcr-button,
+    .yh-btn,
+    .yh-icon-btn,
+    .mcr-tab,
+    .yh-segment-item,
+    .mcr-scheme-row,
+    .mcr-history-card
+  ) {
+    transition-duration: 1ms !important;
+  }
+
+  .mcr-blueprint-select__popover {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-mcr-theme] :where(.mcr-config-topbar, .mcr-page-header, .mcr-footer-actions),
+  .mcr-blueprint-select__popover,
+  .yh-history-expansion__panel {
+    background: var(--color-surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  [data-mcr-theme] {
+    --yh-apple-border: currentColor;
+    --yh-apple-border-strong: currentColor;
+  }
+
+  [data-mcr-theme] :where(
+    .mcr-button,
+    .yh-icon-btn,
+    .mcr-panel,
+    .mcr-config-section-card,
+    .v-field,
+    .mcr-blueprint-field__control,
+    .mcr-blueprint-select__control
+  ) {
+    border-width: 2px !important;
+  }
+}

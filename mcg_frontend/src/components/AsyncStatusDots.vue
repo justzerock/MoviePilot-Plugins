@@ -23,7 +23,7 @@ withDefaults(defineProps<{
   min-width: 0;
   align-items: center;
   gap: 7px;
-  color: var(--mcr-color-on-surface-variant);
+  color: var(--color-text-muted, var(--mcr-color-on-surface-variant));
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
@@ -32,26 +32,26 @@ withDefaults(defineProps<{
 .mcr-async-status__dots {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   height: 14px;
 }
 
 .mcr-async-status__dots i {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--mcr-color-primary);
-  animation: mcr-async-dot 900ms ease-in-out infinite;
+  background: #007aff;
+  animation: mcr-async-dot 1100ms cubic-bezier(0.2, 0.78, 0.25, 1) infinite;
 }
 
 .mcr-async-status__dots i:nth-child(2) {
-  background: var(--mcr-color-secondary);
-  animation-delay: 120ms;
+  background: #5ac8fa;
+  animation-delay: 140ms;
 }
 
 .mcr-async-status__dots i:nth-child(3) {
-  background: var(--mcr-color-success);
-  animation-delay: 240ms;
+  background: #34c759;
+  animation-delay: 280ms;
 }
 
 .mcr-async-status__label {
@@ -60,13 +60,13 @@ withDefaults(defineProps<{
 }
 
 @keyframes mcr-async-dot {
-  0%, 70%, 100% {
-    opacity: 0.42;
-    transform: translateY(2px) scale(0.82);
+  0%, 68%, 100% {
+    opacity: 0.34;
+    transform: scale(0.72);
   }
-  35% {
+  34% {
     opacity: 1;
-    transform: translateY(-3px) scale(1);
+    transform: scale(1);
   }
 }
 

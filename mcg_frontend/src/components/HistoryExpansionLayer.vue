@@ -6,7 +6,13 @@
         <section ref="panelEl" class="yh-history-expansion__panel" :style="panelStyle" role="region" tabindex="-1" :aria-label="`${title} 的历史封面`">
           <header class="yh-history-expansion__header">
             <div><strong>{{ title }}</strong><span>{{ items.length }} 张封面</span></div>
-            <button type="button" aria-label="收起" @click="emit('close')"><v-icon icon="mdi-close" size="19" /></button>
+            <div class="yh-history-expansion__actions">
+              <button v-if="canRestore" type="button" class="yh-history-expansion__restore" :disabled="restoring" @click="emit('restore')">
+                <v-icon icon="mdi-history" size="17" />
+                <span>回溯</span>
+              </button>
+              <button type="button" class="yh-history-expansion__close" aria-label="收起" @click="emit('close')"><v-icon icon="mdi-close" size="19" /></button>
+            </div>
           </header>
           <div class="yh-history-expansion__grid">
             <button v-for="item in items" :key="itemKey(item)" type="button" class="yh-history-expansion__card" :class="{ 'is-selected': selectedKeys.includes(selectionKey(item)), 'has-error': failedImages.has(itemKey(item)) }" :aria-selected="selectedKeys.includes(selectionKey(item))" @click="emit('select', item)">
@@ -29,8 +35,8 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 interface HistoryPosterItem { path: string; name?: string; src?: string; url?: string; server?: string; library?: string; cover_id?: string; history_record_id?: string; library_key?: string }
 interface AnchorRect { left: number; top: number; width: number; height: number }
-const props = withDefaults(defineProps<{ open: boolean; title: string; items: HistoryPosterItem[]; selectedKeys?: string[]; anchorRect?: AnchorRect | null; theme?: 'light' | 'dark' }>(), { selectedKeys: () => [], anchorRect: null, theme: 'light' })
-const emit = defineEmits<{ (event: 'close'): void; (event: 'select', item: HistoryPosterItem): void }>()
+const props = withDefaults(defineProps<{ open: boolean; title: string; items: HistoryPosterItem[]; selectedKeys?: string[]; anchorRect?: AnchorRect | null; theme?: 'light' | 'dark'; canRestore?: boolean; restoring?: boolean }>(), { selectedKeys: () => [], anchorRect: null, theme: 'light', canRestore: false, restoring: false })
+const emit = defineEmits<{ (event: 'close'): void; (event: 'restore'): void; (event: 'select', item: HistoryPosterItem): void }>()
 const panelEl = ref<HTMLElement | null>(null)
 const failedImages = ref(new Set<string>())
 const itemKey = (item: HistoryPosterItem) => String(item.cover_id || item.history_record_id || item.library_key || item.path)
@@ -54,7 +60,11 @@ watch(() => props.open, (open) => { if (open) void nextTick(() => panelEl.value?
 .yh-history-expansion__header > div { min-width:0; display:flex; align-items:baseline; gap:9px; }
 .yh-history-expansion__header strong { overflow:hidden; color:var(--color-text-main); font-size:17px; text-overflow:ellipsis; white-space:nowrap; }
 .yh-history-expansion__header span { color:var(--color-text-muted); font-size:12px; font-weight:700; white-space:nowrap; }
-.yh-history-expansion__header button { width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--color-border); border-radius:11px; background:var(--color-surface); color:var(--color-text-secondary); }
+.yh-history-expansion__actions { flex:0 0 auto; display:flex !important; align-items:center !important; gap:8px !important; }
+.yh-history-expansion__actions button { height:36px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--color-border); border-radius:11px; background:var(--color-surface); color:var(--color-text-secondary); font:inherit; cursor:pointer; }
+.yh-history-expansion__restore { gap:6px; min-width:76px; padding:0 12px; color:var(--color-primary) !important; border-color:color-mix(in srgb,var(--color-primary) 26%,var(--color-border)) !important; background:color-mix(in srgb,var(--color-primary-soft) 70%,var(--color-surface)) !important; font-size:12px !important; font-weight:800 !important; }
+.yh-history-expansion__restore:disabled { cursor:wait; opacity:.56; }
+.yh-history-expansion__close { width:36px; padding:0; }
 .yh-history-expansion__grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:14px; overflow:auto; padding:16px; overscroll-behavior:contain; }
 .yh-history-expansion__card { min-width:0; display:grid; gap:7px; padding:0; overflow:hidden; border:1px solid var(--color-border); border-radius:13px; background:var(--color-surface); color:var(--color-text-main); box-shadow:0 6px 16px var(--color-shadow); text-align:left; }
 .yh-history-expansion__card.is-selected { border-color:var(--color-primary); background:var(--color-primary-soft); box-shadow:0 0 0 2px color-mix(in srgb,var(--color-primary) 18%,transparent),0 8px 18px var(--color-shadow); }

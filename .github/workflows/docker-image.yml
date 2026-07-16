@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-      - yahaha-cover-studio
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -31,6 +28,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read program version
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./docker-app/frontend/package.json').version")"
+          test -n "${version}"
+          echo "value=${version}" >> "${GITHUB_OUTPUT}"
+
       - name: Prepare image names
         id: image
         shell: bash
@@ -51,12 +56,8 @@ jobs:
         with:
           images: ${{ steps.image.outputs.images }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.version.outputs.value }}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=Yahaha Cover Studio
             org.opencontainers.image.description=Yahaha Cover Studio / 呀哈哈封面工坊 Docker app
