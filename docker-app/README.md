@@ -47,6 +47,8 @@ docker run -d \
 http://localhost:8899
 ```
 
+首次打开会要求设置管理员用户名和密码。登录凭证会长期保存在当前浏览器，用于保护配置、生成、上传和历史删除等接口；健康检查与带独立 Token 的 Webhook 保持可用。
+
 停止：
 
 ```bash
@@ -247,10 +249,18 @@ cron 使用 5 位格式：
 
 示例：
 
+除健康检查、登录和 Webhook 外，API 需要登录后的 Bearer Token。网页会自动处理；命令行可以先登录取得 Token：
+
+```bash
+TOKEN=$(curl -sS -H 'Content-Type: application/json' \
+  -d '{"username":"你的用户名","password":"你的密码"}' \
+  http://localhost:8899/api/auth/login | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+```
+
 ```bash
 curl http://localhost:8899/api/health
-curl -X POST http://localhost:8899/api/generate/动漫 -H 'Content-Type: application/json' -d '{"style":"multi_1"}'
-curl -X POST http://localhost:8899/api/generate -H 'Content-Type: application/json' -d '{"library_name":"动漫","style":"animated_1"}'
+curl -X POST http://localhost:8899/api/generate/动漫 -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"style":"multi_1"}'
+curl -X POST http://localhost:8899/api/generate -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"library_name":"动漫","style":"animated_1"}'
 ```
 
 ## Emby / Jellyfin Webhook
@@ -402,8 +412,8 @@ data/output/
 测试模式只用于体验页面效果。关闭「本地图片模式」并开启「测试模式」后，无需连接 Emby / Jellyfin，也会返回模拟媒体库并自动生成测试素材。调用：
 
 ```bash
-curl http://localhost:8899/api/libraries
-curl -X POST http://localhost:8899/api/generate -H 'Content-Type: application/json' -d '{}'
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8899/api/libraries
+curl -X POST http://localhost:8899/api/generate -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}'
 ```
 
 切换真实 Emby / Jellyfin 时，关闭「本地图片模式」和「测试模式」，并填写对应服务器 URL 和 API Key。

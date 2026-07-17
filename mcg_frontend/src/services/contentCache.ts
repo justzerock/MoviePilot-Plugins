@@ -3,7 +3,7 @@ const DB_VERSION = 1
 const STORE_NAME = 'entries'
 // Increment when a backend refresh changes the source image contract. This prevents
 // stale preview records from surviving an application update.
-export const PREVIEW_CACHE_SCHEMA = 7
+export const PREVIEW_CACHE_SCHEMA = 9
 export const HISTORY_CACHE_SCHEMA = 2
 const PREVIEW_MAX_ENTRIES = 30
 const HISTORY_MAX_ENTRIES = 8
@@ -28,6 +28,8 @@ export interface PreviewCacheRecord {
   cacheKey: string
   server: string
   library: string
+  libraryItemCount?: number
+  libraryItemCounts?: Record<string, number>
   style: string
   coverStyleBase: string
   coverStyleVariant: string
@@ -131,6 +133,14 @@ export function createPreviewCacheRecord(cacheKey: string, payload: any): Previe
     cacheKey,
     server: String(payload?.server || ''),
     library: String(payload?.library || ''),
+    libraryItemCount: Number.isFinite(Number(payload?.library_item_count))
+      ? Math.max(0, Math.trunc(Number(payload.library_item_count)))
+      : undefined,
+    libraryItemCounts: Object.entries(payload?.library_item_counts || {}).reduce((result, [key, value]) => {
+      const count = Number(value)
+      if (Number.isFinite(count)) result[String(key)] = Math.max(0, Math.trunc(count))
+      return result
+    }, {} as Record<string, number>),
     style: String(payload?.style || ''),
     coverStyleBase: String(payload?.cover_style_base || ''),
     coverStyleVariant: String(payload?.cover_style_variant || ''),
@@ -162,6 +172,8 @@ export function previewCachePayload(record: PreviewCacheRecord) {
   return {
     server: record.server,
     library: record.library,
+    library_item_count: record.libraryItemCount,
+    library_item_counts: record.libraryItemCounts,
     style: record.style,
     cover_style_base: record.coverStyleBase,
     cover_style_variant: record.coverStyleVariant,

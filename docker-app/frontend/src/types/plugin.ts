@@ -106,11 +106,12 @@ export interface MediaServerConfig {
   enabled?: boolean
 }
 
-export type CustomLayerType = 'image' | 'main_title' | 'subtitle' | 'title_zh' | 'title_en' | 'text'
+export type CustomLayerType = 'image' | 'main_title' | 'subtitle' | 'title_zh' | 'title_en' | 'text' | 'badge'
 export type CustomTextFontFamily = string
 export type TemplateLayerType = CustomLayerType | 'group'
 export type TemplateImageFit = 'cover' | 'contain' | 'stretch'
 export type TemplateTextMaskMode = 'normal' | 'knockout-text' | 'show-text'
+export type BadgeCountMode = 'episodes' | 'titles' | 'seasons'
 export type PreviewMode = 'frontend' | 'backend'
 export type PreviewSourceMode = 'custom' | 'cache' | 'media_server'
 export type CoverStyleBase = 'static_1' | 'static_2' | 'static_3' | 'static_4' | 'custom_static'
@@ -152,6 +153,7 @@ export interface TemplateShadow {
 
 export interface TemplateEffects {
   blur?: number
+  grain?: number
   shadow?: TemplateShadow
 }
 
@@ -179,6 +181,7 @@ export interface CustomLayerBase {
   pivotY?: number
   opacity?: number
   blur?: number
+  grain?: number
   shadowBlur?: number
   shadowOffsetX?: number
   shadowOffsetY?: number
@@ -231,12 +234,27 @@ export interface CustomTextLayer extends CustomLayerBase {
   maskMode?: TemplateTextMaskMode
 }
 
+export interface CustomBadgeLayer extends CustomLayerBase {
+  type: 'badge'
+  content: string
+  countMode?: BadgeCountMode
+  shape?: 'pill' | 'rounded' | 'rectangle' | 'circle'
+  backgroundColor?: string
+  borderColor?: string
+  borderWidth?: number
+  fontSize: number
+  fontFamily?: CustomTextFontFamily
+  colorSource?: 'auto' | 'custom' | 'config'
+  color?: string
+  textAlign?: 'left' | 'center' | 'right'
+}
+
 export interface CustomGroupLayer extends CustomLayerBase {
   type: 'group'
   children: TemplateLayer[]
 }
 
-export type TemplateLayer = CustomImageLayer | CustomTitleLayer | CustomTextLayer | CustomGroupLayer
+export type TemplateLayer = CustomImageLayer | CustomTitleLayer | CustomTextLayer | CustomBadgeLayer | CustomGroupLayer
 
 export interface CustomStaticLayout {
   schema?: 'mcr-template/v1'
@@ -254,6 +272,9 @@ export interface CustomStaticLayout {
     color2?: string
     colorRatio?: number
     opacity?: number
+    gradientStartOpacity?: number
+    gradientEndOpacity?: number
+    gradientDirection?: 'diagonal' | 'horizontal' | 'vertical' | 'reverse-diagonal'
     blur?: number
     grain?: number
     zIndex?: number
@@ -346,6 +367,8 @@ export interface PreviewSourcePayload {
   source_mode: PreviewSourceMode
   titles: PreviewTitles
   custom_texts?: Record<string, string>
+  library_item_count?: number
+  library_item_counts?: Partial<Record<BadgeCountMode, number>>
   title_config_version?: string
   images: PreviewSourceImage[]
   custom_static_layout?: CustomStaticLayout | null
@@ -418,6 +441,9 @@ export interface StatusPayload {
   custom_static_layout?: CustomStaticLayout | null
   custom_static_layouts?: CustomStaticLayoutTemplate[] | null
   custom_static_active_id?: string | null
+  default_scheme_id?: string
+  history_cover_count?: number
+  execution_count?: number
 }
 
 export interface PluginApi {

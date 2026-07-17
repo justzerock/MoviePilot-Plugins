@@ -21,6 +21,7 @@ class MediaLibrary:
     collection_type: str = ""
     server: str = ""
     locations: list[str] | None = None
+    item_count: int | None = None
 
 
 class MediaServerClient:
@@ -58,7 +59,7 @@ class MediaServerClient:
             ("Items", {
                 "IncludeItemTypes": "CollectionFolder",
                 "Recursive": "false",
-                "Fields": "Path,CollectionType,Locations",
+                "Fields": "Path,CollectionType,Locations,RecursiveItemCount,ChildCount",
             }),
         ]
         last_error: Exception | None = None
@@ -97,6 +98,7 @@ class MediaServerClient:
                                 ),
                                 server=self.server_name,
                                 locations=[str(location) for location in locations or []],
+                                item_count=self._safe_count(item.get("RecursiveItemCount"), item.get("ChildCount")),
                             )
                         )
                 if libraries:
@@ -106,6 +108,47 @@ class MediaServerClient:
         if last_error:
             raise last_error
         return []
+
+    @staticmethod
+    def _safe_count(*values: Any) -> int | None:
+        for value in values:
+            try:
+                if value is not None and int(value) >= 0:
+                    return int(value)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    async def get_library_item_count(self, library_id: str, cached: int | None = None) -> int:
+        return (await self.get_library_item_counts(library_id, cached)).get("episodes", 0)
+
+    async def get_library_item_counts(self, library_id: str, cached: int | None = None) -> dict[str, int]:
+        """Count user-facing media units without mixing seasons and episodes."""
+        async def count(include_types: str) -> int:
+            data = await self._get_json("Items", {
+                "ParentId": library_id,
+                "Recursive": "true",
+                "IncludeItemTypes": include_types,
+                "Limit": 0,
+                "EnableTotalRecordCount": "true",
+            })
+            if isinstance(data, dict):
+                return max(0, int(data.get("TotalRecordCount") or len(data.get("Items") or [])))
+            return 0
+
+        results = await asyncio.gather(
+            count("Episode,Movie"),
+            count("Series,Movie"),
+            count("Season,Movie"),
+            return_exceptions=True,
+        )
+        fallback = max(0, int(cached or 0))
+        normalized = [value if isinstance(value, int) else fallback for value in results]
+        return {
+            "episodes": normalized[0],
+            "titles": normalized[1],
+            "seasons": normalized[2],
+        }
 
     async def get_items(self, library_id: str, limit: int = 12, sort_by: str = "DateCreated") -> list[dict[str, Any]]:
         params = {

@@ -127,7 +127,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.2.3"
+    plugin_version = "2.2.4"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -513,6 +513,7 @@ class YahahaCoverStudio(_PluginBase):
         if self._animation_scroll not in ["down", "up", "alternate", "alternate_reverse"]:
             self._animation_scroll = "alternate"
         self._animated_settings = self.__normalize_animated_settings_map(self._animated_settings)
+        self.__apply_default_scheme_selection(self._default_scheme_id)
         if self._cover_style.startswith("animated_"):
             self.__apply_animated_settings_for_style(self._cover_style)
         self._bg_color_mode = (config or {}).get("bg_color_mode", "auto")
@@ -970,10 +971,71 @@ class YahahaCoverStudio(_PluginBase):
             {"id": "animated_1", "name": "动态风格 1"}, {"id": "animated_2", "name": "动态风格 2"},
             {"id": "animated_3", "name": "动态风格 3"}, {"id": "animated_4", "name": "动态风格 4"},
         ]
+        known_ids = {entry["id"] for entry in entries}
         for template in self._custom_static_layouts or []:
-            if isinstance(template, dict) and str(template.get("id") or "").strip():
-                entries.append({"id": str(template["id"]), "name": str(template.get("name") or "自定义方案")})
+            if not isinstance(template, dict):
+                continue
+            template_id = str(template.get("id") or "").strip()
+            if (
+                not template_id
+                or template_id in known_ids
+                or bool(template.get("system"))
+                or template_id.startswith("__preset_")
+            ):
+                continue
+            known_ids.add(template_id)
+            entries.append({"id": template_id, "name": str(template.get("name") or "自定义方案")})
         return entries
+
+    def __apply_default_scheme_selection(self, scheme_id: Any) -> str:
+        requested = str(scheme_id or "").strip()
+        aliases = {
+            "single_1": "static_1",
+            "single_2": "static_2",
+            "multi_1": "static_3",
+            "static_1": "static_1",
+            "static_2": "static_2",
+            "static_3": "static_3",
+            "static_4": "static_4",
+            "animated_1": "animated_1",
+            "animated_2": "animated_2",
+            "animated_3": "animated_3",
+            "animated_4": "animated_4",
+        }
+        target_style = aliases.get(requested)
+        if target_style:
+            self._default_scheme_id = target_style
+            self._cover_style = target_style
+            self._cover_style_base, self._cover_style_variant = self.__resolve_cover_style_ui(target_style)
+            return self._default_scheme_id
+
+        custom = next(
+            (
+                item for item in self._custom_static_layouts or []
+                if isinstance(item, dict) and str(item.get("id") or "") == requested
+            ),
+            None,
+        )
+        if custom:
+            self._default_scheme_id = requested
+            self._custom_static_active_id = requested
+            if isinstance(custom.get("layout"), dict):
+                self._custom_static_layout = custom["layout"]
+            self._cover_style = "static_custom"
+            self._cover_style_base = "custom_static"
+            self._cover_style_variant = "static"
+            return requested
+
+        if requested in {"custom_static", "static_custom"}:
+            self._default_scheme_id = str(self._custom_static_active_id or "custom_static")
+            self._cover_style = "static_custom"
+            self._cover_style_base = "custom_static"
+            self._cover_style_variant = "static"
+            return self._default_scheme_id
+
+        fallback = self._cover_style if self._cover_style in aliases.values() else "static_1"
+        self._default_scheme_id = fallback
+        return fallback
 
     def __library_scheme_keys(self, service, library: Dict[str, Any]) -> Set[str]:
         """Return every persisted spelling for a media-library rule.
@@ -1730,8 +1792,12 @@ class YahahaCoverStudio(_PluginBase):
             normalized["type"] = "main_title"
         elif layer_type in ("title_en", "subtitle"):
             normalized["type"] = "subtitle"
-        elif layer_type not in ("image", "text"):
+        elif layer_type not in ("image", "text", "badge"):
             normalized["type"] = "image"
+        else:
+            # Keep the explicit semantic type through MoviePilot's persisted JSON
+            # round-trip. A badge is text with count metadata, never an image slot.
+            normalized["type"] = layer_type
         frame = normalized.get("frame") if isinstance(normalized.get("frame"), dict) else {}
         transform = normalized.get("transform") if isinstance(normalized.get("transform"), dict) else {}
         effects = normalized.get("effects") if isinstance(normalized.get("effects"), dict) else {}
@@ -1751,6 +1817,7 @@ class YahahaCoverStudio(_PluginBase):
         normalized["cropFocusX"] = pick_value(normalized.get("cropFocusX"), default=0.5)
         normalized["cropFocusY"] = pick_value(normalized.get("cropFocusY"), default=0.5)
         normalized["blur"] = pick_value(normalized.get("blur"), effects.get("blur"), default=0)
+        normalized["grain"] = pick_value(normalized.get("grain"), effects.get("grain"), default=0)
         normalized["shadowBlur"] = pick_value(normalized.get("shadowBlur"), effect_shadow.get("blur"), shadow.get("blur"), default=0)
         normalized["shadowOffsetX"] = pick_value(normalized.get("shadowOffsetX"), effect_shadow.get("offsetX"), shadow.get("offsetX"), shadow.get("x"), default=0)
         normalized["shadowOffsetY"] = pick_value(normalized.get("shadowOffsetY"), effect_shadow.get("offsetY"), shadow.get("offsetY"), shadow.get("y"), default=0)
@@ -1799,6 +1866,7 @@ class YahahaCoverStudio(_PluginBase):
         }
         normalized["effects"] = {
             "blur": normalized.get("blur", 0),
+            "grain": normalized.get("grain", 0),
             "shadow": {
                 "blur": normalized.get("shadowBlur", 0),
                 "offsetX": normalized.get("shadowOffsetX", 0),
@@ -1807,15 +1875,29 @@ class YahahaCoverStudio(_PluginBase):
                 "color": effect_shadow.get("color", "#000000"),
             },
         }
-        if normalized.get("type") in ("main_title", "title_zh", "subtitle", "title_en", "text"):
+        if normalized.get("type") in ("main_title", "title_zh", "subtitle", "title_en", "text", "badge"):
             normalized["textStyle"] = {
                 "fontFamily": normalized.get("fontFamily"),
                 "fontSize": normalized.get("fontSize", 0),
                 "textAlign": normalized.get("textAlign", "center"),
                 "maskMode": normalized.get("maskMode", "normal"),
             }
-            if normalized.get("type") == "text":
+            if normalized.get("type") in ("text", "badge"):
                 normalized["textStyle"]["content"] = normalized.get("content", "")
+            if normalized.get("type") == "badge":
+                count_mode = str(normalized.get("countMode") or "episodes")
+                normalized["countMode"] = count_mode if count_mode in ("episodes", "titles", "seasons") else "episodes"
+                shape = str(normalized.get("shape") or "pill")
+                normalized["shape"] = shape if shape in ("pill", "rounded", "rectangle", "circle") else "pill"
+                normalized["backgroundColor"] = str(normalized.get("backgroundColor") or "#007aff")
+                normalized["borderColor"] = str(normalized.get("borderColor") or "#ffffff")
+                try:
+                    normalized["borderWidth"] = max(0, float(normalized.get("borderWidth") or 0))
+                except (TypeError, ValueError):
+                    normalized["borderWidth"] = 0
+                normalized["textStyle"]["countMode"] = normalized["countMode"]
+                normalized["textStyle"]["shape"] = normalized["shape"]
+            if normalized.get("type") == "text":
                 normalized["textStyle"]["contentSource"] = normalized.get("contentSource", "fixed")
                 normalized["textStyle"]["contentKey"] = normalized.get("contentKey", "")
         return normalized
@@ -1849,6 +1931,16 @@ class YahahaCoverStudio(_PluginBase):
             background["zIndex"] = int(float(background.get("zIndex", 0) or 0))
         except (TypeError, ValueError):
             background["zIndex"] = 0
+        for key in ("opacity", "gradientStartOpacity", "gradientEndOpacity"):
+            try:
+                raw_value = background.get(key)
+                background[key] = max(0, min(1, float(1 if raw_value is None else raw_value)))
+            except (TypeError, ValueError):
+                background[key] = 1
+        gradient_direction = str(background.get("gradientDirection") or "diagonal")
+        background["gradientDirection"] = gradient_direction if gradient_direction in {
+            "diagonal", "horizontal", "vertical", "reverse-diagonal"
+        } else "diagonal"
         return {
             "schema": "mcr-template/v1",
             "version": template.get("version", "1.0"),
@@ -2540,6 +2632,7 @@ class YahahaCoverStudio(_PluginBase):
                 self._font_traditional_variant = "standard"
             self._library_scheme_rules = self.__normalize_library_scheme_rules(raw.get("library_scheme_rules"))
             self._default_scheme_id = str(raw.get("default_scheme_id") or self._default_scheme_id or self._cover_style or "static_1")
+            self.__apply_default_scheme_selection(self._default_scheme_id)
             self._main_title_font_custom = ""
             self._subtitle_font_custom = ""
             self._custom_text_font_custom = ""
@@ -3268,6 +3361,7 @@ class YahahaCoverStudio(_PluginBase):
     def __builtin_font_urls(self) -> Dict[str, str]:
         return {
             "chaohei": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/chaohei.ttf",
+            "impact": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/impact.ttf",
             "yasong": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/yasong.ttf",
             "EmblemaOne": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/EmblemaOne.woff2",
             "Melete": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/fonts/Melete.otf",
@@ -3381,6 +3475,7 @@ class YahahaCoverStudio(_PluginBase):
             {"title": "系统思源黑体", "value": "NotoSansCJKSC", "aliases": ["notosanscjksc", "notosanscjk", "思源黑体", "noto sans cjk sc"]},
         ]
         en_specs = [
+            {"title": "Impact", "value": "impact", "aliases": ["impact"]},
             {"title": "EmblemaOne", "value": "EmblemaOne", "aliases": ["emblemaone", "emblema_one"]},
             {"title": "Melete", "value": "Melete", "aliases": ["melete", "multi_1_en"]},
             {"title": "Phosphate", "value": "Phosphate", "aliases": ["phosphate", "phosphat"]},
@@ -3631,6 +3726,13 @@ class YahahaCoverStudio(_PluginBase):
                 "auth": "bear",
                 "methods": ["GET"],
                 "summary": "获取预览字体信息",
+            },
+            {
+                "path": "/fonts/faces",
+                "endpoint": self.api_preview_font_faces,
+                "auth": "bear",
+                "methods": ["GET"],
+                "summary": "获取页面预览字体映射",
             },
             {
                 "path": "/fonts/{font_id}/status",
@@ -4066,6 +4168,8 @@ class YahahaCoverStudio(_PluginBase):
             },
             {"path": "/restore_history_batch", "endpoint": self.api_restore_history_batch, "auth": "bear", "methods": ["POST"], "summary": "恢复历史批次封面"},
             {"path": "restore_history_batch", "endpoint": self.api_restore_history_batch, "auth": "bear", "methods": ["POST"], "summary": "恢复历史批次封面(兼容)"},
+            {"path": "/restore_history_covers", "endpoint": self.api_restore_history_covers, "auth": "bear", "methods": ["POST"], "summary": "应用所选历史封面"},
+            {"path": "restore_history_covers", "endpoint": self.api_restore_history_covers, "auth": "bear", "methods": ["POST"], "summary": "应用所选历史封面(兼容)"},
             {
                 "path": "/status",
                 "endpoint": self.api_status,
@@ -4198,6 +4302,64 @@ class YahahaCoverStudio(_PluginBase):
             logger.error(f"恢复历史批次失败: {e}", exc_info=True)
             return {"code": 1, "msg": f"恢复历史批次失败: {e}"}
 
+    async def api_restore_history_covers(self, request: Request, data: Optional[Dict[str, Any]] = Body(default=None), kwargs: Optional[Any] = Body(default=None)):
+        try:
+            raw = await self.__read_api_payload(request=request, data=data, kwargs=kwargs)
+            requested = {
+                str(Path(str(value)).expanduser().resolve())
+                for value in (raw.get("files") or [])
+                if str(value or "").strip()
+            }
+            if not requested:
+                return {"code": 1, "msg": "没有选择历史封面"}
+            store = HistoryStore(self.get_data_path(), self.plugin_version)
+            matched = []
+            for summary in store.list_batches()[:1000]:
+                batch_id = str(summary.get("batch_id") or "")
+                manifest = store.get_batch(batch_id) or {}
+                for item in manifest.get("items") or []:
+                    path = store.file_path(batch_id, str(item.get("file") or ""))
+                    if path and str(path.resolve()) in requested:
+                        matched.append((item, path))
+            self.__refresh_media_server_context(force=True)
+            restored = failed = 0
+            skipped = max(0, len(requested) - len(matched))
+            library_cache: Dict[str, List[Dict[str, Any]]] = {}
+            for item, path in matched:
+                server_name = str(item.get("server_name") or "")
+                server_id = str(item.get("server_id") or "")
+                library_name = str(item.get("library_name") or "")
+                service = next(
+                    (
+                        value for key, value in (self._servers or {}).items()
+                        if value and (value.name == server_name or (server_id and str(key) == server_id))
+                    ),
+                    None,
+                )
+                expected_hash = str(item.get("sha256") or "")
+                if not service or (expected_hash and hashlib.sha256(path.read_bytes()).hexdigest() != expected_hash):
+                    skipped += 1
+                    continue
+                try:
+                    cache_key = str(getattr(service, "name", server_name) or server_name)
+                    if cache_key not in library_cache:
+                        library_cache[cache_key] = self.__get_server_libraries(service)
+                    library = next((value for value in library_cache[cache_key] if value.get("Name") == library_name), None)
+                    if not library:
+                        skipped += 1
+                        continue
+                    if self.__set_library_image(service, library, base64.b64encode(path.read_bytes()).decode("ascii")):
+                        restored += 1
+                    else:
+                        failed += 1
+                except Exception as error:
+                    logger.warning("应用历史封面失败 %s / %s: %s", server_name, library_name, error)
+                    failed += 1
+            return {"code": 0, "data": {"restored": restored, "skipped": skipped, "failed": failed}}
+        except Exception as e:
+            logger.error(f"应用历史封面失败: {e}", exc_info=True)
+            return {"code": 1, "msg": f"应用历史封面失败: {e}"}
+
     def __title_config_version(self) -> str:
         payload = {
             "title_config": self._current_config or self._title_config or {},
@@ -4223,6 +4385,7 @@ class YahahaCoverStudio(_PluginBase):
             active_animated_settings = self.__get_animated_settings_for_style(self._cover_style)
             preview_custom_static = self.__custom_static_preview_payload()
 
+            history_stats = HistoryStore(self.get_data_path(), self.plugin_version).stats()
             return {
                 "code": 0,
                 "data": {
@@ -4258,6 +4421,7 @@ class YahahaCoverStudio(_PluginBase):
                     "font_traditional_variant": self._font_traditional_variant,
                     "library_scheme_rules": self._library_scheme_rules,
                     "default_scheme_id": self._default_scheme_id,
+                    **history_stats,
                     "scheme_catalog": self.__scheme_catalog(),
                     "poster_source": "poster" if self._use_primary else "backdrop",
                     "use_primary": bool(self._use_primary),
@@ -4342,7 +4506,10 @@ class YahahaCoverStudio(_PluginBase):
                 logger.info(
                     f"【YahahaCoverStudio】预览素材获取成功，媒体库: {service.name}：{library_name}，来源: {source_mode}"
                 )
+                library_item_counts = self.__get_library_item_counts(service, library)
+                library_item_count = library_item_counts["episodes"]
                 preview_layout = self.__build_custom_static_text_layout(scheme_runtime["layout"], title, custom_texts)
+                preview_layout = self.__layout_with_library_item_counts(preview_layout, library_item_counts)
                 rendered_title, rendered_custom_texts, rendered_layout, font_resolution = self.__resolve_render_text_payload(
                     title,
                     custom_texts,
@@ -4367,6 +4534,8 @@ class YahahaCoverStudio(_PluginBase):
                             "en": title[1] if len(title) > 1 else "",
                         },
                         "custom_texts": rendered_custom_texts,
+                        "library_item_count": library_item_count,
+                        "library_item_counts": library_item_counts,
                         "font_resolution": font_resolution,
                         "title_config_version": self.__title_config_version(),
                         "images": images,
@@ -4470,8 +4639,17 @@ class YahahaCoverStudio(_PluginBase):
             "subtitle": self._subtitle_font_custom or self._subtitle_font_url,
             "custom_text": self._custom_text_font_custom or self._custom_text_font_url,
         }
-        aliases = {"main_title", "subtitle", "custom_text"}
-        alias_texts: Dict[str, str] = {}
+        # The application chrome uses these two curated presets as well. Keep
+        # them in the same subsetting pipeline as the editable layout so a
+        # preview never silently falls back to a browser font.
+        aliases = {"main_title", "subtitle", "custom_text", "chaohei", "impact"}
+        alias_texts: Dict[str, str] = {
+            # Include the application chrome glyphs in the subset. Otherwise
+            # a ready subset can still render these headings through a system
+            # fallback when the layout itself contains no matching text.
+            "chaohei": "呀哈哈封面工坊配置",
+            "impact": "Yahaha Cover StudioConfiguration",
+        }
         if isinstance(layout, dict):
             for layer in self.__iter_custom_text_layers(layout.get("layers") or []):
                 layer_type = str(layer.get("type") or "")
@@ -4597,6 +4775,9 @@ class YahahaCoverStudio(_PluginBase):
         info = self.__preview_font_info(font_id)
         return {"code": 0, "data": info} if info else {"code": 1, "msg": "字体不存在"}
 
+    def api_preview_font_faces(self):
+        return {"code": 0, "data": self.__build_preview_font_faces()}
+
     def api_preview_font_status(self, font_id: str):
         if not self._preview_font_service:
             return {"code": 1, "msg": "字体预览服务未初始化"}
@@ -4695,7 +4876,40 @@ class YahahaCoverStudio(_PluginBase):
             return title[1] if len(title) > 1 else ""
         if layer_type == "text":
             return str(layer.get("content") or "")
+        if layer_type == "badge":
+            return str(layer.get("resolvedContent") or layer.get("content") or "")
         return ""
+
+    def __layout_with_library_item_counts(self, layout: Optional[Dict[str, Any]], item_counts: Any) -> Dict[str, Any]:
+        """Resolve each badge with its own media counting mode on a render-only copy."""
+        normalized_layout = self.__normalize_custom_static_template(layout or {})
+        raw_counts = item_counts if isinstance(item_counts, dict) else {"episodes": item_counts}
+        normalized_counts: Dict[str, int] = {}
+        for mode in ("episodes", "titles", "seasons"):
+            try:
+                normalized_counts[mode] = max(0, int(raw_counts.get(mode, raw_counts.get("episodes", 0)) or 0))
+            except (TypeError, ValueError):
+                normalized_counts[mode] = 0
+        normalized_layout["library_item_count"] = normalized_counts["episodes"]
+        normalized_layout["library_item_counts"] = normalized_counts
+
+        def visit(layer: Dict[str, Any]) -> Dict[str, Any]:
+            next_layer = dict(layer or {})
+            if next_layer.get("type") == "group" and isinstance(next_layer.get("children"), list):
+                next_layer["children"] = [visit(child) for child in next_layer.get("children") or [] if isinstance(child, dict)]
+            elif str(next_layer.get("type") or "") == "badge":
+                count_mode = str(next_layer.get("countMode") or "episodes")
+                normalized_count = normalized_counts.get(count_mode, normalized_counts["episodes"])
+                content = str(next_layer.get("content") or "{count} 部")
+                next_layer["resolvedContent"] = content.replace("{count}", f"{normalized_count:,}")
+            return next_layer
+
+        normalized_layout["layers"] = [visit(layer) for layer in normalized_layout.get("layers") or [] if isinstance(layer, dict)]
+        return normalized_layout
+
+    def __layout_with_library_item_count(self, layout: Optional[Dict[str, Any]], item_count: Any) -> Dict[str, Any]:
+        """Backward-compatible wrapper for layouts created before count modes existed."""
+        return self.__layout_with_library_item_counts(layout, {"episodes": item_count})
 
     def __layout_with_resolved_custom_texts(self, layout: Optional[Dict[str, Any]], custom_texts: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         normalized_layout = self.__normalize_custom_static_template(layout or {})
@@ -4732,7 +4946,7 @@ class YahahaCoverStudio(_PluginBase):
                 continue
             if layer.get("type") == "group":
                 yield from self.__iter_custom_text_layers(layer.get("children") or [])
-            elif str(layer.get("type") or "") in ("main_title", "title_zh", "subtitle", "title_en", "text"):
+            elif str(layer.get("type") or "") in ("main_title", "title_zh", "subtitle", "title_en", "text", "badge"):
                 yield layer
 
     def __resolve_requested_template_font_path(self, font_family: str) -> str:
@@ -4809,13 +5023,15 @@ class YahahaCoverStudio(_PluginBase):
                 item["children"] = [visit(child) for child in item.get("children") or [] if isinstance(child, dict)]
                 return item
             layer_type = str(item.get("type") or "")
-            if layer_type not in ("main_title", "title_zh", "subtitle", "title_en", "text"):
+            if layer_type not in ("main_title", "title_zh", "subtitle", "title_en", "text", "badge"):
                 return item
             alias = str(item.get("fontFamily") or ("subtitle" if layer_type in ("subtitle", "title_en") else "custom_text" if layer_type == "text" else "main_title"))
             if layer_type in ("main_title", "title_zh"):
                 value = main.rendered_text
             elif layer_type in ("subtitle", "title_en"):
                 value = subtitle.rendered_text
+            elif layer_type == "badge":
+                value = str(item.get("resolvedContent") or item.get("content") or "")
             elif item.get("contentSource") == "library":
                 value = rendered_custom.get(str(item.get("contentKey") or ""), str(item.get("content") or ""))
             else:
@@ -5714,6 +5930,10 @@ class YahahaCoverStudio(_PluginBase):
             base, variant = self.__resolve_cover_style_ui(target_style)
             self._cover_style_base = base
             self._cover_style_variant = variant
+            if target_style == "static_custom":
+                self._default_scheme_id = str(self._custom_static_active_id or "custom_static")
+            else:
+                self._default_scheme_id = target_style
             if target_style.startswith("animated_"):
                 self.__apply_animated_settings_for_style(target_style)
             self.__update_config()
@@ -5847,6 +6067,7 @@ class YahahaCoverStudio(_PluginBase):
         self._cover_style = target_style
         self._cover_style_base = f"static_{safe_index}"
         self._cover_style_variant = safe_variant
+        self._default_scheme_id = target_style
         self.__update_config()
         logger.info(f"【YahahaCoverStudio】已保存封面风格: {target_style}")
 
@@ -8312,6 +8533,10 @@ class YahahaCoverStudio(_PluginBase):
 
     def __update_library_with_scheme(self, service, library, scheme_id: str):
         library_name = library['Name']
+        previous_item_count = getattr(self, "_active_library_item_count", 0)
+        previous_item_counts = getattr(self, "_active_library_item_counts", None)
+        self._active_library_item_counts = self.__get_library_item_counts(service, library)
+        self._active_library_item_count = self._active_library_item_counts["episodes"]
         # 自定义图像路径
         image_path = self.__check_custom_image(library_name)
         # 从配置获取标题和背景颜色
@@ -8322,15 +8547,19 @@ class YahahaCoverStudio(_PluginBase):
         else:
             title = title_result
             config_bg_color = None
-        if image_path:
-            logger.info(f"媒体库 {service.name}：{library_name} 从自定义路径获取封面")
-            custom_image_input = image_path
-            if self._cover_style == "static_custom" and isinstance(image_path, list):
-                required_items = self.__get_required_items()
-                custom_image_input = image_path[:required_items] if required_items > 1 else image_path[0]
-            image_data = self.__generate_image_from_path(service.name, library_name, title, custom_image_input, config_bg_color)
-        else:
-            image_data = self.__generate_from_server(service, library, title)
+        try:
+            if image_path:
+                logger.info(f"媒体库 {service.name}：{library_name} 从自定义路径获取封面")
+                custom_image_input = image_path
+                if self._cover_style == "static_custom" and isinstance(image_path, list):
+                    required_items = self.__get_required_items()
+                    custom_image_input = image_path[:required_items] if required_items > 1 else image_path[0]
+                image_data = self.__generate_image_from_path(service.name, library_name, title, custom_image_input, config_bg_color)
+            else:
+                image_data = self.__generate_from_server(service, library, title)
+        finally:
+            self._active_library_item_count = previous_item_count
+            self._active_library_item_counts = previous_item_counts
 
         # `True` is the legacy signal from __generate_from_server for a monitor
         # de-duplication skip. It is intentionally not image/Base64 data.
@@ -8471,6 +8700,15 @@ class YahahaCoverStudio(_PluginBase):
         if static_preset_layout:
             static_preset_layout = self.__layout_with_resolved_custom_texts(static_preset_layout, custom_texts)
         resolved_custom_static_layout = self.__layout_with_resolved_custom_texts(self._custom_static_layout or {}, custom_texts)
+        library_item_count = getattr(self, "_active_library_item_count", 0)
+        library_item_counts = getattr(self, "_active_library_item_counts", None) or {
+            "episodes": library_item_count,
+            "titles": library_item_count,
+            "seasons": library_item_count,
+        }
+        if static_preset_layout:
+            static_preset_layout = self.__layout_with_library_item_counts(static_preset_layout, library_item_counts)
+        resolved_custom_static_layout = self.__layout_with_library_item_counts(resolved_custom_static_layout, library_item_counts)
         title, custom_texts, static_preset_layout, _preset_font_resolution = self.__resolve_render_text_payload(title, custom_texts, static_preset_layout)
         _custom_title, _custom_texts, resolved_custom_static_layout, _custom_font_resolution = self.__resolve_render_text_payload(title, custom_texts, resolved_custom_static_layout)
         static_template_font_paths = self.__build_template_font_paths(static_preset_layout or {}, title) if static_preset_layout else {}
@@ -9378,6 +9616,55 @@ class YahahaCoverStudio(_PluginBase):
         except Exception as err:
             logger.error(f"获取媒体库列表失败：{str(err)}")
             return []
+
+    def __get_library_item_counts(self, service, library: Optional[Dict[str, Any]]) -> Dict[str, int]:
+        """Count episodes, whole titles, and seasons without downloading item records."""
+        library = library or {}
+        fallback_count = 0
+        for key in ("RecursiveItemCount", "ChildCount", "ItemCount", "TotalRecordCount"):
+            try:
+                value = library.get(key)
+                if value is not None:
+                    fallback_count = max(0, int(value))
+                    break
+            except (TypeError, ValueError):
+                continue
+        if not service:
+            return {mode: fallback_count for mode in ("episodes", "titles", "seasons")}
+        library_id = library.get("Id") if service.type == "emby" else library.get("ItemId") or library.get("Id")
+        if not library_id:
+            return {mode: fallback_count for mode in ("episodes", "titles", "seasons")}
+
+        counts: Dict[str, int] = {}
+        include_types = {
+            "episodes": "Episode,Movie",
+            "titles": "Series,Movie",
+            "seasons": "Season,Movie",
+        }
+        for mode, item_types in include_types.items():
+            try:
+                response = service.instance.get_data(
+                    url=(
+                        f"[HOST]emby/Items/?api_key=[APIKEY]&ParentId={library_id}"
+                        f"&Recursive=True&IncludeItemTypes={item_types}"
+                        "&Limit=0&EnableTotalRecordCount=True"
+                    )
+                )
+                payload = response.json() if response else {}
+                counts[mode] = max(0, int(payload.get("TotalRecordCount") or len(payload.get("Items") or [])))
+            except Exception as err:
+                logger.warning(
+                    "获取媒体库 %s 的 %s 统计失败，使用媒体库总数回退: %s",
+                    library.get("Name") or library_id,
+                    mode,
+                    err,
+                )
+                counts[mode] = fallback_count
+        return counts
+
+    def __get_library_item_count(self, service, library: Optional[Dict[str, Any]]) -> int:
+        """Backward-compatible default count: episodes plus movies."""
+        return self.__get_library_item_counts(service, library)["episodes"]
     
     def __get_all_libraries(self, server, service):
         try:

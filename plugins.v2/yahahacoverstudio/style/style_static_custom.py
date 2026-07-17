@@ -50,6 +50,18 @@ def _float_value(value: Any, fallback: float) -> float:
         return fallback
 
 
+def _apply_film_grain(image: Image.Image, intensity: Any) -> Image.Image:
+    amount = max(0.0, min(1.0, _float_value(intensity, 0)))
+    if amount <= 0:
+        return image
+    rgba = image.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    noise = Image.effect_noise(rgba.size, max(2, amount * 42)).convert("RGB")
+    grained = Image.blend(rgba.convert("RGB"), noise, min(0.24, amount * 0.22)).convert("RGBA")
+    grained.putalpha(alpha)
+    return grained
+
+
 def _load_font(font_path: str, size: float) -> ImageFont.FreeTypeFont:
     size_int = max(1, int(round(float(size))))
     return ImageFont.truetype(font_path, size_int)
@@ -127,7 +139,8 @@ def _create_background(
         color_layer = Image.new("RGB", canvas_size, bg_color)
         ratio = float(color_ratio) if 0 <= float(color_ratio) <= 1 else 0.8
         blend = Image.blend(bg, color_layer, ratio)
-        return blend.convert("RGBA")
+        grain = (bg_color_config or {}).get("grain", 0)
+        return _apply_film_grain(blend.convert("RGBA"), grain)
 
 
 def _draw_image_layer(
@@ -151,6 +164,7 @@ def _draw_image_layer(
     radius = float(layer.get("radius", 0)) * min(scale_x, scale_y)
     opacity = max(0.0, min(1.0, _float_value(layer.get("opacity"), 1)))
     blur = max(0.0, _float_value(layer.get("blur"), 0) * min(scale_x, scale_y))
+    grain = max(0.0, min(1.0, _float_value(layer.get("grain", (layer.get("effects") or {}).get("grain")), 0)))
     shadow_blur = max(0.0, _float_value(layer.get("shadowBlur"), 0) * min(scale_x, scale_y))
     shadow_offset_x = _float_value(layer.get("shadowOffsetX"), 0) * scale_x
     shadow_offset_y = _float_value(layer.get("shadowOffsetY"), 0) * scale_y
@@ -220,8 +234,11 @@ def _draw_image_layer(
             rounded.paste(img, (0, 0), mask)
             img = rounded
 
+        shape_alpha = img.getchannel("A").copy()
         if blur > 0:
             img = img.filter(ImageFilter.GaussianBlur(radius=blur))
+            img.putalpha(shape_alpha)
+        img = _apply_film_grain(img, grain)
 
         if opacity < 1:
             alpha = img.getchannel("A")
@@ -365,6 +382,7 @@ def _draw_title_layer(
     rotation = float(layout["rotation"])
     opacity = float(layout["opacity"])
     blur = float(layout["blur"])
+    grain = max(0.0, min(1.0, _float_value(layer.get("grain", (layer.get("effects") or {}).get("grain")), 0)))
     shadow_blur = float(layout["shadow"]["blur"])
     shadow_offset_x = float(layout["shadow"]["offset_x"])
     shadow_offset_y = float(layout["shadow"]["offset_y"])
@@ -393,7 +411,10 @@ def _draw_title_layer(
         shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=max(1, shadow_blur)))
 
     if blur > 0:
+        text_alpha = text_layer.getchannel("A").copy()
         text_layer = text_layer.filter(ImageFilter.GaussianBlur(radius=blur))
+        text_layer.putalpha(text_alpha)
+    text_layer = _apply_film_grain(text_layer, grain)
 
     if opacity < 1:
         alpha = text_layer.getchannel("A")

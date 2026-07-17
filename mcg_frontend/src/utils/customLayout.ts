@@ -1,5 +1,6 @@
 import type {
   CoverStyleBase,
+  CustomBadgeLayer,
   CustomGroupLayer,
   CustomImageLayer,
   CustomLayerBase,
@@ -25,6 +26,7 @@ export function normalizeLayerType(type?: string): TemplateLayerType {
   if (type === 'main_title' || type === 'title_zh') return 'main_title'
   if (type === 'subtitle' || type === 'title_en') return 'subtitle'
   if (type === 'text') return 'text'
+  if (type === 'badge') return 'badge'
   return 'image'
 }
 
@@ -49,9 +51,13 @@ export function isCustomTextLayer(layer: TemplateLayer): layer is CustomTextLaye
   return normalizeLayerType(layer.type) === 'text'
 }
 
-export function isTextLayer(layer: TemplateLayer): layer is CustomTitleLayer | CustomTextLayer {
+export function isBadgeLayer(layer: TemplateLayer): layer is CustomBadgeLayer {
+  return normalizeLayerType(layer.type) === 'badge'
+}
+
+export function isTextLayer(layer: TemplateLayer): layer is CustomTitleLayer | CustomTextLayer | CustomBadgeLayer {
   const normalized = normalizeLayerType(layer.type)
-  return normalized === 'main_title' || normalized === 'subtitle' || normalized === 'text'
+  return normalized === 'main_title' || normalized === 'subtitle' || normalized === 'text' || normalized === 'badge'
 }
 
 function withLegacyLayerFields<T extends TemplateLayer>(layer: T): T {
@@ -79,8 +85,9 @@ function withLegacyLayerFields<T extends TemplateLayer>(layer: T): T {
       fontFamily: normalized.fontFamily,
       fontSize: normalized.fontSize,
       textAlign: normalized.textAlign ?? 'center',
-      maskMode: normalized.maskMode ?? 'normal',
+      ...(!isBadgeLayer(normalized) ? { maskMode: normalized.maskMode ?? 'normal' } : {}),
       ...(isCustomTextLayer(normalized) ? { content: normalized.content } : {}),
+      ...(isBadgeLayer(normalized) ? { content: normalized.content } : {}),
     }
   } else {
     delete normalized.textStyle
@@ -97,6 +104,7 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
     const pivotY = group.pivotY ?? group.transform?.pivotY ?? 0.5
     const opacity = group.opacity ?? group.transform?.opacity ?? 1
     const blur = group.blur ?? group.effects?.blur ?? 0
+    const grain = group.grain ?? group.effects?.grain ?? 0
     const shadowBlur = group.shadowBlur ?? group.effects?.shadow?.blur ?? 0
     const shadowOffsetX = group.shadowOffsetX ?? group.effects?.shadow?.offsetX ?? 0
     const shadowOffsetY = group.shadowOffsetY ?? group.effects?.shadow?.offsetY ?? 0
@@ -109,6 +117,7 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
       pivotY,
       opacity,
       blur,
+      grain,
       shadowBlur,
       shadowOffsetX,
       shadowOffsetY,
@@ -121,6 +130,7 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
       },
       effects: {
         blur,
+        grain,
         shadow: {
           blur: shadowBlur,
           offsetX: shadowOffsetX,
@@ -141,6 +151,7 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
   const pivotX = layer.pivotX ?? layer.transform?.pivotX ?? 0.5
   const pivotY = layer.pivotY ?? layer.transform?.pivotY ?? 0.5
   const blur = layer.blur ?? layer.effects?.blur ?? 0
+  const grain = layer.grain ?? layer.effects?.grain ?? 0
   return withLegacyLayerFields({
     ...layer,
     type: normalizedType as T['type'],
@@ -176,6 +187,7 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
     pivotY,
     opacity,
     blur,
+    grain,
     shadowBlur,
     shadowOffsetX,
     shadowOffsetY,
@@ -188,6 +200,7 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
     },
     effects: {
       blur,
+      grain,
       shadow: {
         blur: shadowBlur,
         offsetX: shadowOffsetX,
@@ -199,14 +212,28 @@ export function normalizeLayerEffects<T extends TemplateLayer>(layer: T): T {
     ...(normalizedType !== 'image'
       ? {
           fontFamily:
-            (layer as CustomTitleLayer | CustomTextLayer).fontFamily
+            (layer as CustomTitleLayer | CustomTextLayer | CustomBadgeLayer).fontFamily
             ?? (normalizedType === 'subtitle' ? 'subtitle' : normalizedType === 'text' ? 'custom_text' : 'main_title'),
-          textAlign: (layer as CustomTitleLayer | CustomTextLayer).textAlign ?? 'center',
-          maskMode: (layer as CustomTitleLayer | CustomTextLayer).maskMode ?? 'normal',
+          textAlign: (layer as CustomTitleLayer | CustomTextLayer | CustomBadgeLayer).textAlign ?? 'center',
+          ...(normalizedType !== 'badge'
+            ? { maskMode: (layer as CustomTitleLayer | CustomTextLayer).maskMode ?? 'normal' }
+            : {}),
         }
       : {}),
     ...(normalizedType === 'text'
       ? { content: (layer as CustomTextLayer).content ?? '自定义文本' }
+      : {}),
+    ...(normalizedType === 'badge'
+      ? {
+          content: (layer as CustomBadgeLayer).content ?? '{count} 部',
+          countMode: (layer as CustomBadgeLayer).countMode ?? 'episodes',
+          shape: (layer as CustomBadgeLayer).shape ?? 'pill',
+          backgroundColor: (layer as CustomBadgeLayer).backgroundColor ?? '#007aff',
+          borderColor: (layer as CustomBadgeLayer).borderColor ?? '#ffffff',
+          borderWidth: (layer as CustomBadgeLayer).borderWidth ?? 0,
+          color: (layer as CustomBadgeLayer).color ?? '#ffffff',
+          colorSource: (layer as CustomBadgeLayer).colorSource ?? 'custom',
+        }
       : {}),
   } as T)
 }
@@ -224,6 +251,9 @@ export function cloneLayout(layout: CustomStaticLayout): CustomStaticLayout {
           imageSource: layout.background.imageSource ? { ...layout.background.imageSource } : undefined,
           colorSource: layout.background.colorSource ?? 'auto',
           opacity: layout.background.opacity ?? (layout.background as any).colorOpacity ?? 1,
+          gradientStartOpacity: layout.background.gradientStartOpacity ?? 1,
+          gradientEndOpacity: layout.background.gradientEndOpacity ?? 1,
+          gradientDirection: layout.background.gradientDirection ?? 'diagonal',
           grain: layout.background.grain ?? 0,
         }
       : undefined,
@@ -338,7 +368,41 @@ export function createTextLayer(partial?: Partial<CustomTextLayer>): CustomTextL
   })
 }
 
-export function getTextLayerFontFamily(layer: CustomTitleLayer | CustomTextLayer): CustomTextFontFamily {
+export function createBadgeLayer(partial?: Partial<CustomBadgeLayer>): CustomBadgeLayer {
+  return normalizeLayerEffects({
+    id: createLayoutId(),
+    type: 'badge',
+    content: partial?.content ?? '{count} 部',
+    countMode: partial?.countMode ?? 'episodes',
+    shape: partial?.shape ?? 'pill',
+    backgroundColor: partial?.backgroundColor ?? '#007aff',
+    borderColor: partial?.borderColor ?? '#ffffff',
+    borderWidth: partial?.borderWidth ?? 0,
+    colorSource: partial?.colorSource ?? 'custom',
+    color: partial?.color ?? '#ffffff',
+    fontFamily: partial?.fontFamily ?? 'main_title',
+    x: partial?.x ?? EDITOR_BASE_WIDTH * 0.78,
+    y: partial?.y ?? EDITOR_BASE_HEIGHT * 0.07,
+    width: partial?.width ?? 250,
+    height: partial?.height ?? 92,
+    zIndex: partial?.zIndex ?? 12,
+    fontSize: partial?.fontSize ?? 46,
+    textAlign: partial?.textAlign ?? 'center',
+    rotation: partial?.rotation ?? 0,
+    radius: partial?.radius ?? 30,
+    pivotX: partial?.pivotX ?? 0.5,
+    pivotY: partial?.pivotY ?? 0.5,
+    opacity: partial?.opacity,
+    blur: partial?.blur,
+    grain: partial?.grain,
+    shadowBlur: partial?.shadowBlur ?? 16,
+    shadowOffsetX: partial?.shadowOffsetX ?? 0,
+    shadowOffsetY: partial?.shadowOffsetY ?? 8,
+    shadowOpacity: partial?.shadowOpacity ?? 0.18,
+  } as CustomBadgeLayer)
+}
+
+export function getTextLayerFontFamily(layer: CustomTitleLayer | CustomTextLayer | CustomBadgeLayer): CustomTextFontFamily {
   if (layer.fontFamily === 'subtitle') return 'subtitle'
   if (layer.fontFamily === 'custom_text') return 'custom_text'
   if (layer.fontFamily && layer.fontFamily !== 'main_title') return layer.fontFamily
@@ -367,6 +431,9 @@ export function createDefaultLayout(): CustomStaticLayout {
       color2: getThemeColor('--mcr-cover-deep-gradient'),
       colorRatio: 0.8,
       opacity: 1,
+      gradientStartOpacity: 1,
+      gradientEndOpacity: 1,
+      gradientDirection: 'diagonal',
       blur: 50,
       grain: 0.18,
       zIndex: 0,
@@ -517,6 +584,9 @@ export function createLayoutFromBuiltInStyle(baseStyle: CoverStyleBase): CustomS
         color2: getThemeColor('--mcr-cover-deep-gradient'),
         colorRatio: 0.42,
         opacity: 1,
+        gradientStartOpacity: 1,
+        gradientEndOpacity: 1,
+        gradientDirection: 'diagonal',
         blur: 58,
         grain: 0.14,
         zIndex: 0,

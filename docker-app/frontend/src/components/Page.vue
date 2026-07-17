@@ -1,12 +1,12 @@
 
 <template>
-  <div class="mcr-shell mcr-page-shell" :data-mcr-theme="isDark ? 'dark' : 'light'">
+  <div ref="pageShellEl" class="mcr-shell mcr-page-shell" :data-mcr-theme="isDark ? 'dark' : 'light'">
     <div class="mcr-shell__aurora" />
     <div class="mcr-shell__noise" />
     <v-card class="mcr-frame">
       <v-defaults-provider :defaults="controlDefaults">
         <v-card-text class="mcr-frame__body">
-          <section class="mcr-shell__header mcr-page-hero">
+          <section ref="pageHeroEl" class="mcr-shell__header mcr-page-hero">
             <div class="mcr-shell__header-grid">
               <div class="mcr-shell__copy">
                 <div class="mcr-page-title-row yh-brand-row">
@@ -32,7 +32,7 @@
                       <v-icon icon="mdi-crown" size="24" />
                     </span>
                   </button>
-                  <h1 class="yh-brand-title" :class="{ 'is-loading': titleLoading }" aria-label="呀哈哈封面工坊 Yahaha Cover Studio">
+                  <h1 class="yh-brand-title" :class="{ 'is-loading': titleLoading }" :style="brandTitleFontStyle" aria-label="呀哈哈封面工坊 Yahaha Cover Studio">
                     <span class="yh-brand-en-big" aria-hidden="true">
                       <span class="yh-brand-en-pc">Yahaha Cover Studio</span>
                       <span class="yh-brand-en-mobile">
@@ -82,7 +82,7 @@
                   >
                     <span class="yh-run-progress" aria-hidden="true" />
                     <span class="yh-run-content">
-                      <v-icon :icon="isGenerating ? 'mdi-stop-circle-outline' : 'mdi-play-circle-outline'" size="24" />
+                      <v-icon :icon="isGenerating ? 'mdi-stop' : 'mdi-play'" size="24" />
                       <span v-if="isGenerating" class="yh-run-count">{{ generationProgressCount }}</span>
                     </span>
                   </button>
@@ -482,6 +482,8 @@
                         :class="{
                           'mcr-scheme-row--active': isSchemeItemActive(item),
                           'mcr-scheme-row--preset': item.kind === 'preset',
+                          'mcr-scheme-row--share-mode': schemeShareMode,
+                          'mcr-scheme-row--share-selected': selectedSchemeShareIds.includes(item.id),
                         }"
                       >
                         <div
@@ -490,9 +492,9 @@
                           :class="{ 'mcr-scheme-row__select--disabled': controlsLocked }"
                           :aria-disabled="controlsLocked ? 'true' : 'false'"
                           :tabindex="controlsLocked ? -1 : 0"
-                          @click="!controlsLocked && selectSchemeItem(item)"
-                          @keydown.enter.prevent="!controlsLocked && selectSchemeItem(item)"
-                          @keydown.space.prevent="!controlsLocked && selectSchemeItem(item)"
+                          @click="!controlsLocked && handleSchemeCardAction(item)"
+                          @keydown.enter.prevent="!controlsLocked && handleSchemeCardAction(item)"
+                          @keydown.space.prevent="!controlsLocked && handleSchemeCardAction(item)"
                         >
                           <span class="mcr-scheme-row__media">
                             <span
@@ -520,7 +522,7 @@
                           </span>
                         </div>
 
-                        <div class="mcr-scheme-row__actions">
+                        <div v-if="!schemeShareMode" class="mcr-scheme-row__actions">
                           <template v-if="styleVariant === 'static'">
                             <v-btn
                             icon="mdi-tune-variant"
@@ -588,28 +590,22 @@
                     </div>
 
                     <div v-if="styleVariant === 'static'" class="mcr-scheme-list__tail">
-                      <v-btn
-                        size="small"
-                        class="mcr-button mcr-button--primary mcr-button--dark-neutral mcr-scheme-tail-button"
-                        prepend-icon="mdi-plus"
-                        :disabled="controlsLocked"
-                        @click="createTemplateFromCurrent"
-                      >
-                        添加方案
-                      </v-btn>
                       <v-menu location="bottom end" :close-on-content-click="true">
-                        <template #activator="{ props: importMenuProps }">
+                        <template #activator="{ props: addMenuProps }">
                           <v-btn
-                            v-bind="importMenuProps"
+                            v-bind="addMenuProps"
                             size="small"
-                            class="mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-scheme-tail-button"
-                            prepend-icon="mdi-import"
+                            class="mcr-button mcr-button--primary mcr-button--dark-neutral mcr-scheme-tail-button"
+                            prepend-icon="mdi-plus"
                             :disabled="controlsLocked"
                           >
-                            导入方案
+                            添加方案
                           </v-btn>
                         </template>
                         <v-list class="mcr-template-action-menu" :data-mcr-theme="isDark ? 'dark' : 'light'" density="compact">
+                          <v-list-item @click="createTemplateFromCurrent">
+                            <v-list-item-title>复制当前方案</v-list-item-title>
+                          </v-list-item>
                           <v-list-item @click="importTemplateFromClipboard">
                             <v-list-item-title>从剪切板导入</v-list-item-title>
                           </v-list-item>
@@ -618,6 +614,40 @@
                           </v-list-item>
                         </v-list>
                       </v-menu>
+                      <v-menu v-if="schemeShareMode" location="bottom end" :close-on-content-click="true">
+                        <template #activator="{ props: shareMenuProps }">
+                          <v-btn
+                            v-bind="shareMenuProps"
+                            size="small"
+                            class="mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-scheme-tail-button mcr-scheme-tail-button--sharing"
+                            prepend-icon="mdi-share-variant"
+                            :disabled="controlsLocked"
+                          >
+                            分享 {{ selectedSchemeShareIds.length }} 个方案
+                          </v-btn>
+                        </template>
+                        <v-list class="mcr-template-action-menu" :data-mcr-theme="isDark ? 'dark' : 'light'" density="compact">
+                          <v-list-item :disabled="!selectedSchemeShareIds.length" @click="exportSelectedSchemesToClipboard">
+                            <v-list-item-title>复制到剪切板</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item :disabled="!selectedSchemeShareIds.length" @click="exportSelectedSchemesToFile">
+                            <v-list-item-title>下载 JSON 文件</v-list-item-title>
+                          </v-list-item>
+                          <v-list-item @click="stopSchemeShare">
+                            <v-list-item-title>退出多选</v-list-item-title>
+                          </v-list-item>
+                        </v-list>
+                      </v-menu>
+                      <v-btn
+                        v-else
+                        size="small"
+                        class="mcr-button mcr-button--ghost mcr-button--dark-neutral mcr-scheme-tail-button"
+                        prepend-icon="mdi-share-variant"
+                        :disabled="controlsLocked"
+                        @click="startSchemeShare"
+                      >
+                        分享方案
+                      </v-btn>
                       <input
                         ref="importTemplateInput"
                         type="file"
@@ -671,50 +701,33 @@
               <Teleport to="body">
                 <div
                   v-if="expandedHistoryGroupId && selectedHistoryPaths.length"
+                  ref="historyFloatingActionsEl"
                   class="mcr-history-floating-actions"
+                  :class="{ 'is-dragging': historyToolbarDragging }"
                   :data-mcr-theme="isDark ? 'dark' : 'light'"
-                  :style="{ left: '50%', top: '84px', transform: 'translateX(-50%)' }"
+                  :style="historyFloatingStyle"
                   role="toolbar"
                   aria-label="历史封面批量操作"
                 >
-                  <span class="mcr-history-selection-count">已选择 {{ selectedHistoryPaths.length }}</span>
-                  <button
-                    type="button"
-                    class="mcr-history-floating-button"
-                    :disabled="controlsLocked || !history.length"
-                    @pointerdown.prevent
-                    @click.prevent.stop="toggleSelectAllHistory"
-                  >
-                    {{ allHistorySelected ? '取消全选' : '全选' }}
-                  </button>
-                  <button
-                    type="button"
-                    class="mcr-history-floating-button mcr-history-floating-button--primary"
-                    :disabled="controlsLocked"
-                    @pointerdown.prevent
-                    @click.prevent.stop="downloadSelectedCoversDirect"
-                  >
-                    直接下载
-                  </button>
-                  <button
-                    type="button"
-                    class="mcr-history-floating-button"
-                    :disabled="controlsLocked"
-                    @pointerdown.prevent
-                    @click.prevent.stop="downloadSelectedCoversZip"
-                  >
-                    下载 ZIP
-                  </button>
-                  <button v-if="historyGroupMode === 'time-machine'" type="button" class="mcr-history-floating-button mcr-history-floating-button--primary" :disabled="controlsLocked || !selectedHistorySnapshot" @click.prevent.stop="applySelectedHistorySnapshot">应用</button>
-                  <button
-                    type="button"
-                    class="mcr-history-floating-button mcr-history-floating-button--danger"
-                    :disabled="controlsLocked"
-                    @pointerdown.prevent
-                    @click.prevent.stop="deleteSelectedCovers"
-                  >
-                    删除
-                  </button>
+                  <div class="mcr-history-floating-header">
+                    <span class="mcr-history-selection-count">已选择 {{ selectedHistoryPaths.length }}</span>
+                    <button
+                      type="button"
+                      class="mcr-history-floating-drag-handle"
+                      title="拖动工具栏"
+                      aria-label="拖动历史封面工具栏"
+                      @pointerdown="startHistoryToolbarDrag"
+                    ><v-icon icon="mdi-drag" size="18" /></button>
+                  </div>
+                  <div class="mcr-history-floating-row mcr-history-floating-row--actions">
+                    <button type="button" class="mcr-history-floating-button" :disabled="controlsLocked || !history.length" @pointerdown.prevent @click.prevent.stop="toggleSelectAllHistory">{{ allHistorySelected ? '取消全选' : '全选' }}</button>
+                    <button type="button" class="mcr-history-floating-button mcr-history-floating-button--primary" :disabled="controlsLocked || !selectedHistoryPaths.length" @pointerdown.prevent @click.prevent.stop="applySelectedHistoryCovers">应用</button>
+                    <button type="button" class="mcr-history-floating-button mcr-history-floating-button--danger" :disabled="controlsLocked" @pointerdown.prevent @click.prevent.stop="deleteSelectedCovers">删除</button>
+                  </div>
+                  <div class="mcr-history-floating-row mcr-history-floating-row--downloads">
+                    <button type="button" class="mcr-history-floating-button mcr-history-floating-button--primary" :disabled="controlsLocked" @pointerdown.prevent @click.prevent.stop="downloadSelectedCoversDirect">直接下载</button>
+                    <button type="button" class="mcr-history-floating-button" :disabled="controlsLocked" @pointerdown.prevent @click.prevent.stop="downloadSelectedCoversZip">下载 ZIP</button>
+                  </div>
                 </div>
               </Teleport>
 
@@ -732,7 +745,11 @@
                       :class="{ 'mcr-history-group--time-machine': historyGroupMode === 'time-machine', [`is-${historyRecordSide(group.key)}`]: historyGroupMode === 'time-machine', 'is-active': activeTimeRecordId === group.key, 'is-dimmed': Boolean(expandedHistoryGroupId && expandedHistoryGroupId !== group.key) }"
                       :id="`time-record-${group.key}`"
                     >
-                      <aside v-if="historyGroupMode === 'time-machine'" class="mcr-time-machine-meta"><strong>{{ group.dateLabel || group.title }}</strong><span>{{ group.timeLabel }}</span></aside>
+                      <aside v-if="historyGroupMode === 'time-machine'" class="mcr-time-machine-meta">
+                        <button v-if="historyRecordSide(group.key) === 'right'" type="button" class="mcr-time-machine-restore" :disabled="controlsLocked || Boolean(restoringBatchId)" @click="restoreHistoryGroup(group)"><v-icon icon="mdi-history" size="16" />回溯</button>
+                        <button type="button" class="mcr-time-machine-time" @click="scrollToTimeRecord(group.key)"><strong>{{ group.dateLabel || group.title }}</strong><span>{{ group.timeLabel }}</span></button>
+                        <button v-if="historyRecordSide(group.key) === 'left'" type="button" class="mcr-time-machine-restore" :disabled="controlsLocked || Boolean(restoringBatchId)" @click="restoreHistoryGroup(group)"><v-icon icon="mdi-history" size="16" />回溯</button>
+                      </aside>
                       <button v-if="historyGroupMode === 'time-machine'" type="button" class="mcr-time-machine-marker" :class="{ 'is-active': activeTimeRecordId === group.key }" :aria-current="activeTimeRecordId === group.key ? 'true' : undefined" :aria-label="`定位到 ${group.fullTitle}`" @click="scrollToTimeRecord(group.key)"><i aria-hidden="true" /></button>
                       <HistoryPosterStack
                         class="mcr-time-machine-poster"
@@ -791,7 +808,7 @@
                 <span class="mcr-donation-stat-icon mcr-donation-stat-icon--static">
                   <v-icon icon="mdi-view-grid-outline" size="20" />
                 </span>
-                <small>Active</small>
+                <small v-if="!defaultSchemeIsAnimated" class="mcr-donation-live-dot" aria-label="当前默认静态方案" />
               </div>
               <strong>{{ donationStaticSchemeCount }}</strong>
               <span>静态方案</span>
@@ -801,7 +818,7 @@
                 <span class="mcr-donation-stat-icon mcr-donation-stat-icon--dynamic">
                   <v-icon icon="mdi-lightning-bolt-outline" size="20" />
                 </span>
-                <small class="mcr-donation-live-dot" aria-label="动态方案可用" />
+                <small v-if="defaultSchemeIsAnimated" class="mcr-donation-live-dot" aria-label="当前默认动态方案" />
               </div>
               <strong>{{ donationDynamicSchemeCount }}</strong>
               <span>动态方案</span>
@@ -1107,6 +1124,38 @@
       </v-card>
     </v-dialog>
 
+    <Transition name="yh-compact-header">
+      <header
+        v-if="compactHeaderVisible"
+        class="yh-compact-page-header"
+        :style="compactHeaderStyle"
+        aria-label="呀哈哈封面工坊快捷操作"
+      >
+        <span class="yh-compact-page-header__title">呀哈哈封面工坊</span>
+        <div class="yh-compact-page-header__actions">
+          <button
+            type="button"
+            class="yh-run-btn"
+            :class="{ 'is-running': isGenerating }"
+            :style="runButtonProgressStyle"
+            :title="isGenerating ? generationProgressLabel : '生成封面'"
+            :aria-label="isGenerating ? generationProgressLabel : '生成封面'"
+            :disabled="!statusLoaded || generatingNow"
+            @click="handleGenerateAction"
+          >
+            <span class="yh-run-progress" aria-hidden="true" />
+            <span class="yh-run-content">
+              <v-icon :icon="isGenerating ? 'mdi-stop' : 'mdi-play'" size="20" />
+              <span v-if="isGenerating" class="yh-run-count">{{ generationProgressCount }}</span>
+            </span>
+          </button>
+          <v-btn class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn" icon title="配置" aria-label="配置" :disabled="controlsLocked" @click="notifySwitch">
+            <v-icon icon="mdi-cog-outline" size="20" />
+          </v-btn>
+        </div>
+      </header>
+    </Transition>
+
     <ViewportSaveToast :message="editorSaveStatus" :theme="isDark ? 'dark' : 'light'" />
 
   </div>
@@ -1127,7 +1176,8 @@ import GeneratePreviewSimulation from './GeneratePreviewSimulation.vue'
 import HistoryPosterStack from './HistoryPosterStack.vue'
 import HistoryExpansionLayer from './HistoryExpansionLayer.vue'
 import ViewportSaveToast from './ViewportSaveToast.vue'
-import { BUILTIN_FONT_ITEMS } from '../constants/fonts'
+import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
+import { loadPreviewFontFaces } from '../services/fontPreview'
 import { getThemeColor } from '../utils/themeColors'
 import { formatTimelineClock, formatTimelineDate } from '../utils/dateTime'
 import { getHistoryCache, getPreviewCache, invalidatePreviewCache, setHistoryCache, setPreviewCache, stableCacheSignature } from '../services/contentCache'
@@ -1195,7 +1245,6 @@ const pageTab = ref<PageTab>('generate-tab')
 const DONATION_ACK_STORAGE_KEY = 'yahaha_supported'
 const DONATION_LEGACY_ACK_STORAGE_KEY = 'mcr-donation-acknowledged'
 const DONATION_AVATAR_STORAGE_KEY = 'yahaha_avatar_source'
-const DONATION_RUN_COUNT_STORAGE_KEY = 'yahaha_generation_run_count'
 const setupWarnings = ref<string[]>([])
 const programEnabled = ref(false)
 const styleVariant = ref<CoverStyleVariant>('static')
@@ -1208,6 +1257,8 @@ const donationAcknowledged = ref(false)
 const donationView = ref<DonationView>('overview')
 const donationAvatarSource = ref<'developer' | 'mp'>('developer')
 const donationExecutionCount = ref(0)
+const donationHistoryCount = ref(0)
+const defaultSchemeId = ref('single_1')
 const moviePilotAvatarUrl = ref('')
 const refreshingPreview = ref(false)
 const previewSourcesLoading = ref(false)
@@ -1225,6 +1276,11 @@ let previewSourceRequestId = 0
 const HISTORY_CACHE_KEY = 'all:newest'
 const isGenerating = ref(false)
 const statusLoaded = ref(false)
+const pageShellEl = ref<HTMLElement | null>(null)
+const pageHeroEl = ref<HTMLElement | null>(null)
+const compactHeaderVisible = ref(false)
+const compactHeaderStyle = ref<Record<string, string>>({})
+const headerFontRevision = ref(0)
 const previewBayEl = ref<HTMLElement | null>(null)
 const schemeListScrollEl = ref<HTMLElement | null>(null)
 const previewBayHeight = ref(0)
@@ -1236,7 +1292,15 @@ const historyFloatingStyle = ref<Record<string, string>>({
   top: '88px',
   transform: 'translateX(-50%)',
 })
+const historyFloatingActionsEl = ref<HTMLElement | null>(null)
+const historyToolbarDragging = ref(false)
+const historyToolbarPosition = ref<{ x: number; y: number } | null>(null)
+let historyToolbarPointerId: number | null = null
+let historyToolbarGrabOffset = { x: 0, y: 0 }
+let historyToolbarDragHandle: HTMLElement | null = null
 const importTemplateInput = ref<HTMLInputElement | null>(null)
+const schemeShareMode = ref(false)
+const selectedSchemeShareIds = ref<string[]>([])
 const modeSwitchPulse = ref(false)
 const customStaticLayout = ref<CustomStaticLayout | null>(null)
 const customTemplates = ref<CustomStaticLayoutTemplate[]>([])
@@ -1346,7 +1410,7 @@ const donationQrImage = computed(() => (isDark.value ? images.wx_code_dark : ima
 const donationStaticSchemeCount = computed(() => PRESET_STYLE_BASES.length + getUserCustomTemplates(customTemplates.value).length)
 const donationDynamicSchemeCount = computed(() => PRESET_STYLE_BASES.length)
 const donationSchemeCount = computed(() => donationStaticSchemeCount.value + donationDynamicSchemeCount.value)
-const donationHistoryCount = computed(() => history.value.length || 0)
+const defaultSchemeIsAnimated = computed(() => defaultSchemeId.value.startsWith('animated_'))
 const sourceSortDisabled = computed(() => controlsLocked.value || sourceSortLocked.value)
 
 const editDialog = ref(false)
@@ -1441,10 +1505,18 @@ function isSystemTemplate(template?: CustomStaticLayoutTemplate | null) {
 
 function normalizeTemplateList(templates?: CustomStaticLayoutTemplate[] | null) {
   if (!Array.isArray(templates)) return []
-  return templates.map((tpl) => ({
-    ...tpl,
-    layout: cloneLayout(tpl.layout),
-  }))
+  const seen = new Set<string>()
+  return templates.reduce<CustomStaticLayoutTemplate[]>((normalized, tpl) => {
+    const id = String(tpl?.id || '').trim()
+    if (!id || seen.has(id)) return normalized
+    seen.add(id)
+    normalized.push({
+      ...tpl,
+      id,
+      layout: cloneLayout(tpl.layout),
+    })
+    return normalized
+  }, [])
 }
 
 function getTemplateById(id: string | null) {
@@ -1573,7 +1645,7 @@ const schemeListKey = computed(() =>
   `${styleVariant.value}:${schemeListItems.value.map((item) => item.id).join('|')}`,
 )
 
-function getReservedSchemeNames(ignoreId?: string) {
+function getReservedSchemeNames(ignoreId?: string, templates = customTemplates.value) {
   const names = new Set<string>()
   for (const baseStyle of PRESET_STYLE_BASES) {
     const presetId = `__preset_${baseStyle}`
@@ -1581,7 +1653,7 @@ function getReservedSchemeNames(ignoreId?: string) {
       names.add(getPresetSchemeTitle(baseStyle, getTemplateById(presetId)))
     }
   }
-  for (const template of customTemplates.value) {
+  for (const template of templates) {
     if (template.id === ignoreId) continue
     if (isSystemTemplate(template) && isPresetStaticStyle(template.baseStyle)) {
       names.add(getPresetSchemeTitle(template.baseStyle, template))
@@ -1594,9 +1666,9 @@ function getReservedSchemeNames(ignoreId?: string) {
   return names
 }
 
-function getUniqueTemplateName(name: string, ignoreId?: string) {
+function getUniqueTemplateName(name: string, ignoreId?: string, templates = customTemplates.value) {
   const baseName = String(name || '').trim() || '自定义方案'
-  const reserved = getReservedSchemeNames(ignoreId)
+  const reserved = getReservedSchemeNames(ignoreId, templates)
   if (!reserved.has(baseName)) return baseName
 
   let index = 2
@@ -2009,6 +2081,42 @@ const effectivePreviewSource = computed<PreviewSourcePayload | null>(() => {
     custom_static_layout: shouldUseCurrentLayout ? cloneLayout(customStaticLayout.value as CustomStaticLayout) : null,
   }
 })
+
+const brandTitleFontStyle = computed<Record<string, string>>(() => {
+  headerFontRevision.value
+  return {
+    '--yh-brand-zh-font': `"${getTemplateFontFaceName('chaohei')}"`,
+    '--yh-brand-en-font': `"${getTemplateFontFaceName('impact')}"`,
+  }
+})
+
+watch(
+  () => previewSource.value?.font_faces,
+  async (fontFaces) => {
+    await loadPreviewFontFaces(fontFaces)
+    headerFontRevision.value += 1
+    updateCompactHeader()
+  },
+  { deep: true, immediate: true },
+)
+
+function updateCompactHeader() {
+  if (typeof window === 'undefined' || !pageHeroEl.value || !pageShellEl.value) return
+  const heroRect = pageHeroEl.value.getBoundingClientRect()
+  const shellRect = pageShellEl.value.getBoundingClientRect()
+  const visible = heroRect.bottom <= 8
+  compactHeaderVisible.value = visible
+  if (!visible) return
+  const gutter = 8
+  const left = Math.max(gutter, Math.min(shellRect.left, window.innerWidth - gutter))
+  const width = Math.max(0, Math.min(shellRect.width, window.innerWidth - left - gutter))
+  compactHeaderStyle.value = {
+    '--yh-compact-left': `${left}px`,
+    '--yh-compact-width': `${width}px`,
+    ...brandTitleFontStyle.value,
+  }
+}
+
 const showMainPreviewSkeleton = computed(() => !effectivePreviewSource.value)
 const showStylePreviewSkeleton = computed(() => !previewSource.value)
 
@@ -2049,6 +2157,7 @@ function buildSchemePreviewSource(item: SchemeListItem): PreviewSourcePayload | 
 }
 
 function isSchemeItemActive(item: SchemeListItem) {
+  if (schemeShareMode.value) return false
   if (item.kind === 'preset') {
     return coverStyleBase.value === item.baseStyle
   }
@@ -2083,6 +2192,28 @@ async function selectSchemeItem(item: SchemeListItem) {
     return
   }
   await setCoverStyle(item.baseStyle)
+}
+
+function handleSchemeCardAction(item: SchemeListItem) {
+  if (!schemeShareMode.value) {
+    void selectSchemeItem(item)
+    return
+  }
+  const selected = new Set(selectedSchemeShareIds.value)
+  if (selected.has(item.id)) selected.delete(item.id)
+  else selected.add(item.id)
+  selectedSchemeShareIds.value = [...selected]
+}
+
+function startSchemeShare() {
+  if (shouldBlockLockedAction()) return
+  schemeShareMode.value = true
+  selectedSchemeShareIds.value = []
+}
+
+function stopSchemeShare() {
+  schemeShareMode.value = false
+  selectedSchemeShareIds.value = []
 }
 
 async function editSchemeItem(item: SchemeListItem) {
@@ -2593,6 +2724,29 @@ function applySelectedHistorySnapshot() {
   void restoreHistoryBatch(selectedHistorySnapshot.value.key, selectedHistorySnapshot.value.title)
 }
 
+async function applySelectedHistoryCovers() {
+  if (shouldBlockLockedAction()) return
+  const files = [...selectedHistoryPaths.value]
+  if (!files.length) return
+  try {
+    const resp = await props.api.post<{ code: number; data?: { restored?: number; skipped?: number; failed?: number }; msg?: string }>(
+      'plugin/MediaCoverGenerator/restore_history_covers',
+      { files },
+    )
+    if (!resp || resp.code !== 0) throw new Error(resp?.msg || '应用历史封面失败')
+    showEditorSaveStatus(`已应用：成功 ${resp.data?.restored || 0} 个，跳过 ${resp.data?.skipped || 0} 个，失败 ${resp.data?.failed || 0} 个`)
+  } catch (error) {
+    showEditorSaveStatus(error instanceof Error ? error.message : '应用历史封面失败')
+  }
+}
+
+function restoreHistoryGroup(group: HistoryGroup) {
+  if (controlsLocked.value || restoringBatchId.value) return
+  selectedHistorySnapshot.value = group
+  activeTimeRecordId.value = group.key
+  void restoreHistoryBatch(group.key, group.title)
+}
+
 function historyGroupPhase(groupKey: string) {
   return expandedHistoryGroupId.value === groupKey ? historyExpansionPhase.value : 'collapsed'
 }
@@ -2862,6 +3016,17 @@ function buildTemplateExportPayload(active: CustomStaticLayoutTemplate) {
   }
 }
 
+function buildTemplateBundleExportPayload(templates: CustomStaticLayoutTemplate[]) {
+  return {
+    schema: 'mcr-custom-static-template-bundle/v1',
+    exported_at: new Date().toISOString(),
+    templates: templates.map((template) => ({
+      ...template,
+      layout: cloneLayout(template.layout),
+    })),
+  }
+}
+
 function stringifyTemplateExport(active: CustomStaticLayoutTemplate) {
   return JSON.stringify(buildTemplateExportPayload(active), null, 2)
 }
@@ -2927,6 +3092,35 @@ async function exportSchemeItemToClipboard(item: SchemeListItem) {
   }
 }
 
+function selectedSchemeTemplates() {
+  return selectedSchemeShareIds.value
+    .map((id) => schemeListItems.value.find((item) => item.id === id))
+    .filter((item): item is SchemeListItem => Boolean(item))
+    .map((item) => resolveSchemeTemplate(item))
+    .filter((template): template is CustomStaticLayoutTemplate => Boolean(template))
+}
+
+async function exportSelectedSchemesToClipboard() {
+  const templates = selectedSchemeTemplates()
+  if (!templates.length) return
+  const text = JSON.stringify(buildTemplateBundleExportPayload(templates), null, 2)
+  try {
+    await writeClipboardText(text)
+    showEditorSaveStatus(`已复制 ${templates.length} 个方案`)
+    stopSchemeShare()
+  } catch (error) {
+    console.error('copy template bundle failed', error)
+    window.prompt('剪切板不可用，请手动复制方案 JSON', text)
+  }
+}
+
+function exportSelectedSchemesToFile() {
+  const templates = selectedSchemeTemplates()
+  if (!templates.length) return
+  downloadTextFile('yahaha-cover-schemes.json', JSON.stringify(buildTemplateBundleExportPayload(templates), null, 2))
+  stopSchemeShare()
+}
+
 function triggerImportTemplate() {
   if (shouldBlockLockedAction()) return
   importTemplateInput.value?.click()
@@ -2934,24 +3128,41 @@ function triggerImportTemplate() {
 
 async function importTemplateFromRaw(raw: string, fallbackName: string) {
   const parsed = JSON.parse(raw)
-  const imported = parsed?.template || parsed
-  if (!imported?.layout?.layers || !Array.isArray(imported.layout.layers)) {
+  const candidates = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.templates)
+      ? parsed.templates
+      : [parsed?.template || parsed]
+  const validCandidates = candidates.filter((imported: any) => (
+    imported?.layout?.layers && Array.isArray(imported.layout.layers)
+  ))
+  if (!validCandidates.length) {
     throw new Error('invalid template file')
   }
   await persistCurrentEditorState()
-  const id = createLayoutId()
-  const importedName = String(imported.name || fallbackName || `导入方案 ${getUserCustomTemplates().length + 1}`)
-  const template: CustomStaticLayoutTemplate = {
-    id,
-    name: getUniqueTemplateName(importedName),
-    layout: cloneLayout(imported.layout),
-    baseStyle: 'custom_static',
+  let nextTemplates = [...customTemplates.value]
+  let lastImportedId = ''
+  for (const [index, imported] of validCandidates.entries()) {
+    const id = createLayoutId()
+    const fallback = validCandidates.length > 1
+      ? `${fallbackName || '导入方案'} ${index + 1}`
+      : fallbackName
+    const importedName = String(imported.name || fallback || `导入方案 ${getUserCustomTemplates(nextTemplates).length + 1}`)
+    const template: CustomStaticLayoutTemplate = {
+      id,
+      name: getUniqueTemplateName(importedName, undefined, nextTemplates),
+      layout: cloneLayout(imported.layout),
+      baseStyle: 'custom_static',
+    }
+    nextTemplates.push(template)
+    lastImportedId = id
   }
-  customTemplates.value = [...customTemplates.value, template]
-  setSelectedCustomTemplate(id)
+  customTemplates.value = normalizeTemplateList(nextTemplates)
+  setSelectedCustomTemplate(lastImportedId)
   backendPreview.value = null
   await setCoverStyle('custom_static')
   await persistCustomLayoutState()
+  showEditorSaveStatus(`已导入 ${validCandidates.length} 个方案`)
 }
 
 async function importTemplateFromClipboard() {
@@ -3096,6 +3307,9 @@ async function loadStatusInner(): Promise<boolean> {
       generationTotal.value = Number(data.generation_total || 0)
       generationLabel.value = String(data.generation_label || '')
       statusLoaded.value = true
+      defaultSchemeId.value = String(data.default_scheme_id || data.cover_style_base || 'single_1')
+      donationHistoryCount.value = Math.max(0, Number(data.history_cover_count || 0) || 0)
+      donationExecutionCount.value = Math.max(0, Number(data.execution_count || 0) || 0)
       coverStyleBase.value = normalizeCoverStyleBase(data.cover_style_base)
       styleVariant.value = data.cover_style_variant === 'animated' ? 'animated' : 'static'
       syncAnimatedSettings(data, coverStyleBase.value)
@@ -3218,9 +3432,12 @@ async function loadPreviewSources(requiredItems?: number, forceRefresh = false):
   const requestId = ++previewSourceRequestId
   if (!forceRefresh) {
     const cached = await getPreviewCache<PreviewSourcePayload>(baseKey, capacity)
-      if (cached?.images?.length) {
-        previewSource.value = cached
+    if (cached?.images?.length) {
+      previewSource.value = cached
+      const cachedCount = Number(cached.library_item_count)
+      if (Number.isFinite(cachedCount) && cachedCount >= 0) {
         return true
+      }
     }
   }
   previewSourcesLoading.value = !previewSource.value?.images?.length
@@ -3354,11 +3571,13 @@ async function setCoverStyle(targetBase: CoverStyleBase, targetVariant: CoverSty
       coverStyleBase.value = 'custom_static'
       styleVariant.value = 'static'
       await props.api.post('plugin/MediaCoverGenerator/set_cover_style?style=custom_static')
+      defaultSchemeId.value = selectedCustomTemplateId.value || 'custom_static'
     } else {
       coverStyleBase.value = targetBase
       styleVariant.value = targetVariant
       const style = `${targetVariant}_${targetBase.split('_')[1]}`
       await props.api.post(`plugin/MediaCoverGenerator/set_cover_style?style=${style}`)
+      defaultSchemeId.value = style
     }
 
     showEditorSaveStatus('已自动保存')
@@ -3385,6 +3604,7 @@ async function toggleStyleVariant() {
     await persistCurrentEditorState()
     styleVariant.value = nextVariant
     await props.api.post('plugin/MediaCoverGenerator/toggle_style_variant')
+    defaultSchemeId.value = `${nextVariant}_${coverStyleBase.value.split('_')[1] || '1'}`
     showEditorSaveStatus('已自动保存')
     backendPreview.value = null
     hydrateEditorForCurrentStyle()
@@ -3434,7 +3654,6 @@ async function startGeneration() {
     generationCurrent.value = 0
     generationTotal.value = 0
     generationLabel.value = '准备生成'
-    incrementDonationExecutionCount()
     startGenerationStatusPoller()
     await loadStatus()
     emit('action')
@@ -3661,13 +3880,6 @@ function acknowledgeDonation() {
   }
 }
 
-function incrementDonationExecutionCount() {
-  donationExecutionCount.value += 1
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(DONATION_RUN_COUNT_STORAGE_KEY, String(donationExecutionCount.value))
-  }
-}
-
 function normalizeMoviePilotAvatarUrl(value: unknown): string {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!raw) return ''
@@ -3833,6 +4045,25 @@ function syncBackendStatusWhenVisible() {
 
 function updateHistoryFloatingActionsPosition() {
   if (typeof window === 'undefined') return
+  if (historyToolbarDragging.value) return
+  const toolbar = historyFloatingActionsEl.value
+  if (historyToolbarPosition.value && toolbar) {
+    const padding = 10
+    const x = Math.min(Math.max(padding, historyToolbarPosition.value.x), Math.max(padding, window.innerWidth - toolbar.offsetWidth - padding))
+    const y = Math.min(Math.max(padding, historyToolbarPosition.value.y), Math.max(padding, window.innerHeight - toolbar.offsetHeight - padding))
+    historyToolbarPosition.value = { x, y }
+    historyFloatingStyle.value = { left: `${Math.round(x)}px`, top: `${Math.round(y)}px`, bottom: 'auto', transform: 'none' }
+    return
+  }
+  if (window.matchMedia('(max-width: 600px)').matches) {
+    historyFloatingStyle.value = {
+      left: '50%',
+      top: 'auto',
+      bottom: 'max(12px, env(safe-area-inset-bottom))',
+      transform: 'translateX(-50%)',
+    }
+    return
+  }
   const stickyTop = Math.max(72, Math.min(112, window.innerHeight * 0.08))
   const headerRect = historyHeaderEl.value?.getBoundingClientRect()
   const preferredTop = headerRect ? headerRect.bottom + 12 : stickyTop
@@ -3840,14 +4071,69 @@ function updateHistoryFloatingActionsPosition() {
   historyFloatingStyle.value = {
     left: '50%',
     top: `${Math.round(top)}px`,
+    bottom: 'auto',
     transform: 'translateX(-50%)',
   }
+}
+
+function startHistoryToolbarDrag(event: PointerEvent) {
+  const toolbar = historyFloatingActionsEl.value
+  const handle = event.currentTarget as HTMLElement | null
+  if (!toolbar || !handle || typeof window === 'undefined') return
+  event.preventDefault()
+  const rect = toolbar.getBoundingClientRect()
+  historyToolbarPointerId = event.pointerId
+  historyToolbarGrabOffset = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+  historyToolbarPosition.value = { x: rect.left, y: rect.top }
+  historyToolbarDragging.value = true
+  historyToolbarDragHandle = handle
+  handle.setPointerCapture?.(event.pointerId)
+  window.addEventListener('pointermove', moveHistoryToolbarDrag, { passive: false })
+  window.addEventListener('pointerup', endHistoryToolbarDrag)
+  window.addEventListener('pointercancel', endHistoryToolbarDrag)
+  updateHistoryFloatingActionsPosition()
+}
+
+function moveHistoryToolbarDrag(event: PointerEvent) {
+  if (!historyToolbarDragging.value || historyToolbarPointerId !== event.pointerId || typeof window === 'undefined') return
+  event.preventDefault()
+  const toolbar = historyFloatingActionsEl.value
+  if (!toolbar) return
+  const padding = 10
+  historyToolbarPosition.value = {
+    x: Math.min(Math.max(padding, event.clientX - historyToolbarGrabOffset.x), Math.max(padding, window.innerWidth - toolbar.offsetWidth - padding)),
+    y: Math.min(Math.max(padding, event.clientY - historyToolbarGrabOffset.y), Math.max(padding, window.innerHeight - toolbar.offsetHeight - padding)),
+  }
+  historyFloatingStyle.value = {
+    left: `${Math.round(historyToolbarPosition.value.x)}px`,
+    top: `${Math.round(historyToolbarPosition.value.y)}px`,
+    bottom: 'auto',
+    transform: 'none',
+  }
+}
+
+function endHistoryToolbarDrag(event: PointerEvent) {
+  if (historyToolbarPointerId !== event.pointerId) return
+  const handle = historyToolbarDragHandle
+  if (handle?.hasPointerCapture?.(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+  historyToolbarPointerId = null
+  historyToolbarDragHandle = null
+  historyToolbarDragging.value = false
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pointermove', moveHistoryToolbarDrag)
+    window.removeEventListener('pointerup', endHistoryToolbarDrag)
+    window.removeEventListener('pointercancel', endHistoryToolbarDrag)
+  }
+  updateHistoryFloatingActionsPosition()
 }
 
 watch(
   () => [selectedHistoryPaths.value.length, pageTab.value, history.length],
   () => {
     if (typeof window === 'undefined') return
+    if (!selectedHistoryPaths.value.length || pageTab.value !== 'history-tab') {
+      historyToolbarPosition.value = null
+    }
     window.requestAnimationFrame(updateHistoryFloatingActionsPosition)
   },
 )
@@ -3905,14 +4191,15 @@ onMounted(async () => {
       window.localStorage.getItem(DONATION_ACK_STORAGE_KEY) === '1'
       || window.localStorage.getItem(DONATION_LEGACY_ACK_STORAGE_KEY) === '1'
     donationAvatarSource.value = window.localStorage.getItem(DONATION_AVATAR_STORAGE_KEY) === 'mp' ? 'mp' : 'developer'
-    donationExecutionCount.value = Math.max(0, Number(window.localStorage.getItem(DONATION_RUN_COUNT_STORAGE_KEY) || 0) || 0)
     void discoverMoviePilotAvatar()
     syncSystemTheme()
     pageThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     pageThemeMediaQuery.addEventListener?.('change', syncSystemTheme)
 	    window.addEventListener('focus', syncBackendStatusWhenVisible)
 	    window.addEventListener('scroll', updateHistoryFloatingActionsPosition, true)
+	    window.addEventListener('scroll', updateCompactHeader, true)
 	    window.addEventListener('resize', updateHistoryFloatingActionsPosition)
+	    window.addEventListener('resize', updateCompactHeader)
 	    window.addEventListener('resize', updatePreviewBayHeight)
 	    window.addEventListener('scroll', scheduleTimeMachineDepth, true)
 	    window.addEventListener('resize', scheduleTimeMachineDepth)
@@ -3943,7 +4230,10 @@ onMounted(async () => {
 		  await loadStatus()
 	  if (isGenerating.value) return
 	  await loadPreviewSources()
-	  window.requestAnimationFrame(updatePreviewBayHeight)
+	  window.requestAnimationFrame(() => {
+	    updatePreviewBayHeight()
+	    updateCompactHeader()
+	  })
 	})
 
 onBeforeUnmount(() => {
@@ -3953,10 +4243,15 @@ onBeforeUnmount(() => {
     pageThemeMediaQuery?.removeEventListener?.('change', syncSystemTheme)
 	    window.removeEventListener('focus', syncBackendStatusWhenVisible)
 	    window.removeEventListener('scroll', updateHistoryFloatingActionsPosition, true)
+	    window.removeEventListener('scroll', updateCompactHeader, true)
 	    window.removeEventListener('resize', updateHistoryFloatingActionsPosition)
+	    window.removeEventListener('resize', updateCompactHeader)
 	    window.removeEventListener('resize', updatePreviewBayHeight)
 	    window.removeEventListener('scroll', scheduleTimeMachineDepth, true)
 	    window.removeEventListener('resize', scheduleTimeMachineDepth)
+	    window.removeEventListener('pointermove', moveHistoryToolbarDrag)
+	    window.removeEventListener('pointerup', endHistoryToolbarDrag)
+	    window.removeEventListener('pointercancel', endHistoryToolbarDrag)
 	    if (timeMachineFrame) window.cancelAnimationFrame(timeMachineFrame)
 	  }
   if (typeof document !== 'undefined') {
@@ -6628,6 +6923,43 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(18px);
 }
 
+.mcr-history-floating-actions.is-dragging {
+  user-select: none;
+  box-shadow: 0 22px 54px rgba(var(--mcr-rgb-shadow), 0.22);
+}
+
+.mcr-history-floating-header,
+.mcr-history-floating-row {
+  display: contents;
+}
+
+.mcr-history-floating-drag-handle {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mcr-color-on-surface-variant);
+  cursor: grab;
+  touch-action: none;
+}
+
+.mcr-history-floating-drag-handle:hover,
+.mcr-history-floating-drag-handle:focus-visible {
+  background: rgba(var(--mcr-rgb-primary-fixed), 0.2);
+  color: var(--mcr-color-primary);
+  outline: none;
+}
+
+.mcr-history-floating-drag-handle:active,
+.mcr-history-floating-actions.is-dragging .mcr-history-floating-drag-handle {
+  cursor: grabbing;
+}
+
 .mcr-history-floating-button {
   min-height: 32px;
   display: inline-flex;
@@ -7716,15 +8048,45 @@ onBeforeUnmount(() => {
     border-radius: 18px;
   }
 
+  .mcr-history-floating-header {
+    order: 0;
+    width: 100%;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 6px;
+  }
+
+  .mcr-history-floating-header .mcr-history-floating-drag-handle {
+    margin-left: auto;
+  }
+
+  .mcr-history-floating-row {
+    width: 100%;
+    display: grid;
+    gap: 6px;
+  }
+
+  .mcr-history-floating-row--actions {
+    order: 1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mcr-history-floating-row--downloads {
+    order: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mcr-history-selection-count {
-    flex: 1 0 100%;
+    flex: 1 1 auto;
     padding: 0;
-    text-align: center;
+    text-align: left;
     font-size: 11px;
   }
 
   .mcr-history-floating-button {
-    flex: 1 1 calc(50% - 6px);
+    width: 100%;
     min-height: 28px;
     padding: 0 8px;
     font-size: 11px;
@@ -9527,15 +9889,33 @@ onBeforeUnmount(() => {
   transform: none !important;
 }
 .mcr-history-group--time-machine.is-right { grid-template-areas: "meta axis poster"; }
-.mcr-time-machine-poster { grid-area: poster; width: min(100%, 430px); justify-self: center; }
-.mcr-time-machine-meta { grid-area: meta; min-width: 0; display: grid; justify-items: start; gap: 5px; padding: 14px 18px; }
-.mcr-history-group--time-machine.is-right .mcr-time-machine-meta { justify-items: end; text-align: right; }
-.mcr-time-machine-meta strong { max-width: 100%; overflow: hidden; color: var(--color-text-main); font-size: clamp(15px, 1.6vw, 20px); font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
-.mcr-time-machine-meta span { color: var(--color-text-muted); font-size: 12px; font-weight: 700; }
-.mcr-time-machine-meta button { min-height: 38px; margin-top: 4px; padding: 7px 13px; border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface)); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.mcr-time-machine-poster {
+  --history-stack-origin-x: calc(100% - var(--history-poster-width) - 72px);
+  grid-area: poster;
+  width: min(100%, 430px);
+  justify-self: end;
+  margin-right: -20px;
+}
+.mcr-history-group--time-machine.is-right .mcr-time-machine-poster {
+  --history-stack-origin-x: 0px;
+  justify-self: start;
+  margin-right: 0;
+  margin-left: -20px;
+}
+.mcr-time-machine-meta { grid-area: meta; min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 14px 18px 14px 60px; }
+.mcr-history-group--time-machine.is-right .mcr-time-machine-meta { justify-content: flex-end; padding-right: 60px; padding-left: 18px; text-align: right; }
+.mcr-time-machine-time { min-width: 0; display: grid; justify-items: start; gap: 4px; padding: 9px 11px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background-color 180ms ease, transform 100ms ease-out; }
+.mcr-history-group--time-machine.is-right .mcr-time-machine-time { justify-items: end; text-align: right; }
+.mcr-time-machine-time:hover,.mcr-time-machine-time:focus-visible { background: color-mix(in srgb, var(--color-primary-soft) 62%, var(--color-surface)); outline: none; }
+.mcr-time-machine-time:active { transform: scale(.97); }
+.mcr-time-machine-time strong { max-width: 100%; overflow: hidden; color: var(--color-text-main); font-size: clamp(15px, 1.6vw, 20px); font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.mcr-time-machine-time span { color: var(--color-text-muted); font-size: 12px; font-weight: 700; }
+.mcr-time-machine-restore { min-height: 36px; display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border)); border-radius: 12px; background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface)); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 800; white-space: nowrap; cursor: pointer; transition: transform 100ms ease-out, background-color 180ms ease; }
+.mcr-time-machine-restore:active { transform: scale(.96); }
+.mcr-time-machine-restore:disabled { cursor: wait; opacity: .52; }
 .mcr-time-machine-marker { grid-area: axis; position: relative; align-self: stretch; width: 100%; min-height: 176px; display: grid; place-items: center; border: 0; background: transparent; color: var(--color-text-muted); cursor: pointer; }
 .mcr-time-machine-marker::before { content: ''; position: absolute; top: -12px; bottom: -12px; left: 50%; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--color-border) 88%, transparent); transform: translateX(-50%); }
-.mcr-time-machine-marker::after { content: ''; position: absolute; top: 50%; left: -40px; right: -40px; border-top: 1px dashed color-mix(in srgb, var(--color-text-muted) 42%, transparent); transform: translateY(-50%); }
+.mcr-time-machine-marker::after { content: ''; position: absolute; top: 50%; left: -28px; right: -28px; border-top: 1px dashed color-mix(in srgb, var(--color-text-muted) 42%, transparent); transform: translateY(-50%); }
 .mcr-time-machine-marker i { position: relative; z-index: 1; width: 12px; height: 12px; border: 2px solid var(--color-surface); border-radius: 50%; background: currentColor; box-shadow: 0 0 0 1px var(--color-border); transition: width 180ms ease, height 180ms ease, color 180ms ease, box-shadow 180ms ease; }
 .mcr-time-machine-marker.is-active { color: var(--color-primary); }
 .mcr-time-machine-marker.is-active i { width: 19px; height: 19px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 15%, transparent); }
@@ -9544,10 +9924,14 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
   .mcr-history-group--time-machine { min-height: 140px; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
   .mcr-time-machine-marker { min-height: 140px; }
-  .mcr-time-machine-poster { width: min(100%, 240px); }
-  .mcr-time-machine-meta { gap: 3px; padding: 8px 5px; }
-  .mcr-time-machine-meta strong { font-size: 13px; }
-  .mcr-time-machine-meta span { font-size: 10px; }
+  .mcr-time-machine-poster { width: min(100%, 240px); margin-right: -10px; }
+  .mcr-history-group--time-machine.is-right .mcr-time-machine-poster { margin-left: -10px; }
+  .mcr-time-machine-meta { gap: 5px; padding: 8px 5px 8px 28px; }
+  .mcr-history-group--time-machine.is-right .mcr-time-machine-meta { padding-right: 28px; padding-left: 5px; }
+  .mcr-time-machine-time { padding: 7px 8px; }
+  .mcr-time-machine-time strong { font-size: 13px; }
+  .mcr-time-machine-time span { font-size: 10px; }
+  .mcr-time-machine-restore { min-height: 32px; padding: 5px 7px; font-size: 10px; }
   .mcr-time-machine-marker::after { left: -24px; right: -24px; }
   .mcr-history-groups--library { gap: 9px !important; }
   .mcr-history-groups--library > .mcr-history-group { width: calc((100% - 9px) / 2); flex-basis: calc((100% - 9px) / 2); }
@@ -9555,25 +9939,32 @@ onBeforeUnmount(() => {
 @media (max-width: 600px) {
   .mcr-history-group--time-machine,
   .mcr-history-group--time-machine.is-right {
-    min-height: 210px;
-    grid-template-columns: 42px minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "axis meta"
-      "axis poster";
+    min-height: 154px;
+    grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "poster axis meta";
   }
-  .mcr-time-machine-marker { min-height: 210px; grid-row: 1 / -1; }
+  .mcr-history-group--time-machine.is-right { grid-template-areas: "meta axis poster"; }
+  .mcr-time-machine-marker { min-height: 154px; grid-row: auto; }
   .mcr-time-machine-meta,
   .mcr-history-group--time-machine.is-right .mcr-time-machine-meta {
-    justify-items: start;
-    padding: 8px 8px 2px;
-    text-align: left;
+    gap: 4px;
+    padding: 6px 4px 6px 18px;
   }
-  .mcr-time-machine-poster { width: min(100%, 320px); justify-self: start; }
+  .mcr-history-group--time-machine.is-right .mcr-time-machine-meta {
+    justify-content: flex-end;
+    padding-right: 18px;
+    padding-left: 4px;
+    text-align: right;
+  }
+  .mcr-time-machine-poster { width: min(100%, 176px); justify-self: end; margin-right: -6px; }
+  .mcr-history-group--time-machine.is-right .mcr-time-machine-poster { justify-self: start; margin-right: 0; margin-left: -6px; }
+  .mcr-time-machine-restore { min-width: 32px; padding-inline: 6px; }
+  .mcr-time-machine-marker::after { left: -18px; right: -18px; }
 }
 @media (max-width: 360px) {
   .mcr-history-group--time-machine,
-  .mcr-history-group--time-machine.is-right { grid-template-columns: 38px minmax(0, 1fr); }
+  .mcr-history-group--time-machine.is-right { grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr); }
   .mcr-time-machine-meta { padding-inline: 2px; }
   .mcr-time-machine-meta strong { font-size: 12px; }
 }
@@ -10270,11 +10661,279 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
   transform: scale(.96);
 }
 
+.mcr-page-shell :deep(.mcr-history-toggle .mcr-history-mode-button--active) {
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.mcr-page-shell .mcr-scheme-row--share-mode {
+  cursor: pointer;
+}
+
+.mcr-page-shell .mcr-scheme-row--share-selected {
+  border-color: #1677ff !important;
+  background: #1677ff !important;
+  color: #fff !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28), 0 10px 22px rgba(22, 119, 255, .22) !important;
+}
+
+.mcr-page-shell .mcr-scheme-row--share-selected .mcr-scheme-row__body strong,
+.mcr-page-shell .mcr-scheme-row--share-selected .mcr-scheme-row__body span {
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.mcr-page-shell .mcr-scheme-row--share-selected .mcr-scheme-row__media {
+  border-color: rgba(255, 255, 255, .58) !important;
+}
+
+.mcr-page-shell .mcr-scheme-row--share-selected::after {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  content: '✓';
+  border: 1px solid rgba(255, 255, 255, .82);
+  border-radius: 50%;
+  background: rgba(9, 46, 101, .34);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.mcr-page-shell[data-mcr-theme="dark"] .mcr-scheme-row--share-selected {
+  border-color: #6ea2ff !important;
+  background: #286fdd !important;
+  box-shadow: inset 0 0 0 1px rgba(244, 247, 251, .24), 0 12px 28px rgba(0, 0, 0, .32) !important;
+}
+
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"]) {
+  border-color: #dfe8f6 !important;
+  background: #fff !important;
+  color: #182033 !important;
+  box-shadow: 0 12px 30px rgba(47, 76, 128, .14) !important;
+}
+
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"] .v-list-item),
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"] .v-list-item-title),
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"] .v-list-item__content) {
+  color: #182033 !important;
+  -webkit-text-fill-color: #182033 !important;
+}
+
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"] .v-list-item:hover) {
+  background: #eef5ff !important;
+  color: #1677ff !important;
+  -webkit-text-fill-color: #1677ff !important;
+}
+
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"] .v-list-item--disabled),
+:global(.v-overlay__content .mcr-template-action-menu[data-mcr-theme="light"] .v-list-item--disabled .v-list-item-title) {
+  color: #8a96b8 !important;
+  -webkit-text-fill-color: #8a96b8 !important;
+  opacity: 1 !important;
+}
+
+.mcr-page-shell .mcr-scheme-tail-button--sharing {
+  border-color: color-mix(in srgb, var(--color-primary) 48%, var(--color-border)) !important;
+  background: var(--color-primary-soft) !important;
+  color: var(--color-primary) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mcr-page-shell .yh-brand-title.is-loading {
     animation: none;
     opacity: .82;
     transform: none;
+  }
+}
+
+/* Keep the application chrome on the same subset-capable font path as the
+ * canvas preview without reintroducing CSS-only fallback fonts. */
+.mcr-page-shell .yh-brand-en-big {
+  font-family: var(--yh-brand-en-font, "Impact"), "Arial Narrow", sans-serif !important;
+  font-weight: 400 !important;
+}
+
+.mcr-page-shell .yh-brand-zh-overlap {
+  font-family: var(--yh-brand-zh-font, "McrFont_chaohei"), "PingFang SC", "Microsoft YaHei", sans-serif !important;
+  font-weight: 400 !important;
+  opacity: .8 !important;
+}
+
+.mcr-page-shell .yh-run-btn {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  transition:
+    width 220ms cubic-bezier(.2, .8, .2, 1),
+    min-width 220ms cubic-bezier(.2, .8, .2, 1),
+    border-radius 220ms cubic-bezier(.2, .8, .2, 1),
+    background-color 180ms ease,
+    transform 140ms ease !important;
+}
+
+.mcr-page-shell .yh-run-btn:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: scale(1.06);
+}
+
+.mcr-page-shell .yh-run-btn .yh-run-content {
+  padding: 0 !important;
+  color: var(--yahaha-blue) !important;
+  -webkit-text-fill-color: var(--yahaha-blue) !important;
+  transition: color 160ms ease;
+}
+
+.mcr-page-shell .yh-run-btn.is-running {
+  width: 112px !important;
+  min-width: 112px !important;
+  overflow: hidden !important;
+  border-radius: 13px !important;
+  background: var(--yahaha-blue) !important;
+}
+
+.mcr-page-shell .yh-run-btn.is-running .yh-run-content {
+  gap: 7px;
+  padding: 0 11px !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.mcr-page-shell .yh-run-btn .v-icon {
+  transition: transform 180ms ease;
+}
+
+.mcr-page-shell .yh-run-btn.is-running .v-icon {
+  transform: scale(.9);
+}
+
+.mcr-page-shell .yh-run-progress {
+  border-radius: inherit;
+  background: rgba(255, 255, 255, .22) !important;
+}
+
+.yh-compact-page-header {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: var(--yh-compact-left);
+  z-index: 58;
+  display: flex;
+  width: var(--yh-compact-width);
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid var(--yahaha-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  box-shadow: 0 10px 24px var(--color-shadow);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.yh-compact-page-header__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-main);
+  font-family: var(--yh-brand-zh-font, "McrFont_chaohei"), "PingFang SC", sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  opacity: .8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yh-compact-page-header__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.yh-compact-page-header .yh-run-btn,
+.yh-compact-page-header .yh-icon-btn {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  border-radius: 12px !important;
+}
+
+.yh-compact-page-header .yh-run-btn.is-running {
+  width: 88px !important;
+  min-width: 88px !important;
+}
+
+.yh-compact-page-header .yh-run-count {
+  min-width: 31px;
+  font-size: 12px;
+}
+
+.yh-compact-header-enter-active,
+.yh-compact-header-leave-active {
+  transition: opacity 160ms ease, transform 180ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.yh-compact-header-enter-from,
+.yh-compact-header-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@media (max-width: 599px) {
+  .mcr-page-shell .blueprint-meta-grid.mcr-render-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .mcr-page-shell .mcr-render-option {
+    gap: 3px;
+    padding: 8px 6px;
+    border-right: 1px solid var(--color-border) !important;
+    border-bottom: 0 !important;
+  }
+
+  .mcr-page-shell .mcr-render-option:last-child {
+    border-right: 0 !important;
+  }
+
+  .mcr-page-shell .mcr-render-option > span,
+  .mcr-page-shell .mcr-render-option .yh-field-label {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mcr-page-shell .mcr-render-option select,
+  .mcr-page-shell .mcr-render-option__value {
+    min-width: 0;
+    padding-inline: 6px !important;
+    font-size: 12px;
+  }
+
+  .mcr-page-shell .yh-inline-lock-badge {
+    display: none;
+  }
+
+  .yh-compact-page-header {
+    gap: 8px;
+    padding-left: 12px;
+  }
+
+  .yh-compact-page-header__title {
+    font-size: 16px;
   }
 }
 </style>

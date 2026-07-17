@@ -1,4 +1,5 @@
 import type {
+  CustomBadgeLayer,
   CustomGroupLayer,
   CustomImageLayer,
   CustomStaticLayout,
@@ -8,7 +9,7 @@ import type {
   SimulationParams,
   TemplateLayer,
 } from '../types/plugin'
-import { isCustomTextLayer, isImageLayer, isMainTitleLayer, isTextLayer } from './customLayout'
+import { isBadgeLayer, isCustomTextLayer, isImageLayer, isMainTitleLayer, isTextLayer } from './customLayout'
 import { resolveBlendColor } from './renderSimulation'
 import { normalizeTemplate } from './templateSchema'
 import { getTemplateFontFamilyStack } from '../constants/fonts'
@@ -192,7 +193,8 @@ function getFittedImageFrame(layer: CustomImageLayer, source: PreviewSourcePaylo
 
 function getFilterId(layer: TemplateLayer) {
   const blur = Number(layer.blur ?? layer.effects?.blur ?? 0)
-  if (!blur) return ''
+  const grain = Number(layer.grain ?? layer.effects?.grain ?? 0)
+  if (!blur && !grain) return ''
   return `fx-${escapeXml(layer.id)}`
 }
 
@@ -200,11 +202,22 @@ function renderFilter(layer: TemplateLayer, canvasWidth: number, canvasHeight: n
   const id = getFilterId(layer)
   if (!id) return ''
   const blur = Math.max(0, Number(layer.blur ?? layer.effects?.blur ?? 0))
+  const grain = clamp(Number(layer.grain ?? layer.effects?.grain ?? 0), 0, 1)
   const nodes = []
+  let current = 'SourceGraphic'
   if (blur) {
     nodes.push(`<feGaussianBlur in="SourceGraphic" stdDeviation="${blur}" result="blurred"/>`)
-    nodes.push('<feMerge><feMergeNode in="blurred"/></feMerge>')
+    nodes.push('<feComposite in="blurred" in2="SourceAlpha" operator="in" result="boundedBlur"/>')
+    current = 'boundedBlur'
   }
+  if (grain) {
+    nodes.push(`<feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="2" seed="23" result="layerNoise"/>`)
+    nodes.push('<feComposite in="layerNoise" in2="SourceAlpha" operator="in" result="boundedNoise"/>')
+    nodes.push(`<feComponentTransfer in="boundedNoise" result="softNoise"><feFuncA type="linear" slope="${Math.min(0.42, grain * 0.34)}"/></feComponentTransfer>`)
+    nodes.push(`<feBlend in="${current}" in2="softNoise" mode="overlay" result="grainOutput"/>`)
+    current = 'grainOutput'
+  }
+  nodes.push(`<feComposite in="${current}" in2="SourceAlpha" operator="in"/>`)
   return `<filter id="${id}" x="${-canvasWidth}" y="${-canvasHeight}" width="${canvasWidth * 3}" height="${canvasHeight * 3}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">${nodes.join('')}</filter>`
 }
 
@@ -307,8 +320,57 @@ function getTextContent(layer: CustomTitleLayer | CustomTextLayer, source: Previ
   return source?.titles.en || ''
 }
 
-function getFontFamily(layer: CustomTitleLayer | CustomTextLayer, text: string) {
+function getFontFamily(layer: CustomTitleLayer | CustomTextLayer | CustomBadgeLayer, text: string) {
   return getTemplateFontFamilyStack(layer.fontFamily || 'main_title', text)
+}
+
+function getBadgeContent(layer: CustomBadgeLayer, source: PreviewSourcePayload | null) {
+  const mode = layer.countMode || 'episodes'
+  const count = Number(source?.library_item_counts?.[mode] ?? source?.library_item_count)
+  const value = Number.isFinite(count) && count >= 0 ? Math.trunc(count).toLocaleString('zh-CN') : '--'
+  return String(layer.content || '{count} 部').replaceAll('{count}', value)
+}
+
+function renderBadgeLayer(layer: CustomBadgeLayer, source: PreviewSourcePayload | null, options: RenderOptions) {
+  const text = getBadgeContent(layer, source)
+  const x = Number(layer.x || 0)
+  const y = Number(layer.y || 0)
+  const width = Math.max(1, Number(layer.width || 1))
+  const height = Math.max(1, Number(layer.height || 1))
+  const shape = layer.shape || 'pill'
+  const radius = shape === 'pill'
+    ? height / 2
+    : shape === 'rectangle'
+      ? 0
+      : shape === 'circle'
+        ? Math.min(width, height) / 2
+        : Math.max(0, Number(layer.radius ?? 24))
+  const fontSize = Math.max(1, Number(layer.fontSize || 46))
+  const family = getFontFamily(layer, text)
+  const background = layer.backgroundColor || '#007aff'
+  const foreground = resolveTemplateColor(
+    layer.colorSource || 'custom',
+    layer.color || '#ffffff',
+    source,
+    { blur: 0, colorRatio: 0, colorSource: 'custom', customColor: '#ffffff' },
+    '#ffffff',
+  ) || '#ffffff'
+  const borderWidth = Math.max(0, Number(layer.borderWidth || 0))
+  const border = borderWidth
+    ? ` stroke="${escapeXml(layer.borderColor || '#ffffff')}" stroke-width="${borderWidth}"`
+    : ''
+  const opacity = clamp(Number(layer.opacity ?? layer.transform?.opacity ?? 1), 0, 1)
+  const filterId = getFilterId(layer)
+  const filter = filterId ? ` filter="url(#${filterId})"` : ''
+  const pointer = options.interactive ? ` data-layer-id="${escapeXml(layer.id)}" style="cursor:pointer"` : ''
+  const shadow = getShadowStyle(layer)
+  const shadowNode = shadow
+    ? `<rect x="${x + shadow.offsetX}" y="${y + shadow.offsetY}" width="${width}" height="${height}" rx="${radius}" ry="${radius}" fill="${escapeXml(shadow.color)}" opacity="${shadow.opacity}" style="filter: blur(${shadow.blur}px);"/>`
+    : ''
+  const align = layer.textAlign === 'left' || layer.textAlign === 'right' ? layer.textAlign : 'center'
+  const textX = align === 'left' ? x + Math.min(28, height * 0.3) : align === 'right' ? x + width - Math.min(28, height * 0.3) : x + width / 2
+  const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle'
+  return `<g${pointer}${getLayerTransform(layer)} opacity="${opacity}"${filter}>${shadowNode}<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${radius}" ry="${radius}" fill="${escapeXml(background)}"${border}/><text x="${textX}" y="${y + height / 2}" dy="0.35em" font-family="${escapeXml(family)}" font-size="${fontSize}" font-weight="700" fill="${escapeXml(foreground)}" text-anchor="${anchor}">${escapeXml(text)}</text></g>`
 }
 
 function getTextMaskMode(layer: CustomTitleLayer | CustomTextLayer) {
@@ -492,7 +554,9 @@ function renderImageLayer(layer: CustomImageLayer, source: PreviewSourcePayload 
   const blendNode = blendColor && colorRatio > 0
     ? `<rect x="${layer.x}" y="${layer.y}" width="${layer.width}" height="${layer.height}" rx="${Math.max(0, Number(layer.radius || 0))}" ry="${Math.max(0, Number(layer.radius || 0))}" fill="${escapeXml(blendColor)}" opacity="${colorRatio}"${hasClip ? ` clip-path="url(#clip-${escapeXml(layer.id)})"` : ''}/>`
     : ''
-  return `<g${pointer}${getLayerTransform(layer)} opacity="${opacity}"${filter}>${shadowNode}${placeholderNode}${imageNode}${blendNode}</g>`
+  const visualNode = `<g${filter}>${placeholderNode}${imageNode}${blendNode}</g>`
+  const boundedVisual = hasClip ? `<g${clipPath}>${visualNode}</g>` : visualNode
+  return `<g${pointer}${getLayerTransform(layer)} opacity="${opacity}">${shadowNode}${boundedVisual}</g>`
 }
 
 function renderTextLayer(layer: CustomTitleLayer | CustomTextLayer, source: PreviewSourcePayload | null, options: RenderOptions) {
@@ -552,6 +616,7 @@ function renderLayer(layer: TemplateLayer, source: PreviewSourcePayload | null, 
     return `<g${pointer}${getLayerTransform(group)} opacity="${opacity}">${[...(group.children || [])].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map((child) => renderLayer(child, source, options)).join('')}</g>`
   }
   if (isImageLayer(layer)) return renderImageLayer(layer, source, options)
+  if (isBadgeLayer(layer)) return renderBadgeLayer(layer, source, options)
   if (isTextLayer(layer)) return renderTextLayer(layer, source, options)
   return ''
 }
@@ -581,13 +646,22 @@ export function renderTemplateSvg(
   const bgBlur = Math.max(0, Number(template.background?.blur ?? params.blur ?? 0))
   const gradientColor = getBackgroundColor(template, source, params, options.autoBlendColor)
   const gradientColor2 = template.background?.color2 || getThemeColor('--mcr-cover-deep-gradient')
+  const gradientStartOpacity = clamp(Number(template.background?.gradientStartOpacity ?? 1), 0, 1)
+  const gradientEndOpacity = clamp(Number(template.background?.gradientEndOpacity ?? 1), 0, 1)
+  const gradientDirection = String(template.background?.gradientDirection || 'diagonal')
+  const gradientVector = {
+    horizontal: 'x1="0%" y1="0%" x2="100%" y2="0%"',
+    vertical: 'x1="0%" y1="0%" x2="0%" y2="100%"',
+    'reverse-diagonal': 'x1="0%" y1="100%" x2="100%" y2="0%"',
+    diagonal: 'x1="0%" y1="0%" x2="100%" y2="100%"',
+  }[gradientDirection] || 'x1="0%" y1="0%" x2="100%" y2="100%"'
   const filmGrainFilter = '<filter id="mcr-film-grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" seed="17" result="noise"/><feColorMatrix in="noise" type="matrix" values="0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0.33 0.33 0.33 0 0 0 0 0 0.48 0" result="monoNoise"/><feComponentTransfer in="monoNoise"><feFuncR type="linear" slope="1.8" intercept="-0.38"/><feFuncG type="linear" slope="1.8" intercept="-0.38"/><feFuncB type="linear" slope="1.8" intercept="-0.38"/></feComponentTransfer></filter>'
   const backgroundMaskPoints = getMaskPolygonPoints(template.background?.maskPolygon, 0, 0, width, height)
   const backgroundMaskDef = backgroundMaskPoints
     ? `<clipPath id="mcr-bg-mask" clipPathUnits="userSpaceOnUse"><polygon points="${backgroundMaskPoints}"/></clipPath>`
     : ''
   const textMaskDef = renderTextMaskDef(template.layers, source, width, height)
-  const defs = `<defs><linearGradient id="mcr-bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${escapeXml(gradientColor)}"/><stop offset="100%" stop-color="${escapeXml(gradientColor2)}"/></linearGradient>${backgroundMaskDef}${textMaskDef}${filmGrainFilter}<filter id="mcr-bg-blur" x="${-width}" y="${-height}" width="${width * 3}" height="${height * 3}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="${bgBlur}"/></filter></defs>${renderDefs(template.layers, width, height)}`
+  const defs = `<defs><linearGradient id="mcr-bg-gradient" ${gradientVector}><stop offset="0%" stop-color="${escapeXml(gradientColor)}" stop-opacity="${gradientStartOpacity}"/><stop offset="100%" stop-color="${escapeXml(gradientColor2)}" stop-opacity="${gradientEndOpacity}"/></linearGradient>${backgroundMaskDef}${textMaskDef}${filmGrainFilter}<filter id="mcr-bg-blur" x="${-width}" y="${-height}" width="${width * 3}" height="${height * 3}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" stdDeviation="${bgBlur}"/></filter></defs>${renderDefs(template.layers, width, height)}`
   const layers = [...template.layers].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
   const backgroundZIndex = Number(template.background?.zIndex ?? 0)
   const underBackgroundLayers = layers.filter((layer) => Number(layer.zIndex || 0) < backgroundZIndex)

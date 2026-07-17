@@ -34,7 +34,7 @@ def _write(path: Path, value: dict[str, Any]) -> None:
 
 
 class HistoryStore:
-    def __init__(self, data_dir: Path, version: str = "2.2.3"):
+    def __init__(self, data_dir: Path, version: str = "2.2.4"):
         self.root = data_dir / "history"
         self.tmp = self.root / ".tmp"
         self.batches = self.root / "batches"
@@ -107,6 +107,13 @@ class HistoryStore:
             except Exception:
                 return []
         return value.get("batches", []) if isinstance(value, dict) else []
+
+    def stats(self) -> dict[str, int]:
+        batches = self.list_batches()
+        return {
+            "history_cover_count": sum(max(0, int(item.get("item_count") or 0)) for item in batches if isinstance(item, dict)),
+            "execution_count": len(batches),
+        }
 
     def get_batch(self, batch_id: str) -> dict[str, Any] | None:
         if not re.fullmatch(r"[A-Za-z0-9._-]+", str(batch_id or "")):

@@ -54,6 +54,10 @@ BUILTIN_FONT_FALLBACKS = {
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ],
+    "impact": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ],
     "yasong": [
         "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -295,6 +299,29 @@ class CoverService:
     def renderer(self) -> CoverRenderer:
         return CoverRenderer(DATA_DIR / "fonts")
 
+    @staticmethod
+    def normalized_library_item_counts(item_counts: Any, fallback_count: Any = 0) -> dict[str, int]:
+        """Keep real count units, but never render a generated library as an empty badge.
+
+        The server endpoint remains authoritative.  The fallback is only used when
+        every count request failed or returned no usable total while sources for the
+        same library have already been resolved.
+        """
+        raw_counts = item_counts if isinstance(item_counts, dict) else {}
+        normalized: dict[str, int] = {}
+        for mode in ("episodes", "titles", "seasons"):
+            try:
+                normalized[mode] = max(0, int(raw_counts.get(mode, 0) or 0))
+            except (TypeError, ValueError):
+                normalized[mode] = 0
+        try:
+            fallback = max(0, int(fallback_count or 0))
+        except (TypeError, ValueError):
+            fallback = 0
+        if fallback and not any(normalized.values()):
+            return {mode: fallback for mode in normalized}
+        return normalized
+
     def begin_history_batch(self, trigger: str) -> HistoryBatch | None:
         if not bool(self.config.get("history_enabled", True)):
             return None
@@ -503,7 +530,10 @@ class CoverService:
         if not bool(self.config.get("preview_font_enabled", True)):
             return {}
         paths = dict(resolved_paths or self.build_font_paths())
-        aliases = {"main_title", "subtitle", "custom_text"}
+        # Match the plugin: page chrome is rendered through the same preview
+        # font service, so the curated Chinese and English faces can be
+        # subsetted and cached alongside layout text.
+        aliases = {"main_title", "subtitle", "custom_text", "chaohei", "impact"}
 
         def visit(layers: list[Any]) -> None:
             for layer in layers:
@@ -529,6 +559,9 @@ class CoverService:
                     rendered_characters.append(str(layer.get("content") or (layer.get("textStyle") or {}).get("content") or ""))
         if isinstance(layout, dict):
             collect_text(layout.get("layers") or [])
+        # The page titles are also rendered with these faces. Keep their
+        # glyphs in a subset even before a custom layout has text layers.
+        rendered_characters.extend(["呀哈哈封面工坊配置", "Yahaha Cover StudioConfiguration"])
         preview_config["preview_rendered_characters"] = "".join(rendered_characters)
         selected_paths = [paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index()) for alias in aliases]
         self._preview_font_paths.update(str(path) for path in selected_paths if path)
@@ -566,9 +599,20 @@ class CoverService:
             {"id": "animated_3", "name": "动态风格 3"},
             {"id": "animated_4", "name": "动态风格 4"},
         ]
+        known_ids = {entry["id"] for entry in entries}
         for template in self.config.get("custom_static_layouts") or []:
-            if isinstance(template, dict) and str(template.get("id") or "").strip():
-                entries.append({"id": str(template["id"]), "name": str(template.get("name") or "自定义方案")})
+            if not isinstance(template, dict):
+                continue
+            template_id = str(template.get("id") or "").strip()
+            if (
+                not template_id
+                or template_id in known_ids
+                or bool(template.get("system"))
+                or template_id.startswith("__preset_")
+            ):
+                continue
+            known_ids.add(template_id)
+            entries.append({"id": template_id, "name": str(template.get("name") or "自定义方案")})
         return entries
 
     def scheme_keys_for_library(
@@ -897,6 +941,12 @@ class CoverService:
         sources_ready = time.perf_counter()
         title, subtitle, _texts = library_title_payload(self.config, library.name, client.server_name)
         render_config = self.render_config(style_config, library.name, style_name, client.server_name, scheme_layout)
+        item_counts = self.normalized_library_item_counts(
+            await client.get_library_item_counts(library.id, library.item_count),
+            len(image_paths),
+        )
+        render_config["library_item_counts"] = item_counts
+        render_config["library_item_count"] = item_counts.get("episodes", 0)
         output_path = output_dir / f"{slugify(library.name)}_{style_name}{self.output_suffix(render_config, style_name)}"
         await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or title), str(render_config.get("resolved_subtitle") or subtitle), style_name, render_config, output_path)
         rendered_at = time.perf_counter()
@@ -943,6 +993,8 @@ class CoverService:
         if not image_paths:
             raise ValueError("本地图片模式未找到素材，请将图片放入 /app/data/input 或 /app/data/input/媒体库名")
         render_config = self.render_config(style_config, "本地封面", style_name, custom_layout=scheme_layout)
+        render_config["library_item_count"] = len(image_paths)
+        render_config["library_item_counts"] = {mode: len(image_paths) for mode in ("episodes", "titles", "seasons")}
         output_path = output_dir / f"local_{style_name}{self.output_suffix(render_config, style_name)}"
         await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or "本地封面"), str(render_config.get("resolved_subtitle") or "Local Library"), style_name, render_config, output_path)
         result = {
@@ -975,6 +1027,8 @@ class CoverService:
             raise ValueError(f"本地媒体库没有可用图片: {library_name}")
         title, subtitle = title_for_library(self.config, library_name)
         render_config = self.render_config(style_config, library_name, style_name, custom_layout=scheme_layout)
+        render_config["library_item_count"] = len(image_paths)
+        render_config["library_item_counts"] = {mode: len(image_paths) for mode in ("episodes", "titles", "seasons")}
         output_path = output_dir / f"{slugify(library_name)}_{style_name}{self.output_suffix(render_config, style_name)}"
         await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or title), str(render_config.get("resolved_subtitle") or subtitle), style_name, render_config, output_path)
         result = {
@@ -1107,6 +1161,10 @@ class CoverService:
         title, subtitle = title_for_library(self.config, library["name"])
         image_paths = ensure_mock_images(input_dir, slugify(library["name"]), title, image_limit)
         render_config = self.render_config(style_config, library["name"], style_name, custom_layout=scheme_layout)
+        item_counts = dict(library.get("item_counts") or {})
+        fallback_count = int(library.get("item_count") or len(image_paths))
+        render_config["library_item_counts"] = {mode: int(item_counts.get(mode, fallback_count)) for mode in ("episodes", "titles", "seasons")}
+        render_config["library_item_count"] = render_config["library_item_counts"]["episodes"]
         output_path = output_dir / f"{slugify(library['name'])}_{style_name}{self.output_suffix(render_config, style_name)}"
         await asyncio.to_thread(self.renderer().render, image_paths, str(render_config.get("resolved_title") or title), str(render_config.get("resolved_subtitle") or subtitle or "Mock Library"), style_name, render_config, output_path)
         result = {

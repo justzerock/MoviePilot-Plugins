@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import hmac
 from email import policy
 from email.parser import BytesParser
 import io
@@ -21,7 +22,7 @@ import httpx
 import yaml
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -35,6 +36,16 @@ from .history_store import HistoryStore, sha256
 from .title_config import normalize_title_config
 from . import storage
 from .run_logs import APP_LOGGER, RunLog, clean_expired_logs, iter_logs, safe_log_path
+from .auth import (
+    AUTH_COOKIE,
+    auth_config,
+    configure_auth,
+    is_auth_configured,
+    issue_token,
+    request_token,
+    verify_password,
+    verify_token,
+)
 
 
 class GenerateRequest(BaseModel):
@@ -68,6 +79,67 @@ PLUGIN_TO_STYLE = {
     "animated_4": "animated_4",
     "custom_static": "custom_static",
 }
+
+SCHEME_TO_STYLE = {
+    "single_1": "single_1",
+    "static_1": "single_1",
+    "single_2": "single_2",
+    "static_2": "single_2",
+    "multi_1": "multi_1",
+    "static_3": "multi_1",
+    "static_4": "static_4",
+    "animated_1": "animated_1",
+    "animated_2": "animated_2",
+    "animated_3": "animated_3",
+    "animated_4": "animated_4",
+}
+
+STYLE_TO_SCHEME = {
+    "single_1": "single_1",
+    "single_2": "single_2",
+    "multi_1": "multi_1",
+    "static_4": "static_4",
+    "animated_1": "animated_1",
+    "animated_2": "animated_2",
+    "animated_3": "animated_3",
+    "animated_4": "animated_4",
+}
+
+
+def apply_default_scheme(config: dict[str, Any], scheme_id: str) -> str:
+    requested = str(scheme_id or "").strip()
+    style_config = config.setdefault("style_config", {})
+    style = SCHEME_TO_STYLE.get(requested)
+    if style:
+        config["default_scheme_id"] = STYLE_TO_SCHEME[style]
+        style_config["style"] = style
+        return config["default_scheme_id"]
+    custom_ids = {
+        str(item.get("id") or "")
+        for item in (config.get("custom_static_layouts") or [])
+        if isinstance(item, dict) and str(item.get("id") or "")
+    }
+    if requested in custom_ids:
+        config["default_scheme_id"] = requested
+        config["custom_static_active_id"] = requested
+        style_config["style"] = "custom_static"
+        return requested
+    if requested in {"custom_static", "static_custom"}:
+        active_id = str(config.get("custom_static_active_id") or "").strip()
+        config["default_scheme_id"] = active_id or "custom_static"
+        style_config["style"] = "custom_static"
+        return config["default_scheme_id"]
+    fallback = str(style_config.get("style") or "single_1")
+    config["default_scheme_id"] = STYLE_TO_SCHEME.get(fallback, "single_1")
+    return config["default_scheme_id"]
+
+
+def select_style(config: dict[str, Any], style: str) -> str:
+    normalized = normalize_style(style)
+    config.setdefault("style_config", {})["style"] = normalized
+    if normalized == "custom_static":
+        return apply_default_scheme(config, str(config.get("custom_static_active_id") or "custom_static"))
+    return apply_default_scheme(config, STYLE_TO_SCHEME.get(normalized, "single_1"))
 
 ANIMATED_SETTING_KEYS = (
     "animation_duration",
@@ -131,7 +203,7 @@ def normalize_media_servers(config: dict[str, Any]) -> list[dict[str, Any]]:
     return servers
 
 
-app = FastAPI(title="Yahaha Cover Studio", version="2.2.3")
+app = FastAPI(title="Yahaha Cover Studio", version="2.2.4")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -140,6 +212,61 @@ app.add_middleware(
 )
 
 service = CoverService()
+
+
+PUBLIC_API_PATHS = {
+    "/api/health",
+    "/api/auth/status",
+    "/api/auth/setup",
+    "/api/auth/login",
+    "/api/v1/webhook",
+    "/api/v1/webhook/",
+    "/api/webhook",
+    "/api/webhook/",
+}
+
+
+def request_is_secure(request: Request) -> bool:
+    forwarded = str(request.headers.get("x-forwarded-proto") or "").split(",", 1)[0].strip().lower()
+    return request.url.scheme == "https" or forwarded == "https"
+
+
+def authenticated_username(request: Request, config: dict[str, Any]) -> str | None:
+    token = request_token(request.headers.get("authorization"), request.cookies.get(AUTH_COOKIE))
+    return verify_token(config, token) if token else None
+
+
+def set_auth_cookie(response: Response, request: Request, token: str, config: dict[str, Any]) -> None:
+    days = max(1, min(3650, int(auth_config(config).get("session_days") or 180)))
+    response.set_cookie(
+        AUTH_COOKIE,
+        token,
+        max_age=days * 86400,
+        httponly=True,
+        secure=request_is_secure(request),
+        samesite="lax",
+        path="/",
+    )
+
+
+@app.middleware("http")
+async def require_api_auth(request: Request, call_next):
+    path = request.url.path
+    protected = path.startswith("/api/") or path == "/data" or path.startswith("/data/")
+    if not protected or path in PUBLIC_API_PATHS:
+        return await call_next(request)
+    config = load_config()
+    if not is_auth_configured(config):
+        return JSONResponse(
+            status_code=401,
+            content={"code": "AUTH_SETUP_REQUIRED", "message": "请先设置管理员账号"},
+        )
+    if not authenticated_username(request, config):
+        return JSONResponse(
+            status_code=401,
+            content={"code": "AUTH_REQUIRED", "message": "登录已失效，请重新登录"},
+        )
+    return await call_next(request)
 
 
 class GenerationManager:
@@ -386,15 +513,74 @@ async def health():
     }
 
 
+@app.get("/api/auth/status")
+async def auth_status(request: Request):
+    config = load_config()
+    configured = is_auth_configured(config)
+    username = authenticated_username(request, config) if configured else None
+    return {
+        "configured": configured,
+        "authenticated": bool(username),
+        "username": username or "",
+    }
+
+
+@app.post("/api/auth/setup")
+async def auth_setup(request: Request, payload: dict[str, Any]):
+    config = load_config()
+    if is_auth_configured(config):
+        raise HTTPException(status_code=409, detail="管理员账号已经设置")
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    if not 2 <= len(username) <= 32:
+        raise HTTPException(status_code=400, detail="用户名需要 2 至 32 个字符")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="密码至少需要 8 个字符")
+    config = save_config(configure_auth(config, username, password))
+    service.reload()
+    token = issue_token(config, username)
+    response = JSONResponse({"authenticated": True, "username": username, "token": token})
+    set_auth_cookie(response, request, token, config)
+    return response
+
+
+@app.post("/api/auth/login")
+async def auth_login(request: Request, payload: dict[str, Any]):
+    config = load_config()
+    value = auth_config(config)
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    valid = (
+        is_auth_configured(config)
+        and hmac.compare_digest(username, str(value.get("username") or ""))
+        and verify_password(password, str(value.get("password_hash") or ""))
+    )
+    if not valid:
+        raise HTTPException(status_code=401, detail="用户名或密码不正确")
+    token = issue_token(config, username)
+    response = JSONResponse({"authenticated": True, "username": username, "token": token})
+    set_auth_cookie(response, request, token, config)
+    return response
+
+
+@app.post("/api/auth/logout")
+async def auth_logout():
+    response = JSONResponse({"authenticated": False})
+    response.delete_cookie(AUTH_COOKIE, path="/")
+    return response
+
+
 @app.get("/api/config")
 async def get_config():
-    return service.reload()
+    return {key: value for key, value in service.reload().items() if key != "auth"}
 
 
 @app.post("/api/config")
 async def post_config(config: dict[str, Any]):
     try:
-        return service.save(config)
+        current = load_config()
+        incoming = {key: value for key, value in config.items() if key != "auth"}
+        return {key: value for key, value in service.save({**current, **incoming}).items() if key != "auth"}
     except Exception as error:
         APP_LOGGER.exception("配置保存失败: %s", error)
         raise HTTPException(status_code=500, detail=f"配置保存失败: {error}") from error
@@ -697,6 +883,58 @@ async def plugin_restore_history_batch(payload: dict[str, Any] | None = None):
     return ok({"batch_id": batch_id, "restored": restored, "skipped": skipped, "failed": failed})
 
 
+@app.post("/api/plugin/MediaCoverGenerator/restore_history_covers")
+async def plugin_restore_history_covers(payload: dict[str, Any] | None = None):
+    requested = {
+        str(Path(str(value)).expanduser().resolve())
+        for value in ((payload or {}).get("files") or [])
+        if str(value or "").strip()
+    }
+    if not requested:
+        return {"code": 1, "msg": "没有选择历史封面"}
+    store = HistoryStore(DATA_DIR, app_version=app.version)
+    matched: list[tuple[dict[str, Any], Path]] = []
+    for summary in store.list_history_batches(page_size=1000).get("items", []):
+        batch_id = str(summary.get("batch_id") or "")
+        manifest = store.get_history_batch(batch_id) or {}
+        for item in manifest.get("items") or []:
+            path = store.safe_file(batch_id, str(item.get("file") or ""))
+            if path and str(path.resolve()) in requested:
+                matched.append((item, path))
+    restored = failed = 0
+    skipped = max(0, len(requested) - len(matched))
+    clients = service.clients()
+    library_cache: dict[str, list[Any]] = {}
+    for item, path in matched:
+        server_name = str(item.get("server_name") or "")
+        server_id = str(item.get("server_id") or "")
+        library_name = str(item.get("library_name") or "")
+        client = next(
+            (
+                value for value in clients
+                if value.server_name == server_name or (server_id and value.server_id == server_id)
+            ),
+            None,
+        )
+        expected_hash = str(item.get("sha256") or "")
+        if not client or (expected_hash and sha256(path) != expected_hash):
+            skipped += 1
+            continue
+        try:
+            if client.server_id not in library_cache:
+                library_cache[client.server_id] = await client.get_libraries()
+            library = next((value for value in library_cache[client.server_id] if value.name == library_name), None)
+            if not library:
+                skipped += 1
+                continue
+            await client.upload_library_cover(library.id, path)
+            restored += 1
+        except Exception as error:
+            APP_LOGGER.warning("应用历史封面失败 server=%s library=%s: %s", server_name, library_name, error)
+            failed += 1
+    return ok({"restored": restored, "skipped": skipped, "failed": failed})
+
+
 @app.get("/api/plugin/MediaCoverGenerator/preview_sources")
 async def plugin_preview_sources(required_items: int = Query(9), force_refresh: bool = Query(False)):
     config = load_config()
@@ -742,7 +980,7 @@ async def plugin_stop_generation():
 @app.post("/api/plugin/MediaCoverGenerator/set_cover_style")
 async def plugin_set_cover_style(style: str = Query("")):
     config = load_config()
-    config.setdefault("style_config", {})["style"] = normalize_style(style)
+    select_style(config, style)
     save_config(config)
     service.reload()
     return ok({"style": style})
@@ -790,7 +1028,14 @@ async def plugin_set_page_tab_clean():
 
 @app.post("/api/plugin/MediaCoverGenerator/toggle_style_variant")
 async def plugin_toggle_style_variant():
-    return ok({"variant": "static"})
+    config = load_config()
+    current = str((config.get("style_config") or {}).get("style") or "single_1")
+    base, variant = STYLE_TO_PLUGIN.get(current, ("static_1", "static"))
+    next_variant = "animated" if variant == "static" else "static"
+    select_style(config, f"{next_variant}_{base.split('_')[-1]}")
+    save_config(config)
+    service.reload()
+    return ok({"variant": next_variant, **to_status_payload(config)})
 
 
 @app.post("/api/plugin/MediaCoverGenerator/set_render_options")
@@ -892,6 +1137,11 @@ async def plugin_fonts():
         if path.is_file() and path.suffix.lower() in storage.FONT_EXTENSIONS
     ]
     return ok({"custom": items})
+
+
+@app.get("/api/fonts/faces")
+async def preview_font_faces():
+    return service.preview_font_faces()
 
 
 @app.get("/api/fonts/{font_id}/preview")
@@ -1332,7 +1582,7 @@ def set_style_by_index(index: int):
         3: "multi_1",
         4: "static_4",
     }.get(index, "single_1")
-    config.setdefault("style_config", {})["style"] = style
+    select_style(config, style)
     save_config(config)
     service.reload()
     return ok({"style": style, **to_status_payload(config)})
@@ -1701,6 +1951,8 @@ def remember_libraries(config: dict[str, Any], libraries: list[dict[str, Any]]) 
             "value": str(item.get("value") or f"{item.get('server_id') or item.get('server')}:{item.get('id') or item.get('name')}"),
             "server": str(item.get("server") or ""),
             "server_id": str(item.get("server_id") or item.get("server") or ""),
+            "server_name": str(item.get("server_name") or item.get("server") or ""),
+            "item_count": item.get("item_count"),
         }
         for item in libraries
         if str(item.get("name") or item.get("id") or "").strip()
@@ -2160,6 +2412,8 @@ def from_plugin_config(incoming: dict[str, Any], base: dict[str, Any]) -> dict[s
     for key in ("custom_static_layout", "custom_static_layouts", "custom_static_active_id"):
         if key in incoming:
             config[key] = incoming[key]
+    if "default_scheme_id" in incoming:
+        apply_default_scheme(config, str(incoming.get("default_scheme_id") or ""))
     return config
 
 
@@ -2181,6 +2435,7 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
         for item in (config.get("selected_servers") or [])
         if str(item) in allowed_servers
     ]
+    stats = HistoryStore(DATA_DIR, app_version=app.version).stats()
     return {
         "warnings": [],
         "enabled": bool(config.get("enabled", True)),
@@ -2233,6 +2488,7 @@ def to_status_payload(config: dict[str, Any]) -> dict[str, Any]:
         "custom_static_active_id": config.get("custom_static_active_id"),
         "default_scheme_id": str(config.get("default_scheme_id") or style_config.get("style") or "single_1"),
         "library_scheme_rules": config.get("library_scheme_rules") or [],
+        **stats,
     }
 
 
@@ -2299,10 +2555,12 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
     preview_scheme_id = default_scheme_id
     preview_style_name, preview_layout = service.scheme_style_and_layout(preview_scheme_id)
     preview_server_name = ""
+    library_item_count = 0
+    library_item_counts = {"episodes": 0, "titles": 0, "seasons": 0}
 
     def resolve_saved_library_scheme() -> None:
         """Use the same per-library rule for cached previews and generation."""
-        nonlocal preview_scheme_id, preview_style_name, preview_layout, preview_server_name
+        nonlocal preview_scheme_id, preview_style_name, preview_layout, preview_server_name, library_item_count, library_item_counts
         for item in config.get("all_libraries") or []:
             if not isinstance(item, dict):
                 continue
@@ -2316,6 +2574,11 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
             library_id = str(item.get("id") or "").strip()
             server_id = str(item.get("server_id") or item.get("server") or "").strip()
             preview_server_name = str(item.get("server_name") or item.get("server") or server_id).strip()
+            try:
+                library_item_count = max(0, int(item.get("item_count") or item.get("RecursiveItemCount") or item.get("ChildCount") or 0))
+            except (TypeError, ValueError):
+                library_item_count = 0
+            library_item_counts = {mode: library_item_count for mode in ("episodes", "titles", "seasons")}
             library_name = str(item.get("name") or cache_library or "").strip()
             preview_scheme_id = service.resolve_scheme_for_library(
                 str(item.get("value") or f"{server_id}:{library_id}"),
@@ -2345,6 +2608,8 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         source_mode = "custom" if configured_input else "local"
         if not images:
             images = service.local_images("", limit, include_mock=False)
+        library_item_count = len(service.local_images(cache_library or library, 100000, include_mock=False))
+        library_item_counts = {mode: library_item_count for mode in ("episodes", "titles", "seasons")}
     elif config.get("mock_enabled", True):
         preview_scheme_id = service.resolve_scheme_for_library(
             f"mock:{slugify(cache_library or library)}",
@@ -2357,6 +2622,10 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         server = "mock"
         preview_server_name = "mock"
         source_mode = "custom"
+        mock_library = mock_library_by_name(cache_library or library)
+        library_item_count = int((mock_library or {}).get("item_count") or len(images))
+        mock_counts = dict((mock_library or {}).get("item_counts") or {})
+        library_item_counts = {mode: int(mock_counts.get(mode, library_item_count)) for mode in ("episodes", "titles", "seasons")}
     else:
         # Server previews use an internal cache, never the user-controlled input
         # directory. This keeps an empty covers_input truly empty and prevents a
@@ -2375,6 +2644,8 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                 server = client.server_name
                 preview_server_name = client.server_name
                 library = media_library.name
+                library_item_counts = await client.get_library_item_counts(media_library.id, media_library.item_count)
+                library_item_count = library_item_counts.get("episodes", 0)
                 preview_scheme_id = service.resolve_scheme_for_library(
                     f"{client.server_id}:{media_library.id}",
                     media_library.name,
@@ -2409,9 +2680,26 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
                     if len(download_jobs) >= limit:
                         break
                 images = [path for path in await client.download_images(download_jobs, concurrency=4) if path]
+                library_item_counts = service.normalized_library_item_counts(library_item_counts, len(images))
+                library_item_count = library_item_counts["episodes"]
                 source_mode = "media_server" if images else "cache"
             except Exception:
                 images = []
+        else:
+            # Cached preview files still need exact badge units. Library list
+            # metadata exposes only one recursive total, so it cannot
+            # distinguish episodes, whole titles, and seasons. These three
+            # count-only requests return no item payload and do not invalidate
+            # the already visible cached posters.
+            try:
+                count_client, count_library = await service.find_library(requested_library)
+                library_item_counts = await count_client.get_library_item_counts(count_library.id, count_library.item_count)
+                library_item_count = library_item_counts.get("episodes", 0)
+                preview_server_name = preview_server_name or count_client.server_name
+            except Exception as error:
+                APP_LOGGER.warning("预览媒体数量获取失败 library=%s: %s", requested_library or library, error)
+    library_item_counts = service.normalized_library_item_counts(library_item_counts, len(images))
+    library_item_count = library_item_counts["episodes"]
     preview_version = str(int(datetime.now(timezone.utc).timestamp() * 1000)) if force_refresh else ""
     title_lookup_server = preview_server_name or server
     title, subtitle, custom_texts = library_title_payload(config, library, title_lookup_server)
@@ -2428,6 +2716,8 @@ async def ensure_preview_images(config: dict[str, Any], library: str, required_i
         "titles": {"zh": resolved["title"], "en": resolved["subtitle"] or ("Local Library" if config.get("local_mode", False) else ("Mock Library" if config.get("mock_enabled", True) else ""))},
         "original_titles": {"zh": title, "en": subtitle},
         "custom_texts": resolved["custom_texts"],
+        "library_item_count": library_item_count,
+        "library_item_counts": library_item_counts,
         "font_resolution": resolved["diagnostics"],
         "title_config_version": title_config_version(config),
         "images": [

@@ -1,5 +1,6 @@
 import type {
   CustomGroupLayer,
+  CustomBadgeLayer,
   CustomImageLayer,
   CustomStaticLayout,
   CustomTextLayer,
@@ -41,6 +42,7 @@ function normalizeGroupLayer(layer: Partial<CustomGroupLayer>): CustomGroupLayer
     opacity: numberOr(layer.shadowOpacity ?? layer.effects?.shadow?.opacity, DEFAULT_SHADOW.opacity),
   }
   const blur = numberOr(layer.blur ?? layer.effects?.blur, 0)
+  const grain = numberOr(layer.grain ?? layer.effects?.grain, 0)
   return normalizeLayerEffects({
     id: layer.id || createLayoutId(),
     type: 'group',
@@ -54,6 +56,7 @@ function normalizeGroupLayer(layer: Partial<CustomGroupLayer>): CustomGroupLayer
     pivotY,
     opacity,
     blur,
+    grain,
     shadowBlur: shadow.blur,
     shadowOffsetX: shadow.offsetX,
     shadowOffsetY: shadow.offsetY,
@@ -61,6 +64,7 @@ function normalizeGroupLayer(layer: Partial<CustomGroupLayer>): CustomGroupLayer
     children: (layer.children || []).map((child) => normalizeTemplateLayer(child)).filter(Boolean) as TemplateLayer[],
     effects: {
       blur,
+      grain,
       shadow,
     },
   } as CustomGroupLayer)
@@ -82,6 +86,7 @@ export function normalizeTemplateLayer(layer: Partial<TemplateLayer> | null | un
     opacity: numberOr(layer.shadowOpacity ?? layer.effects?.shadow?.opacity, DEFAULT_SHADOW.opacity),
   }
   const blur = numberOr(layer.blur ?? layer.effects?.blur, 0)
+  const grain = numberOr(layer.grain ?? layer.effects?.grain, 0)
   const textStyle = (layer as Partial<CustomTitleLayer | CustomTextLayer> & { textStyle?: Record<string, unknown> }).textStyle || {}
   const rawMaskMode = (layer as Partial<CustomTitleLayer | CustomTextLayer>).maskMode ?? textStyle.maskMode
   const maskMode = rawMaskMode === 'knockout-text' || rawMaskMode === 'show-text' ? rawMaskMode : 'normal'
@@ -99,39 +104,57 @@ export function normalizeTemplateLayer(layer: Partial<TemplateLayer> | null | un
     pivotY: numberOr(layer.pivotY ?? layer.transform?.pivotY, 0.5),
     opacity: numberOr(layer.opacity ?? layer.transform?.opacity, 1),
     blur,
+    grain,
     shadowBlur: shadow.blur,
     shadowOffsetX: shadow.offsetX,
     shadowOffsetY: shadow.offsetY,
     shadowOpacity: shadow.opacity,
-    fontSize: numberOr((layer as Partial<CustomTitleLayer | CustomTextLayer>).fontSize, normalizedType === 'subtitle' ? 75 : 170),
-    textAlign: ['left', 'center', 'right'].includes(String((layer as Partial<CustomTitleLayer | CustomTextLayer>).textAlign))
-      ? (layer as Partial<CustomTitleLayer | CustomTextLayer>).textAlign
+    fontSize: numberOr((layer as Partial<CustomTitleLayer | CustomTextLayer | CustomBadgeLayer>).fontSize, normalizedType === 'subtitle' ? 75 : normalizedType === 'badge' ? 46 : 170),
+    textAlign: ['left', 'center', 'right'].includes(String((layer as Partial<CustomTitleLayer | CustomTextLayer | CustomBadgeLayer>).textAlign))
+      ? (layer as Partial<CustomTitleLayer | CustomTextLayer | CustomBadgeLayer>).textAlign
       : 'center',
     maskMode,
     content: (layer as Partial<CustomTextLayer>).content ?? '自定义文本',
-    assetKind: (layer as Partial<CustomImageLayer>).assetKind === 'sticker'
-      || Boolean(
-        (layer as Partial<CustomImageLayer>).stickerDataUrl
-        || (layer as Partial<CustomImageLayer>).stickerPath
-        || (layer as Partial<CustomImageLayer>).stickerUrl,
-      )
-      ? 'sticker'
-      : 'source',
-    stickerDataUrl: (layer as Partial<CustomImageLayer>).stickerDataUrl,
-    stickerPath: (layer as Partial<CustomImageLayer>).stickerPath,
-    stickerUrl: (layer as Partial<CustomImageLayer>).stickerUrl,
-    stickerName: (layer as Partial<CustomImageLayer>).stickerName,
-    stickerWidth: numberOr((layer as Partial<CustomImageLayer>).stickerWidth, 0),
-    stickerHeight: numberOr((layer as Partial<CustomImageLayer>).stickerHeight, 0),
-    sourceIndex: numberOr((layer as Partial<CustomImageLayer>).sourceIndex ?? (layer as Partial<CustomImageLayer>).source?.slot, 1),
-    fit: (layer as Partial<CustomImageLayer>).fit || 'cover',
-    source: {
-      kind: 'slot',
-      slot: numberOr((layer as Partial<CustomImageLayer>).sourceIndex ?? (layer as Partial<CustomImageLayer>).source?.slot, 1),
-    },
-    maskPolygon: (layer as Partial<CustomImageLayer>).maskPolygon,
+    ...(normalizedType === 'badge'
+      ? {
+          content: (layer as Partial<CustomBadgeLayer>).content ?? '{count} 部',
+          countMode: (layer as Partial<CustomBadgeLayer>).countMode ?? 'episodes',
+          shape: (layer as Partial<CustomBadgeLayer>).shape ?? 'pill',
+          backgroundColor: (layer as Partial<CustomBadgeLayer>).backgroundColor ?? '#007aff',
+          borderColor: (layer as Partial<CustomBadgeLayer>).borderColor ?? '#ffffff',
+          borderWidth: numberOr((layer as Partial<CustomBadgeLayer>).borderWidth, 0),
+          color: (layer as Partial<CustomBadgeLayer>).color ?? '#ffffff',
+          colorSource: (layer as Partial<CustomBadgeLayer>).colorSource ?? 'custom',
+        }
+      : {}),
+    ...(normalizedType === 'image'
+      ? {
+          assetKind: (layer as Partial<CustomImageLayer>).assetKind === 'sticker'
+            || Boolean(
+              (layer as Partial<CustomImageLayer>).stickerDataUrl
+              || (layer as Partial<CustomImageLayer>).stickerPath
+              || (layer as Partial<CustomImageLayer>).stickerUrl,
+            )
+            ? 'sticker'
+            : 'source',
+          stickerDataUrl: (layer as Partial<CustomImageLayer>).stickerDataUrl,
+          stickerPath: (layer as Partial<CustomImageLayer>).stickerPath,
+          stickerUrl: (layer as Partial<CustomImageLayer>).stickerUrl,
+          stickerName: (layer as Partial<CustomImageLayer>).stickerName,
+          stickerWidth: numberOr((layer as Partial<CustomImageLayer>).stickerWidth, 0),
+          stickerHeight: numberOr((layer as Partial<CustomImageLayer>).stickerHeight, 0),
+          sourceIndex: numberOr((layer as Partial<CustomImageLayer>).sourceIndex ?? (layer as Partial<CustomImageLayer>).source?.slot, 1),
+          fit: (layer as Partial<CustomImageLayer>).fit || 'cover',
+          source: {
+            kind: 'slot',
+            slot: numberOr((layer as Partial<CustomImageLayer>).sourceIndex ?? (layer as Partial<CustomImageLayer>).source?.slot, 1),
+          },
+          maskPolygon: (layer as Partial<CustomImageLayer>).maskPolygon,
+        }
+      : {}),
     effects: {
       blur,
+      grain,
       shadow,
     },
   } as TemplateLayer)

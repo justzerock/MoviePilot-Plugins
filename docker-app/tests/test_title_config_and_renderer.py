@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import asyncio
 from pathlib import Path
 
 import yaml
@@ -9,8 +10,9 @@ from PIL import Image
 
 from app.cover.presets import create_preset_layout
 from app.cover.renderer import CoverRenderer
+from app.media_client import MediaServerClient
 from app.font_preview import PreviewFontService
-from app.services import library_title_background, library_title_payload
+from app.services import CoverService, library_title_background, library_title_payload
 from app.title_config import normalize_title_config
 
 
@@ -102,6 +104,119 @@ class RendererLayoutTests(unittest.TestCase):
             with Image.open(output) as image:
                 self.assertEqual(image.size, (1280, 720))
                 self.assertGreater(len(image.getcolors(maxcolors=1_000_000) or []), 8)
+
+    def test_media_count_badge_is_persisted_into_formal_cover(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            root = Path(raw_dir)
+            source = root / "source.jpg"
+            output = root / "cover.png"
+            Image.new("RGB", (640, 960), "#445566").save(source)
+            layout = create_preset_layout("static_1")
+            layout["layers"].append({
+                "id": "library-count",
+                "type": "badge",
+                "content": "{count} 部",
+                "shape": "pill",
+                "x": 1400,
+                "y": 80,
+                "width": 360,
+                "height": 120,
+                "zIndex": 20,
+                "backgroundColor": "#007aff",
+                "borderColor": "#ffffff",
+                "borderWidth": 0,
+                "fontSize": 46,
+                "fontFamily": "main_title",
+                "color": "#ffffff",
+                "opacity": 1,
+            })
+            renderer = CoverRenderer(root / "fonts")
+            renderer.render(
+                [source], "动画电影", "Anime Films", "static_1",
+                {
+                    "resolution": "720p",
+                    "output_format": "png",
+                    "library_item_count": 128,
+                    "custom_static_layout": layout,
+                },
+                output,
+            )
+            with Image.open(output).convert("RGB") as image:
+                blue = image.getpixel((950, 70))
+                self.assertGreater(blue[2], blue[0])
+                self.assertGreater(blue[2], blue[1])
+
+    def test_badge_uses_its_selected_count_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            renderer = CoverRenderer(Path(raw_dir) / "fonts")
+            captured: list[str] = []
+
+            def capture_text(size, text, layer, config):
+                captured.append(text)
+                return Image.new("RGBA", size, (0, 0, 0, 0))
+
+            renderer._draw_layout_text = capture_text  # type: ignore[method-assign]
+            renderer._draw_layout_badge(
+                (360, 120),
+                {"type": "badge", "content": "{count} 部", "countMode": "titles"},
+                {
+                    "library_item_count": 128,
+                    "library_item_counts": {"episodes": 128, "titles": 12, "seasons": 18},
+                },
+            )
+            self.assertEqual(captured, ["12 部"])
+
+    def test_gradient_direction_preserves_transparent_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_dir:
+            renderer = CoverRenderer(Path(raw_dir) / "fonts")
+            image = renderer._layout_background(
+                [],
+                (4, 3),
+                {
+                    "background": {
+                        "type": "gradient",
+                        "colorSource": "custom",
+                        "color": "#ff0000",
+                        "color2": "#0000ff",
+                        "gradientDirection": "horizontal",
+                        "gradientStartOpacity": 1,
+                        "gradientEndOpacity": 0,
+                    }
+                },
+                {},
+            )
+            self.assertEqual(image.getpixel((0, 1))[3], 255)
+            self.assertEqual(image.getpixel((3, 1))[3], 0)
+            self.assertGreater(image.getpixel((0, 1))[0], image.getpixel((0, 1))[2])
+            self.assertGreater(image.getpixel((3, 1))[2], image.getpixel((3, 1))[0])
+
+
+class MediaCountTests(unittest.TestCase):
+    def test_nonempty_sources_only_fallback_when_server_counts_are_all_missing(self) -> None:
+        self.assertEqual(
+            CoverService.normalized_library_item_counts({"episodes": 0, "titles": 0, "seasons": 0}, 9),
+            {"episodes": 9, "titles": 9, "seasons": 9},
+        )
+        self.assertEqual(
+            CoverService.normalized_library_item_counts({"episodes": 0, "titles": 12, "seasons": 0}, 9),
+            {"episodes": 0, "titles": 12, "seasons": 0},
+        )
+
+    def test_server_counts_use_episode_title_and_season_units(self) -> None:
+        client = MediaServerClient("http://example.test", "token")
+        requested_types: list[str] = []
+        totals = {"Episode,Movie": 128, "Series,Movie": 12, "Season,Movie": 18}
+
+        async def fake_get_json(path, params):
+            self.assertEqual(path, "Items")
+            self.assertEqual(params["Limit"], 0)
+            requested_types.append(params["IncludeItemTypes"])
+            return {"Items": [], "TotalRecordCount": totals[params["IncludeItemTypes"]]}
+
+        client._get_json = fake_get_json  # type: ignore[method-assign]
+        result = asyncio.run(client.get_library_item_counts("library-1"))
+        self.assertEqual(result, {"episodes": 128, "titles": 12, "seasons": 18})
+        self.assertEqual(requested_types, ["Episode,Movie", "Series,Movie", "Season,Movie"])
 
 
 class PreviewFontTests(unittest.TestCase):

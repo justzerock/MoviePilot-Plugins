@@ -146,7 +146,7 @@ class HistoryBatch:
 
 
 class HistoryStore:
-    def __init__(self, data_dir: Path, app_version: str = "2.2.3") -> None:
+    def __init__(self, data_dir: Path, app_version: str = "2.2.4") -> None:
         self.root = data_dir / HISTORY_ROOT_NAME
         self.batches = self.root / "batches"
         self.tmp = self.root / ".tmp"
@@ -180,6 +180,15 @@ class HistoryStore:
         values = [item for item in index if all(not filters.get(key) or str(item.get(key)) == str(filters[key]) for key in ("trigger", "status"))]
         start = max(0, (max(1, page) - 1) * max(1, min(page_size, 100)))
         return {"total": len(values), "items": values[start:start + max(1, min(page_size, 100))]}
+
+    def stats(self) -> dict[str, int]:
+        batches = self._read_index().get("batches", [])
+        if not isinstance(batches, list):
+            batches = []
+        return {
+            "history_cover_count": sum(max(0, int(item.get("item_count") or 0)) for item in batches if isinstance(item, dict)),
+            "execution_count": len(batches),
+        }
 
     def get_history_batch(self, value: str) -> dict[str, Any] | None:
         if not re.fullmatch(r"[A-Za-z0-9._-]+", str(value or "")):

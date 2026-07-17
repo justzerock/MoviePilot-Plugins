@@ -23,6 +23,9 @@
         <v-btn size="small" class="mcr-button mcr-button--ghost" prepend-icon="mdi-text-box-plus-outline" @click="addTextLayer">
           添加文字
         </v-btn>
+        <v-btn size="small" class="mcr-button mcr-button--ghost mcr-button--badge" prepend-icon="mdi-label-percent-outline" @click="addBadgeLayer">
+          添加角标
+        </v-btn>
         <input
           ref="stickerFileInputEl"
           class="mcr-sticker-file-input"
@@ -289,6 +292,30 @@
           label="背景图层不透明度"
           @update:model-value="(val) => updateBackgroundNumeric('opacity', Number(val) / 100)"
         />
+        <template v-if="layout.background?.type === 'gradient'">
+          <BlueprintSelect
+            :model-value="layout.background?.gradientDirection || 'diagonal'"
+            :items="gradientDirectionItems"
+            label="渐变方向"
+            @update:model-value="(val) => updateBackgroundString('gradientDirection', String(val || 'diagonal'))"
+          />
+          <BlueprintRange
+            :model-value="(layout.background?.gradientStartOpacity ?? 1) * 100"
+            :min="0"
+            :max="100"
+            :step="5"
+            label="渐变起点透明度"
+            @update:model-value="(val) => updateBackgroundNumeric('gradientStartOpacity', Number(val) / 100)"
+          />
+          <BlueprintRange
+            :model-value="(layout.background?.gradientEndOpacity ?? 1) * 100"
+            :min="0"
+            :max="100"
+            :step="5"
+            label="渐变终点透明度"
+            @update:model-value="(val) => updateBackgroundNumeric('gradientEndOpacity', Number(val) / 100)"
+          />
+        </template>
         <BlueprintRange
           :model-value="layout.background?.zIndex ?? 0"
           :min="-20"
@@ -483,6 +510,41 @@
             @update:model-value="(val) => updateSelectedString('content', String(val || ''))"
           />
         </v-col>
+        <template v-if="isBadgeLayer(selectedLayer)">
+          <v-col cols="12">
+            <BlueprintSelect
+              :model-value="selectedLayer.countMode || 'episodes'"
+              :items="badgeCountModeItems"
+              label="统计口径"
+              @update:model-value="(val) => updateSelectedString('countMode', String(val || 'episodes'))"
+            />
+          </v-col>
+          <v-col cols="12">
+            <BlueprintField
+              :model-value="selectedLayer.content"
+              label="角标内容"
+              placeholder="{count} 部"
+              @update:model-value="(val) => updateSelectedString('content', String(val || '{count} 部'))"
+            />
+          </v-col>
+          <v-col cols="12">
+            <BlueprintSelect
+              :model-value="selectedLayer.shape || 'pill'"
+              :items="badgeShapeItems"
+              label="背景形状"
+              @update:model-value="(val) => updateSelectedString('shape', String(val || 'pill'))"
+            />
+          </v-col>
+          <v-col cols="6">
+            <BlueprintField :model-value="selectedLayer.backgroundColor || '#007aff'" type="color" label="背景颜色" @update:model-value="(val) => updateSelectedString('backgroundColor', String(val || '#007aff'))" />
+          </v-col>
+          <v-col cols="6">
+            <BlueprintField :model-value="selectedLayer.borderColor || '#ffffff'" type="color" label="边框颜色" @update:model-value="(val) => updateSelectedString('borderColor', String(val || '#ffffff'))" />
+          </v-col>
+          <v-col cols="12">
+            <BlueprintRange :model-value="selectedLayer.borderWidth || 0" :min="0" :max="12" :step="1" label="边框宽度" @update:model-value="(val) => updateSelectedNumeric('borderWidth', val)" />
+          </v-col>
+        </template>
       </v-row>
 
       <v-row dense class="mt-1">
@@ -507,7 +569,7 @@
       </v-row>
 
       <v-row dense class="mt-1" v-if="isTextLayer(selectedLayer)">
-        <v-col cols="12">
+        <v-col v-if="!isBadgeLayer(selectedLayer)" cols="12">
           <div class="mcr-text-align-control" aria-label="文字排版">
             <button
               v-for="item in textAlignItems"
@@ -524,7 +586,7 @@
             </button>
           </div>
         </v-col>
-        <v-col cols="12">
+        <v-col v-if="!isBadgeLayer(selectedLayer)" cols="12">
           <BlueprintSelect
             :model-value="selectedLayer.maskMode || 'normal'"
             :items="textMaskModeItems"
@@ -588,6 +650,19 @@
             @start="onSliderStart"
             @end="onSliderEnd"
             @change="(val) => onSizeSliderChange('width', val)"
+          />
+        </v-col>
+      </v-row>
+
+      <v-row v-if="selectedLayer.type !== 'group'" dense class="mt-1">
+        <v-col cols="12">
+          <BlueprintRange
+            :model-value="(selectedLayer.grain ?? 0) * 100"
+            :min="0"
+            :max="100"
+            :step="1"
+            label="胶片颗粒"
+            @update:model-value="(val) => updateSelectedNumeric('grain', Number(val) / 100)"
           />
         </v-col>
       </v-row>
@@ -768,9 +843,11 @@ import type {
 } from '../types/plugin'
 import {
   cloneLayout,
+  createBadgeLayer,
   createTextLayer,
   getLayerShadowStyle,
   getTextLayerFontFamily,
+  isBadgeLayer,
   isCustomTextLayer,
   isImageLayer,
   isMainTitleLayer,
@@ -876,6 +953,12 @@ const backgroundColorSourceItems = [
   { title: '手动指定', value: 'custom' },
   { title: '配置指定', value: 'config' },
 ]
+const gradientDirectionItems = [
+  { title: '左上至右下', value: 'diagonal' },
+  { title: '从左到右', value: 'horizontal' },
+  { title: '从上到下', value: 'vertical' },
+  { title: '左下至右上', value: 'reverse-diagonal' },
+]
 const layerColorSourceItems = [
   { title: '不混色', value: 'none' },
   { title: '从主图自动取色', value: 'auto' },
@@ -895,6 +978,17 @@ const textAlignItems = [
 const textContentSourceItems = [
   { title: '固定文本', value: 'fixed' },
   { title: '按媒体库配置', value: 'library' },
+] as const
+const badgeShapeItems = [
+  { title: '胶囊', value: 'pill' },
+  { title: '圆角矩形', value: 'rounded' },
+  { title: '矩形', value: 'rectangle' },
+  { title: '圆形', value: 'circle' },
+] as const
+const badgeCountModeItems = [
+  { title: '集数（剧集按集，电影按部）', value: 'episodes' },
+  { title: '整部影视（剧集整部，电影按部）', value: 'titles' },
+  { title: '按季影视（剧集按季，电影按部）', value: 'seasons' },
 ] as const
 const textMaskModeItems = [
   { title: '普通文字', value: 'normal' },
@@ -1149,8 +1243,8 @@ function updateLayout(mutator: (layout: CustomStaticLayout) => void) {
   emit('update:modelValue', next)
 }
 
-type BackgroundStringKey = 'type' | 'color' | 'color2' | 'colorSource'
-type BackgroundNumericKey = 'colorRatio' | 'opacity' | 'blur' | 'grain' | 'zIndex'
+type BackgroundStringKey = 'type' | 'color' | 'color2' | 'colorSource' | 'gradientDirection'
+type BackgroundNumericKey = 'colorRatio' | 'opacity' | 'gradientStartOpacity' | 'gradientEndOpacity' | 'blur' | 'grain' | 'zIndex'
 
 function updateBackgroundString(key: BackgroundStringKey, value: string) {
   updateLayout((layout) => {
@@ -1162,6 +1256,9 @@ function updateBackgroundString(key: BackgroundStringKey, value: string) {
       color2: defaultDeepGradientColor.value,
       colorRatio: effectiveParams.value.colorRatio,
       opacity: 1,
+      gradientStartOpacity: 1,
+      gradientEndOpacity: 1,
+      gradientDirection: 'diagonal',
       blur: effectiveParams.value.blur,
       grain: 0.18,
       zIndex: 0,
@@ -1183,6 +1280,9 @@ function updateBackgroundNumeric(key: BackgroundNumericKey, raw: string | number
       color2: defaultDeepGradientColor.value,
       colorRatio: effectiveParams.value.colorRatio,
       opacity: 1,
+      gradientStartOpacity: 1,
+      gradientEndOpacity: 1,
+      gradientDirection: 'diagonal',
       blur: effectiveParams.value.blur,
       grain: 0.18,
       zIndex: 0,
@@ -1201,6 +1301,7 @@ const selectedLayerPanelTitle = computed(() => {
   if (!layer) return '图层'
   if (layer.type === 'group') return '图层组'
   if (isImageLayer(layer)) return layer.assetKind === 'sticker' ? '贴图图层' : '图片图层'
+  if (isBadgeLayer(layer)) return '媒体数量角标'
   if (isCustomTextLayer(layer)) return '文本图层'
   return isMainTitleLayer(layer) ? '主标题图层' : '副标题图层'
 })
@@ -1609,6 +1710,12 @@ function getKonvaImageForLayer(layer: CustomImageLayer) {
 }
 
 function getLayerPreviewText(layer: AnyLayer) {
+  if (isBadgeLayer(layer)) {
+    const mode = layer.countMode || 'episodes'
+    const count = Number(props.previewSource?.library_item_counts?.[mode] ?? props.previewSource?.library_item_count)
+    const value = Number.isFinite(count) && count >= 0 ? Math.trunc(count).toLocaleString('zh-CN') : '--'
+    return String(layer.content || '{count} 部').replaceAll('{count}', value)
+  }
   if (isCustomTextLayer(layer)) {
     const fallback = layer.content || '未定义文本'
     if ((layer.contentSource || 'fixed') !== 'library') return fallback
@@ -1620,6 +1727,7 @@ function getLayerPreviewText(layer: AnyLayer) {
     }
     return fallback
   }
+  if (isBadgeLayer(layer)) return '媒体数量角标'
   if (isMainTitleLayer(layer)) {
     return activeTitles.value.zh || '未定义主标题'
   }
@@ -1640,6 +1748,7 @@ function layerLabel(layer: AnyLayer): string {
   if (isCustomTextLayer(layer)) {
     return `文本: ${getLayerPreviewText(layer).slice(0, 10)}`
   }
+  if (isBadgeLayer(layer)) return `角标: ${getLayerPreviewText(layer).slice(0, 10)}`
   return isMainTitleLayer(layer) ? '主标题' : '副标题'
 }
 
@@ -1653,6 +1762,9 @@ function layerListIcon(layer: AnyLayer): string {
   }
   if (isCustomTextLayer(layer)) {
     return 'mdi-text-box-outline'
+  }
+  if (isBadgeLayer(layer)) {
+    return 'mdi-label-percent-outline'
   }
   return isMainTitleLayer(layer) ? 'mdi-format-title' : 'mdi-subtitles-outline'
 }
@@ -2529,6 +2641,14 @@ function addTextLayer() {
   })
 }
 
+function addBadgeLayer() {
+  updateLayout((layout) => {
+    const layer = createBadgeLayer({ zIndex: layout.layers.length + 1 })
+    layout.layers.push(layer)
+    selectedLayerId.value = layer.id
+  })
+}
+
 function removeSelectedLayer() {
   const id = selectedLayerId.value
   if (!id) return
@@ -2573,13 +2693,15 @@ type NumericKey =
   | 'cropFocusY'
   | 'opacity'
   | 'blur'
+  | 'grain'
   | 'shadowBlur'
   | 'shadowOffsetX'
   | 'shadowOffsetY'
   | 'shadowOpacity'
   | 'colorRatio'
+  | 'borderWidth'
 
-type StringKey = 'content' | 'contentSource' | 'contentKey' | 'fontFamily' | 'fit' | 'colorSource' | 'color' | 'textAlign' | 'maskMode'
+type StringKey = 'content' | 'contentSource' | 'contentKey' | 'fontFamily' | 'fit' | 'colorSource' | 'color' | 'textAlign' | 'maskMode' | 'shape' | 'backgroundColor' | 'borderColor'
 
 function updateSelectedNumeric(key: NumericKey, raw: string | number) {
   const id = selectedLayerId.value

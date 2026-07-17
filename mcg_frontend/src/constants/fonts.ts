@@ -1,5 +1,6 @@
 export const BUILTIN_FONT_ITEMS = [
   { title: '潮黑 chaohei', value: 'chaohei' },
+  { title: 'Impact', value: 'impact' },
   { title: '粗雅宋 yasong', value: 'yasong' },
   { title: 'Emblema One', value: 'EmblemaOne' },
   { title: 'Melete', value: 'Melete' },

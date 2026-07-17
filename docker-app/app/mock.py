@@ -6,9 +6,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 MOCK_LIBRARIES = [
-    {"id": "mock-anime", "name": "动漫", "server": "mock", "collection_type": "shows"},
-    {"id": "mock-music", "name": "音乐", "server": "mock", "collection_type": "music"},
-    {"id": "mock-movie", "name": "电影", "server": "mock", "collection_type": "movies"},
+    {"id": "mock-anime", "name": "动漫", "server": "mock", "collection_type": "shows", "item_count": 128, "item_counts": {"episodes": 128, "titles": 12, "seasons": 18}},
+    {"id": "mock-music", "name": "音乐", "server": "mock", "collection_type": "music", "item_count": 45, "item_counts": {"episodes": 45, "titles": 45, "seasons": 45}},
+    {"id": "mock-movie", "name": "电影", "server": "mock", "collection_type": "movies", "item_count": 312, "item_counts": {"episodes": 312, "titles": 312, "seasons": 312}},
 ]
 
 PALETTES = [

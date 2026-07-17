@@ -299,6 +299,17 @@ class CoverRenderer:
         image.putalpha(ImageChops.multiply(alpha, mask))
         return image
 
+    def _apply_film_grain(self, image: Image.Image, intensity: Any) -> Image.Image:
+        amount = max(0.0, min(1.0, float(intensity or 0)))
+        if amount <= 0:
+            return image
+        rgba = image.convert("RGBA")
+        alpha = rgba.getchannel("A")
+        noise = Image.effect_noise(rgba.size, 54).convert("RGB")
+        grained = Image.blend(rgba.convert("RGB"), noise, min(0.24, amount * 0.22)).convert("RGBA")
+        grained.putalpha(alpha)
+        return grained
+
     def _shadow(self, size: tuple[int, int], radius: int, blur: int, opacity: int = 130) -> Image.Image:
         shadow = Image.new("RGBA", size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(shadow)
@@ -370,16 +381,36 @@ class CoverRenderer:
         color = self._resolve_layout_color(background.get("colorSource") or "auto", background.get("color"), config, "#6f8090") or (111, 128, 144)
         if bg_type == "solid":
             canvas = Image.new("RGBA", size, (*color, int(255 * opacity)))
-            return self._apply_polygon_mask(canvas, background.get("maskPolygon"))
+            return self._apply_polygon_mask(self._apply_film_grain(canvas, background.get("grain")), background.get("maskPolygon"))
         if bg_type == "gradient":
             color2 = self._hex_to_rgb(str(background.get("color2") or "#0a1628"))
+            start_opacity = max(0, min(1, float(background.get("gradientStartOpacity", 1) if background.get("gradientStartOpacity") is not None else 1)))
+            end_opacity = max(0, min(1, float(background.get("gradientEndOpacity", 1) if background.get("gradientEndOpacity") is not None else 1)))
+            direction = str(background.get("gradientDirection") or "diagonal")
+            if direction not in {"diagonal", "horizontal", "vertical", "reverse-diagonal"}:
+                direction = "diagonal"
             canvas = Image.new("RGBA", size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(canvas)
-            for y in range(size[1]):
-                t = y / max(1, size[1] - 1)
-                rgb = tuple(int(color[index] * (1 - t) + color2[index] * t) for index in range(3))
-                draw.line((0, y, size[0], y), fill=(*rgb, int(255 * opacity)))
-            return self._apply_polygon_mask(canvas, background.get("maskPolygon"))
+            if direction in {"horizontal", "vertical"}:
+                steps = size[0] if direction == "horizontal" else size[1]
+                for position in range(steps):
+                    t = position / max(1, steps - 1)
+                    rgb = tuple(int(color[index] * (1 - t) + color2[index] * t) for index in range(3))
+                    alpha = opacity * (start_opacity * (1 - t) + end_opacity * t)
+                    if direction == "horizontal":
+                        draw.line((position, 0, position, size[1]), fill=(*rgb, int(255 * alpha)))
+                    else:
+                        draw.line((0, position, size[0], position), fill=(*rgb, int(255 * alpha)))
+            else:
+                pixels = canvas.load()
+                diagonal = max(1, size[0] + size[1] - 2)
+                for y in range(size[1]):
+                    for x in range(size[0]):
+                        t = (x + (size[1] - 1 - y if direction == "reverse-diagonal" else y)) / diagonal
+                        rgb = tuple(int(color[index] * (1 - t) + color2[index] * t) for index in range(3))
+                        alpha = opacity * (start_opacity * (1 - t) + end_opacity * t)
+                        pixels[x, y] = (*rgb, int(255 * alpha))
+            return self._apply_polygon_mask(self._apply_film_grain(canvas, background.get("grain")), background.get("maskPolygon"))
         slot = 1
         try:
             source = background.get("imageSource") or {}
@@ -394,6 +425,7 @@ class CoverRenderer:
         blended = Image.blend(bg, tint, max(0, min(1, ratio)))
         if opacity < 1:
             blended.putalpha(int(255 * opacity))
+        blended = self._apply_film_grain(blended, background.get("grain"))
         return self._apply_polygon_mask(blended, background.get("maskPolygon"))
 
     def _draw_text(self, canvas: Image.Image, title: str, subtitle: str, box: tuple[int, int, int, int], config: dict[str, Any], align="center") -> None:
@@ -456,7 +488,10 @@ class CoverRenderer:
             shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(shadow_blur))
         blur = max(0, int(float(layer.get("blur") or layer.get("effects", {}).get("blur") or 0)))
         if blur:
+            text_alpha = text_layer.getchannel("A")
             text_layer = text_layer.filter(ImageFilter.GaussianBlur(blur))
+            text_layer.putalpha(text_alpha)
+        text_layer = self._apply_film_grain(text_layer, layer.get("grain", layer.get("effects", {}).get("grain", 0)))
         return Image.alpha_composite(shadow_layer, text_layer)
 
     def _draw_layout_text_mask_tile(self, size: tuple[int, int], text: str, layer: dict[str, Any], config: dict[str, Any]) -> Image.Image:
@@ -486,6 +521,45 @@ class CoverRenderer:
                 x = max(0, (width - text_width) // 2)
             draw.text((x - bbox[0], start_y + index * line_height - bbox[1]), line, font=font, fill=255)
         return tile
+
+    def _draw_layout_badge(self, size: tuple[int, int], layer: dict[str, Any], config: dict[str, Any]) -> Image.Image:
+        width, height = size
+        tile = Image.new("RGBA", size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(tile)
+        shape = str(layer.get("shape") or "pill")
+        radius = height // 2 if shape == "pill" else 0 if shape == "rectangle" else max(0, int(float(layer.get("radius") or 24)))
+        background = self._hex_to_rgb(str(layer.get("backgroundColor") or "#007aff"))
+        border = self._hex_to_rgb(str(layer.get("borderColor") or "#ffffff"))
+        border_width = max(0, int(float(layer.get("borderWidth") or 0)))
+        inset = max(0, border_width // 2)
+        bounds = (inset, inset, max(inset, width - 1 - inset), max(inset, height - 1 - inset))
+        if shape == "circle":
+            diameter = max(1, min(width, height) - border_width)
+            left = (width - diameter) // 2
+            top = (height - diameter) // 2
+            bounds = (left, top, left + diameter - 1, top + diameter - 1)
+            draw.ellipse(bounds, fill=(*background, 255), outline=(*border, 255) if border_width else None, width=border_width)
+        else:
+            draw.rounded_rectangle(bounds, radius=max(0, min(radius, height // 2)), fill=(*background, 255), outline=(*border, 255) if border_width else None, width=border_width)
+
+        count_mode = str(layer.get("countMode") or "episodes")
+        item_counts = config.get("library_item_counts") if isinstance(config.get("library_item_counts"), dict) else {}
+        try:
+            count = max(0, int(item_counts.get(count_mode, config.get("library_item_count") or 0)))
+        except (TypeError, ValueError):
+            count = 0
+        text = str(layer.get("content") or "{count} 部").replace("{count}", f"{count:,}")
+        text_layer_config = dict(layer)
+        text_layer_config.update({
+            "shadowBlur": 0,
+            "shadowOffsetX": 0,
+            "shadowOffsetY": 0,
+            "shadowOpacity": 0,
+            "blur": 0,
+            "grain": 0,
+            "opacity": 1,
+        })
+        return Image.alpha_composite(tile, self._draw_layout_text(size, text, text_layer_config, config))
 
     def _text_line(self, draw: ImageDraw.ImageDraw, text: str, font, pos: tuple[int, int], width: int, fill, shadow, align: str) -> None:
         bbox = draw.textbbox((0, 0), text, font=font)
@@ -694,11 +768,14 @@ class CoverRenderer:
                 tile = Image.alpha_composite(tile, overlay)
         blur = max(0, int(float(layer.get("blur") or layer.get("effects", {}).get("blur") or 0)))
         if blur:
+            shape_alpha = tile.getchannel("A")
             tile = tile.filter(ImageFilter.GaussianBlur(blur))
+            tile.putalpha(shape_alpha)
         radius = max(0, int(float(layer.get("radius") or 0)))
         if radius:
             tile = self._rounded(tile, radius)
-        return self._apply_polygon_mask(tile, layer.get("maskPolygon"))
+        tile = self._apply_polygon_mask(tile, layer.get("maskPolygon"))
+        return self._apply_film_grain(tile, layer.get("grain", layer.get("effects", {}).get("grain", 0)))
 
     def _layout_text_value(self, layer: dict[str, Any], title: str, subtitle: str, config: dict[str, Any]) -> str:
         layer_type = str(layer.get("type") or "")
@@ -828,6 +905,11 @@ class CoverRenderer:
         layer_type = str(layer.get("type") or "")
         if layer_type == "image":
             tile = self._render_layout_image_layer(layer, images, config)
+        elif layer_type == "badge":
+            tile = self._apply_film_grain(
+                self._draw_layout_badge((width, height), layer, config),
+                layer.get("grain", layer.get("effects", {}).get("grain", 0)),
+            )
         elif layer_type in {"main_title", "subtitle", "title_zh", "title_en", "text"}:
             if self._text_mask_mode(layer) != "normal":
                 tile = None
@@ -862,12 +944,21 @@ class CoverRenderer:
         )
         config = dict(config)
         config.setdefault("auto_color", self._extract_auto_color(images[0] if images else None))
-        canvas = self._layout_background(images, design_size, layout, config)
+        background = self._layout_background(images, design_size, layout, config)
         layers = sorted(
             (item for item in layout.get("layers") or [] if isinstance(item, dict)),
             key=lambda item: float(item.get("zIndex") or 0),
         )
-        for layer in layers:
+        background_config = layout.get("background") if isinstance(layout.get("background"), dict) else {}
+        try:
+            background_z_index = float(background_config.get("zIndex") or 0)
+        except (TypeError, ValueError):
+            background_z_index = 0
+        canvas = Image.new("RGBA", design_size, (0, 0, 0, 0))
+        for layer in (item for item in layers if float(item.get("zIndex") or 0) < background_z_index):
+            self._draw_layout_layer(canvas, layer, images, title, subtitle, config)
+        canvas.alpha_composite(background)
+        for layer in (item for item in layers if float(item.get("zIndex") or 0) >= background_z_index):
             self._draw_layout_layer(canvas, layer, images, title, subtitle, config)
         text_mask = self._build_text_mask(layers, title, subtitle, config, design_size)
         if text_mask is not None:

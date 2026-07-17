@@ -31,6 +31,18 @@ def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
 
 
+def _apply_film_grain(image: Image.Image, intensity: Any) -> Image.Image:
+    amount = _clamp(_num(intensity, 0), 0, 1)
+    if amount <= 0:
+        return image
+    rgba = image.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    noise = Image.effect_noise(rgba.size, max(2, amount * 42)).convert("RGB")
+    grained = Image.blend(rgba.convert("RGB"), noise, min(0.24, amount * 0.22)).convert("RGBA")
+    grained.putalpha(alpha)
+    return grained
+
+
 def _esc(value: Any) -> str:
     return html.escape(str(value or ""), quote=True)
 
@@ -224,7 +236,7 @@ def _normalize_layer(layer: Dict[str, Any]) -> Dict[str, Any]:
         layer_type = "main_title"
     elif layer_type in ("title_en", "subtitle"):
         layer_type = "subtitle"
-    elif layer_type not in ("image", "text", "group"):
+    elif layer_type not in ("image", "text", "badge", "group"):
         layer_type = "image"
 
     transform = layer.get("transform") if isinstance(layer.get("transform"), dict) else {}
@@ -243,6 +255,7 @@ def _normalize_layer(layer: Dict[str, Any]) -> Dict[str, Any]:
         "pivotY": _clamp(_num(layer.get("pivotY", transform.get("pivotY")), 0.5), 0, 1),
         "opacity": _clamp(_num(layer.get("opacity", transform.get("opacity")), 1), 0, 1),
         "blur": max(0, _num(layer.get("blur", effects.get("blur")), 0)),
+        "grain": _clamp(_num(layer.get("grain", effects.get("grain")), 0), 0, 1),
         "shadowBlur": max(0, _num(layer.get("shadowBlur", shadow.get("blur")), 0)),
         "shadowOffsetX": _num(layer.get("shadowOffsetX", shadow.get("offsetX")), 0),
         "shadowOffsetY": _num(layer.get("shadowOffsetY", shadow.get("offsetY")), 0),
@@ -256,6 +269,7 @@ def _normalize_layer(layer: Dict[str, Any]) -> Dict[str, Any]:
     }
     normalized["effects"] = {
         "blur": normalized["blur"],
+        "grain": normalized["grain"],
         "shadow": {
             "blur": normalized["shadowBlur"],
             "offsetX": normalized["shadowOffsetX"],
@@ -287,13 +301,20 @@ def _normalize_layer(layer: Dict[str, Any]) -> Dict[str, Any]:
         ]
     else:
         text_style = layer.get("textStyle") if isinstance(layer.get("textStyle"), dict) else {}
-        normalized["fontSize"] = _num(layer.get("fontSize"), 75 if layer_type == "subtitle" else 170)
+        normalized["fontSize"] = _num(layer.get("fontSize"), 46 if layer_type == "badge" else 75 if layer_type == "subtitle" else 170)
         normalized["fontFamily"] = layer.get("fontFamily") or ("subtitle" if layer_type == "subtitle" else "custom_text" if layer_type == "text" else "main_title")
         normalized["textAlign"] = layer.get("textAlign") if layer.get("textAlign") in ("left", "center", "right") else "center"
         mask_mode = layer.get("maskMode", text_style.get("maskMode"))
         normalized["maskMode"] = mask_mode if mask_mode in ("knockout-text", "show-text") else "normal"
-        if layer_type == "text":
+        if layer_type in ("text", "badge"):
             normalized["content"] = str(layer.get("content") or "")
+        if layer_type == "badge":
+            count_mode = str(layer.get("countMode") or "episodes")
+            normalized["countMode"] = count_mode if count_mode in ("episodes", "titles", "seasons") else "episodes"
+            normalized["shape"] = layer.get("shape") if layer.get("shape") in ("pill", "rounded", "rectangle", "circle") else "pill"
+            normalized["backgroundColor"] = _normalize_hex_color(layer.get("backgroundColor"), "#007aff")
+            normalized["borderColor"] = _normalize_hex_color(layer.get("borderColor"), "#ffffff")
+            normalized["borderWidth"] = max(0, _num(layer.get("borderWidth"), 0))
     return normalized
 
 
@@ -363,7 +384,7 @@ def _text_value(layer: Dict[str, Any], title: Tuple[str, str]) -> str:
         return title[0] if title else ""
     if layer_type == "subtitle":
         return title[1] if len(title) > 1 else ""
-    return str(layer.get("content") or "")
+    return str(layer.get("resolvedContent") or layer.get("content") or "")
 
 
 def _font_family(layer: Dict[str, Any]) -> str:
@@ -483,9 +504,21 @@ def _render_background(
     second_color = _normalize_hex_color(background_config.get("color2"), "#0a1628")
     grain_overlay = _render_grain_overlay(canvas_width, canvas_height, background_config.get("grain", 0))
     background_opacity = _clamp(_num(background_config.get("opacity", background_config.get("colorOpacity")), 1), 0, 1)
+    gradient_start_opacity = _clamp(_num(background_config.get("gradientStartOpacity"), 1), 0, 1)
+    gradient_end_opacity = _clamp(_num(background_config.get("gradientEndOpacity"), 1), 0, 1)
+    gradient_direction = str(background_config.get("gradientDirection") or "diagonal")
+    gradient_vectors = {
+        "horizontal": ('0%', '0%', '100%', '0%'),
+        "vertical": ('0%', '0%', '0%', '100%'),
+        "reverse-diagonal": ('0%', '100%', '100%', '0%'),
+        "diagonal": ('0%', '0%', '100%', '100%'),
+    }
+    gradient_vector = gradient_vectors.get(gradient_direction, gradient_vectors["diagonal"])
     gradient_def = (
-        f'<linearGradient id="mcr-bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">'
-        f'<stop offset="0%" stop-color="{_esc(base_color)}"/><stop offset="100%" stop-color="{_esc(second_color)}"/>'
+        f'<linearGradient id="mcr-bg-gradient" x1="{gradient_vector[0]}" y1="{gradient_vector[1]}" '
+        f'x2="{gradient_vector[2]}" y2="{gradient_vector[3]}">'
+        f'<stop offset="0%" stop-color="{_esc(base_color)}" stop-opacity="{gradient_start_opacity}"/>'
+        f'<stop offset="100%" stop-color="{_esc(second_color)}" stop-opacity="{gradient_end_opacity}"/>'
         f'</linearGradient>'
     ) + _background_grain_defs()
     def wrap_background_layer(content: str) -> str:
@@ -643,6 +676,7 @@ def _render_image_layer_as_image(
     shadow_y = _num(layer.get("shadowOffsetY"), 0) * scale_y
     shadow_opacity = _clamp(_num(layer.get("shadowOpacity"), 0.28), 0, 1)
     layer_blur = max(0, _num(layer.get("blur"), 0) * min(scale_x, scale_y))
+    layer_grain = _clamp(_num(layer.get("grain", (layer.get("effects") or {}).get("grain", 0)), 0), 0, 1)
     rotation = _num(layer.get("rotation"), 0)
     fit = str(layer.get("fit") or "cover")
     crop_focus_x = _clamp(_num(layer.get("cropFocusX"), 0.5), 0, 1)
@@ -658,7 +692,7 @@ def _render_image_layer_as_image(
     has_polygon_mask = bool(_polygon_points_for_layer(layer, 1, 1))
     has_custom_crop_focus = fit == "cover" and (abs(crop_focus_x - 0.5) > 0.001 or abs(crop_focus_y - 0.5) > 0.001)
     has_source_image = bool(sticker_image is not None or (source_path and Path(source_path).is_file()))
-    should_rasterize = bool(has_source_image and (rotation or shadow_blur or shadow_x or shadow_y or layer_blur or has_custom_crop_focus or has_polygon_mask))
+    should_rasterize = bool(has_source_image and (rotation or shadow_blur or shadow_x or shadow_y or layer_blur or layer_grain or has_custom_crop_focus or has_polygon_mask))
     if not should_rasterize:
         return _render_image_layer(layer, image_data, scale_x, scale_y, auto_bg_color, config_bg_color)
 
@@ -686,6 +720,8 @@ def _render_image_layer_as_image(
 
         if layer_blur:
             fitted = fitted.filter(ImageFilter.GaussianBlur(radius=layer_blur))
+            fitted.putalpha(shape_alpha)
+        fitted = _apply_film_grain(fitted, layer_grain)
 
         rotation_pad = int(math.ceil(math.hypot(width, height))) if rotation else 0
         shadow_pad = int(math.ceil(abs(shadow_x) + abs(shadow_y) + shadow_blur * 3))
@@ -830,7 +866,10 @@ def _render_text_layer_as_image(
             shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=max(1, shadow_blur)))
         blur = max(0, _num(layer.get("blur"), 0) * min(scale_x, scale_y))
         if blur:
+            text_alpha = text_layer.getchannel("A").copy()
             text_layer = text_layer.filter(ImageFilter.GaussianBlur(radius=blur))
+            text_layer.putalpha(text_alpha)
+        text_layer = _apply_film_grain(text_layer, layer.get("grain", (layer.get("effects") or {}).get("grain", 0)))
 
         rotation = _num(layer.get("rotation"), 0)
         if rotation:
@@ -955,16 +994,31 @@ def _get_layer_source_image(layer: Dict[str, Any], image_slots: Dict[int, str]) 
         return None
 
 
-def _make_linear_gradient(size: Tuple[int, int], color1: str, color2: str) -> Image.Image:
+def _make_linear_gradient(
+    size: Tuple[int, int],
+    color1: str,
+    color2: str,
+    start_opacity: float = 1,
+    end_opacity: float = 1,
+    direction: str = "diagonal",
+) -> Image.Image:
     width, height = size
-    start = _hex_to_rgba(color1, 1, "#5f7185")
-    end = _hex_to_rgba(color2, 1, "#0a1628")
+    start = _hex_to_rgba(color1, _clamp(start_opacity, 0, 1), "#5f7185")
+    end = _hex_to_rgba(color2, _clamp(end_opacity, 0, 1), "#0a1628")
     gradient = Image.new("RGBA", size, (0, 0, 0, 0))
     pixels = gradient.load()
-    denom = max(1, width + height - 2)
+    direction = direction if direction in {"diagonal", "horizontal", "vertical", "reverse-diagonal"} else "diagonal"
+    diagonal_denom = max(1, width + height - 2)
     for y in range(height):
         for x in range(width):
-            ratio = (x + y) / denom
+            if direction == "horizontal":
+                ratio = x / max(1, width - 1)
+            elif direction == "vertical":
+                ratio = y / max(1, height - 1)
+            elif direction == "reverse-diagonal":
+                ratio = (x + (height - 1 - y)) / diagonal_denom
+            else:
+                ratio = (x + y) / diagonal_denom
             pixels[x, y] = tuple(
                 int(round(start[index] * (1 - ratio) + end[index] * ratio))
                 for index in range(4)
@@ -999,7 +1053,14 @@ def _render_background_image(
     if bg_type == "solid":
         background = Image.new("RGBA", size, _hex_to_rgba(base_color, 1, "#5f7185"))
     elif bg_type == "gradient":
-        background = _make_linear_gradient(size, base_color, _normalize_hex_color(background_config.get("color2"), "#0a1628"))
+        background = _make_linear_gradient(
+            size,
+            base_color,
+            _normalize_hex_color(background_config.get("color2"), "#0a1628"),
+            _clamp(_num(background_config.get("gradientStartOpacity"), 1), 0, 1),
+            _clamp(_num(background_config.get("gradientEndOpacity"), 1), 0, 1),
+            str(background_config.get("gradientDirection") or "diagonal"),
+        )
     else:
         image_source = background_config.get("imageSource") if isinstance(background_config.get("imageSource"), dict) else {}
         bg_slot = int(_num(image_source.get("slot"), 1))
@@ -1015,6 +1076,7 @@ def _render_background_image(
             except Exception as err:
                 logger.warning("template pillow: 背景图渲染失败: %s", err)
 
+    background = _apply_film_grain(background, background_config.get("grain", 0))
     if opacity < 1:
         alpha = background.getchannel("A")
         background.putalpha(alpha.point(lambda value: int(value * opacity)))
@@ -1167,6 +1229,8 @@ def _draw_template_image_layer(
         layer_blur = max(0, _num(layer.get("blur"), 0) * min(scale_x, scale_y))
         if layer_blur:
             fitted = fitted.filter(ImageFilter.GaussianBlur(radius=layer_blur))
+            fitted.putalpha(shape_alpha)
+        fitted = _apply_film_grain(fitted, layer.get("grain", (layer.get("effects") or {}).get("grain", 0)))
 
         shadow_blur = max(0, _num(layer.get("shadowBlur"), 0) * min(scale_x, scale_y))
         shadow_x = _num(layer.get("shadowOffsetX"), 0) * scale_x
@@ -1265,11 +1329,88 @@ def _draw_template_text_layer(
             shadow_canvas = shadow_canvas.filter(ImageFilter.GaussianBlur(radius=max(1, shadow_blur)))
         blur = max(0, _num(layer.get("blur"), 0) * min(scale_x, scale_y))
         if blur:
+            text_alpha = layer_canvas.getchannel("A").copy()
             layer_canvas = layer_canvas.filter(ImageFilter.GaussianBlur(radius=blur))
+            layer_canvas.putalpha(text_alpha)
+        layer_canvas = _apply_film_grain(layer_canvas, layer.get("grain", (layer.get("effects") or {}).get("grain", 0)))
         combined = Image.alpha_composite(shadow_canvas, layer_canvas)
         _paste_layer_canvas(canvas, combined, layer, scale_x, scale_y)
     except Exception as err:
         logger.warning("template pillow: 文字图层渲染失败: %s", err)
+
+
+def _draw_template_badge_layer(
+    canvas: Image.Image,
+    layer: Dict[str, Any],
+    title: Tuple[str, str],
+    scale_x: float,
+    scale_y: float,
+    font_paths: FontPathInput,
+    auto_bg_color: str,
+    config_bg_color: str,
+) -> None:
+    """Render a persistent media-count badge as one transformable layer."""
+    text = _text_value(layer, title)
+    if not text:
+        return
+    try:
+        x = int(round(_num(layer.get("x"), 0) * scale_x))
+        y = int(round(_num(layer.get("y"), 0) * scale_y))
+        width = max(1, int(round(_num(layer.get("width"), 250) * scale_x)))
+        height = max(1, int(round(_num(layer.get("height"), 92) * scale_y)))
+        scale = min(scale_x, scale_y)
+        tile = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(tile)
+        shape = str(layer.get("shape") or "pill")
+        radius = 0 if shape == "rectangle" else min(width, height) // 2 if shape in ("pill", "circle") else max(0, int(round(_num(layer.get("cornerRadius"), 24) * scale)))
+        background = _hex_to_rgba(layer.get("backgroundColor"), 1, "#007aff")
+        border_width = max(0, int(round(_num(layer.get("borderWidth"), 0) * scale)))
+        border = _hex_to_rgba(layer.get("borderColor"), 1, "#ffffff")
+        bbox = (0, 0, width - 1, height - 1)
+        if shape == "circle":
+            diameter = min(width, height)
+            left = (width - diameter) // 2
+            top = (height - diameter) // 2
+            bbox = (left, top, left + diameter - 1, top + diameter - 1)
+            draw.ellipse(bbox, fill=background, outline=border if border_width else None, width=border_width or 1)
+        elif radius:
+            draw.rounded_rectangle(bbox, radius=radius, fill=background, outline=border if border_width else None, width=border_width or 1)
+        else:
+            draw.rectangle(bbox, fill=background, outline=border if border_width else None, width=border_width or 1)
+
+        font_path = _font_path_for_layer(layer, font_paths)
+        font_size = max(1, int(round(_num(layer.get("fontSize"), 46) * scale)))
+        font = ImageFont.truetype(font_path, font_size) if font_path and Path(font_path).is_file() else ImageFont.load_default()
+        color = _resolve_template_color(layer.get("colorSource") or "custom", layer.get("color") or "#ffffff", auto_bg_color, config_bg_color, "#ffffff")
+        fill = _hex_to_rgba(color, 1, "#ffffff")
+        text_bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        text_x = (width - text_width) / 2 - text_bbox[0]
+        text_y = (height - text_height) / 2 - text_bbox[1]
+        draw.text((text_x, text_y), text, font=font, fill=fill)
+        tile = _apply_film_grain(tile, layer.get("grain", (layer.get("effects") or {}).get("grain", 0)))
+
+        layer_canvas = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        layer_canvas.alpha_composite(tile, (x, y))
+        shadow_blur = max(0, _num(layer.get("shadowBlur"), 0) * scale)
+        shadow_opacity = _clamp(_num(layer.get("shadowOpacity"), 0.18), 0, 1)
+        if shadow_blur > 0 and shadow_opacity > 0:
+            shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+            alpha = layer_canvas.getchannel("A").filter(ImageFilter.GaussianBlur(radius=max(1, shadow_blur)))
+            shadow_color = Image.new("RGBA", canvas.size, (0, 0, 0, int(round(255 * shadow_opacity))))
+            shadow_color.putalpha(alpha.point(lambda value: int(value * shadow_opacity)))
+            shadow.alpha_composite(
+                shadow_color,
+                (
+                    int(round(_num(layer.get("shadowOffsetX"), 0) * scale_x)),
+                    int(round(_num(layer.get("shadowOffsetY"), 8) * scale_y)),
+                ),
+            )
+            layer_canvas = Image.alpha_composite(shadow, layer_canvas)
+        _paste_layer_canvas(canvas, layer_canvas, layer, scale_x, scale_y)
+    except Exception as err:
+        logger.warning("template pillow: 媒体数量角标渲染失败: %s", err)
 
 
 def _has_text_mask_layer(layers: List[Dict[str, Any]], mode: Optional[str] = None) -> bool:
@@ -1310,9 +1451,36 @@ def _has_sticker_layer(layers: List[Dict[str, Any]]) -> bool:
     return False
 
 
+def _has_film_grain(layers: List[Dict[str, Any]]) -> bool:
+    for layer in layers:
+        if layer.get("type") == "group":
+            if _has_film_grain(layer.get("children") or []):
+                return True
+            continue
+        effects = layer.get("effects") if isinstance(layer.get("effects"), dict) else {}
+        if _num(layer.get("grain", effects.get("grain")), 0) > 0:
+            return True
+    return False
+
+
+def _has_badge_layer(layers: List[Dict[str, Any]]) -> bool:
+    for layer in layers:
+        if layer.get("type") == "group":
+            if _has_badge_layer(layer.get("children") or []):
+                return True
+        elif layer.get("type") == "badge":
+            return True
+    return False
+
+
 def _should_render_template_with_pillow_first(layout_config: Dict[str, Any]) -> Tuple[bool, str]:
     template = normalize_template(layout_config)
     layers = template.get("layers") or []
+    background = template.get("background") if isinstance(template.get("background"), dict) else {}
+    if _num(background.get("grain"), 0) > 0 or _has_film_grain(layers):
+        return True, "film-grain"
+    if _has_badge_layer(layers):
+        return True, "media-count-badge"
     if _has_text_mask_layer(layers):
         return True, "text-mask"
     if _has_sticker_layer(layers):
@@ -1467,6 +1635,8 @@ def _draw_template_layer(
         _paste_layer_canvas(canvas, group_canvas, layer, scale_x, scale_y)
     elif layer.get("type") == "image":
         _draw_template_image_layer(canvas, layer, image_slots, scale_x, scale_y, auto_bg_color, config_bg_color)
+    elif layer.get("type") == "badge":
+        _draw_template_badge_layer(canvas, layer, title, scale_x, scale_y, font_paths, auto_bg_color, config_bg_color)
     else:
         if layer.get("maskMode") in ("knockout-text", "show-text"):
             return

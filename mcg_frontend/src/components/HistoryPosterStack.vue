@@ -278,7 +278,7 @@ watch(
 .yh-history-poster-stack__poster {
   position: absolute;
   top: 8px;
-  left: max(0px, calc((100% - var(--history-poster-width) - 72px) / 2));
+  left: var(--history-stack-origin-x, max(0px, calc((100% - var(--history-poster-width) - 72px) / 2)));
   z-index: var(--history-stack-z);
   width: var(--history-poster-width);
   display: grid;

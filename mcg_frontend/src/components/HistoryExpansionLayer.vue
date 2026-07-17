@@ -65,8 +65,8 @@ watch(() => props.open, (open) => { if (open) void nextTick(() => panelEl.value?
 .yh-history-expansion__restore { gap:6px; min-width:76px; padding:0 12px; color:var(--color-primary) !important; border-color:color-mix(in srgb,var(--color-primary) 26%,var(--color-border)) !important; background:color-mix(in srgb,var(--color-primary-soft) 70%,var(--color-surface)) !important; font-size:12px !important; font-weight:800 !important; }
 .yh-history-expansion__restore:disabled { cursor:wait; opacity:.56; }
 .yh-history-expansion__close { width:36px; padding:0; }
-.yh-history-expansion__grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:14px; overflow:auto; padding:16px; overscroll-behavior:contain; }
-.yh-history-expansion__card { min-width:0; display:grid; gap:7px; padding:0; overflow:hidden; border:1px solid var(--color-border); border-radius:13px; background:var(--color-surface); color:var(--color-text-main); box-shadow:0 6px 16px var(--color-shadow); text-align:left; }
+.yh-history-expansion__grid { display:flex; flex-wrap:wrap; align-content:flex-start; justify-content:center; gap:14px; overflow:auto; padding:16px; overscroll-behavior:contain; }
+.yh-history-expansion__card { width:clamp(190px,22vw,236px); min-width:190px; flex:0 0 auto; display:grid; gap:7px; padding:0; overflow:hidden; border:1px solid var(--color-border); border-radius:13px; background:var(--color-surface); color:var(--color-text-main); box-shadow:0 6px 16px var(--color-shadow); text-align:left; }
 .yh-history-expansion__card.is-selected { border-color:var(--color-primary); background:var(--color-primary-soft); box-shadow:0 0 0 2px color-mix(in srgb,var(--color-primary) 18%,transparent),0 8px 18px var(--color-shadow); }
 .yh-history-expansion__image { position:relative; aspect-ratio:16/9; display:grid; place-items:center; overflow:hidden; background:var(--color-surface-soft); color:var(--color-text-muted); }
 .yh-history-expansion__image img { width:100%; height:100%; display:block; object-fit:cover; }
@@ -77,7 +77,10 @@ watch(() => props.open, (open) => { if (open) void nextTick(() => panelEl.value?
 .yh-history-expansion-enter-active,.yh-history-expansion-leave-active { transition:opacity 280ms ease; }.yh-history-expansion-enter-active .yh-history-expansion__panel,.yh-history-expansion-leave-active .yh-history-expansion__panel { transition:transform 300ms cubic-bezier(.2,.78,.25,1),opacity 220ms ease; }
 .yh-history-expansion-enter-from,.yh-history-expansion-leave-to { opacity:0; }.yh-history-expansion-enter-from .yh-history-expansion__panel,.yh-history-expansion-leave-to .yh-history-expansion__panel { opacity:.2; transform:translate(var(--yh-expand-from-x),var(--yh-expand-from-y)) scale(.34); }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) { .yh-history-expansion__panel { background:var(--color-surface); } }
-@media(max-width:768px){.yh-history-expansion{padding:12px}.yh-history-expansion__panel{max-height:82vh;border-radius:17px}.yh-history-expansion__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:10px}.yh-history-expansion__header{padding:10px 12px}.yh-history-expansion__meta{font-size:10px}}
-@media(max-width:340px){.yh-history-expansion__grid{gap:7px;padding:8px}.yh-history-expansion__meta{padding-inline:7px}}
+@media(max-width:768px){.yh-history-expansion{padding:12px}.yh-history-expansion__panel{max-height:82vh;border-radius:17px}.yh-history-expansion__grid{gap:9px;padding:10px}.yh-history-expansion__card{width:calc((100% - 9px)/2);min-width:0}.yh-history-expansion__header{padding:10px 12px}.yh-history-expansion__meta{font-size:10px}}
+@media(max-width:340px){.yh-history-expansion__grid{gap:7px;padding:8px}.yh-history-expansion__card{width:calc((100% - 7px)/2)}.yh-history-expansion__meta{padding-inline:7px}}
 @media(prefers-reduced-motion:reduce){.yh-history-expansion-enter-active,.yh-history-expansion-leave-active,.yh-history-expansion-enter-active .yh-history-expansion__panel,.yh-history-expansion-leave-active .yh-history-expansion__panel{transition:none}}
+.yh-history-expansion__card { width:236px; min-width:236px; flex-basis:236px; }
+@media(max-width:768px) { .yh-history-expansion__card { width:calc((100% - 9px)/2); min-width:0; flex-basis:calc((100% - 9px)/2); } }
+@media(max-width:340px) { .yh-history-expansion__card { width:calc((100% - 7px)/2); flex-basis:calc((100% - 7px)/2); } }
 </style>

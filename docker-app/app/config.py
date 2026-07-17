@@ -80,6 +80,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "page_tab": "generate-tab",
     "style_naming_v2": True,
     "log_retention_days": 7,
+    "auth": {},
     "custom_static_layout": None,
     "custom_static_layouts": None,
     "custom_static_active_id": None,
@@ -230,8 +231,35 @@ def normalize_config(config: dict[str, Any]) -> dict[str, Any]:
         config["font_script_target"] = "auto"
     if str(config.get("font_traditional_variant") or "standard") not in {"standard", "taiwan", "hongkong"}:
         config["font_traditional_variant"] = "standard"
-    legacy_scheme = str((config.get("style_config") or {}).get("style") or "single_1")
-    config["default_scheme_id"] = str(config.get("default_scheme_id") or legacy_scheme)
+    style_config = config.get("style_config") if isinstance(config.get("style_config"), dict) else {}
+    legacy_scheme = str(style_config.get("style") or "single_1")
+    default_scheme = str(config.get("default_scheme_id") or legacy_scheme)
+    scheme_styles = {
+        "single_1": "single_1", "static_1": "single_1",
+        "single_2": "single_2", "static_2": "single_2",
+        "multi_1": "multi_1", "static_3": "multi_1",
+        "static_4": "static_4",
+        "animated_1": "animated_1", "animated_2": "animated_2",
+        "animated_3": "animated_3", "animated_4": "animated_4",
+    }
+    custom_ids = {
+        str(item.get("id") or "")
+        for item in (config.get("custom_static_layouts") or [])
+        if isinstance(item, dict) and str(item.get("id") or "")
+    }
+    if default_scheme in scheme_styles:
+        style_config["style"] = scheme_styles[default_scheme]
+        default_scheme = {
+            "static_1": "single_1", "static_2": "single_2", "static_3": "multi_1",
+        }.get(default_scheme, default_scheme)
+    elif default_scheme in custom_ids:
+        config["custom_static_active_id"] = default_scheme
+        style_config["style"] = "custom_static"
+    elif default_scheme in {"custom_static", "static_custom"}:
+        style_config["style"] = "custom_static"
+        default_scheme = str(config.get("custom_static_active_id") or "custom_static")
+    config["style_config"] = style_config
+    config["default_scheme_id"] = default_scheme
     rules: list[dict[str, Any]] = []
     seen_libraries: set[str] = set()
     for raw in config.get("library_scheme_rules") or []:
