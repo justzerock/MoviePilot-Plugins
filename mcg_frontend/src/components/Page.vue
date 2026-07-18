@@ -1145,15 +1145,17 @@
       </v-card>
     </v-dialog>
 
-    <Transition name="yh-compact-header">
-      <header
-        v-if="compactHeaderVisible"
-        class="yh-compact-page-header"
-        :style="compactHeaderStyle"
-        aria-label="呀哈哈封面工坊快捷操作"
-      >
-        <span class="yh-compact-page-header__title">呀哈哈封面工坊</span>
-        <div class="yh-compact-page-header__actions">
+    <Teleport to="body">
+      <Transition name="yh-compact-header">
+        <header
+          v-if="compactHeaderVisible"
+          class="yh-compact-page-header"
+          :data-mcr-theme="isDark ? 'dark' : 'light'"
+          :style="compactHeaderStyle"
+          aria-label="呀哈哈封面工坊快捷操作"
+        >
+          <span class="yh-compact-page-header__title">呀哈哈封面工坊</span>
+          <div class="yh-compact-page-header__actions">
           <button
             type="button"
             class="yh-run-btn"
@@ -1176,9 +1178,10 @@
           <v-btn class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn" icon title="关闭" aria-label="关闭" @click="notifyClose">
             <v-icon icon="mdi-close" size="20" />
           </v-btn>
-        </div>
-      </header>
-    </Transition>
+          </div>
+        </header>
+      </Transition>
+    </Teleport>
 
     <ViewportSaveToast :message="editorSaveStatus" :theme="isDark ? 'dark' : 'light'" />
 
@@ -2143,7 +2146,7 @@ watch(
 
 async function loadPageHeaderFonts() {
   try {
-    const response = await props.api.get<any>('plugin/MediaCoverGenerator/fonts/faces')
+    const response = await props.api.get<any>('plugin/YahahaCoverStudio/fonts/faces')
     const faces = response?.code === 0 ? response.data : response
     await loadPreviewFontFaces(faces || {})
     headerFontRevision.value += 1

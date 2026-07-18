@@ -212,6 +212,8 @@ test('application chrome uses subsetted chaohei and impact fonts with a compact 
   assert.match(page, /getTemplateFontFaceName\('app_chaohei'\)/)
   assert.match(page, /getTemplateFontFaceName\('app_impact'\)/)
   assert.match(page, /loadPageHeaderFonts\(\)/)
+  assert.match(page, /plugin\/YahahaCoverStudio\/fonts\/faces/)
+  assert.match(page, /<Teleport to="body">/)
   assert.match(page, /yh-compact-page-header/)
   assert.match(page, /updateCompactHeader\(\)/)
   assert.match(config, /plugin\/YahahaCoverStudio\/fonts\/faces/)
