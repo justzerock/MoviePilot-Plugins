@@ -533,7 +533,14 @@ class CoverService:
         # Match the plugin: page chrome is rendered through the same preview
         # font service, so the curated Chinese and English faces can be
         # subsetted and cached alongside layout text.
-        aliases = {"main_title", "subtitle", "custom_text", "chaohei", "impact"}
+        aliases = {"main_title", "subtitle", "custom_text", "chaohei", "impact", "app_chaohei", "app_impact"}
+        # Application chrome must not share a preset alias with a text layer.
+        # A user can bind `chaohei` or `impact` to a semantic title font, which
+        # would otherwise replace the face used by the page heading.
+        chrome_paths = {
+            "app_chaohei": self.resolve_font_reference("chaohei", self.font_library_index()),
+            "app_impact": self.resolve_font_reference("impact", self.font_library_index()),
+        }
 
         def visit(layers: list[Any]) -> None:
             for layer in layers:
@@ -563,7 +570,7 @@ class CoverService:
         # glyphs in a subset even before a custom layout has text layers.
         rendered_characters.extend(["呀哈哈封面工坊配置", "Yahaha Cover StudioConfiguration"])
         preview_config["preview_rendered_characters"] = "".join(rendered_characters)
-        selected_paths = [paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index()) for alias in aliases]
+        selected_paths = [chrome_paths.get(alias) or paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index()) for alias in aliases]
         self._preview_font_paths.update(str(path) for path in selected_paths if path)
         assets = self.preview_font_assets(selected_paths)
         path_to_id = {str(item["path"]): asset_id for asset_id, item in assets.items()}
@@ -572,7 +579,7 @@ class CoverService:
         # complete custom-font library here used to create many redundant
         # FontFace requests before a user even selected a text layer.
         for alias in aliases:
-            path = paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index())
+            path = chrome_paths.get(alias) or paths.get(alias) or self.resolve_font_reference(alias, self.font_library_index())
             if not path:
                 continue
             info = self.preview_font_info(path_to_id.get(str(Path(path).resolve()), ""), preview_config)

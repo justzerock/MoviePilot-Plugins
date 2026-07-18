@@ -2109,15 +2109,15 @@ const effectivePreviewSource = computed<PreviewSourcePayload | null>(() => {
 const brandTitleFontStyle = computed<Record<string, string>>(() => {
   headerFontRevision.value
   return {
-    '--yh-brand-zh-font': `"${getTemplateFontFaceName('chaohei')}"`,
-    '--yh-brand-en-font': `"${getTemplateFontFaceName('impact')}"`,
+    '--yh-brand-zh-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
+    '--yh-brand-en-font': `"${getTemplateFontFaceName('app_impact')}"`,
   }
 })
 
 const brandChineseTitleStyle = computed<Record<string, string>>(() => {
   headerFontRevision.value
   return {
-    fontFamily: `"${getTemplateFontFaceName('chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
+    fontFamily: `"${getTemplateFontFaceName('app_chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
     fontWeight: '400',
     opacity: '.8',
   }
@@ -2126,7 +2126,7 @@ const brandChineseTitleStyle = computed<Record<string, string>>(() => {
 const brandEnglishTitleStyle = computed<Record<string, string>>(() => {
   headerFontRevision.value
   return {
-    fontFamily: `"${getTemplateFontFaceName('impact')}", Impact, "Arial Narrow", sans-serif`,
+    fontFamily: `"${getTemplateFontFaceName('app_impact')}", Impact, "Arial Narrow", sans-serif`,
     fontWeight: '400',
   }
 })
@@ -2140,6 +2140,18 @@ watch(
   },
   { deep: true, immediate: true },
 )
+
+async function loadPageHeaderFonts() {
+  try {
+    const response = await props.api.get<any>('plugin/MediaCoverGenerator/fonts/faces')
+    const faces = response?.code === 0 ? response.data : response
+    await loadPreviewFontFaces(faces || {})
+    headerFontRevision.value += 1
+    updateCompactHeader()
+  } catch (error) {
+    console.warn('load page header fonts failed', error)
+  }
+}
 
 function updateCompactHeader() {
   if (typeof window === 'undefined' || !pageHeroEl.value || !pageShellEl.value) return
@@ -4263,6 +4275,7 @@ onMounted(async () => {
     document.addEventListener('visibilitychange', syncBackendStatusWhenVisible)
   }
 		  void loadFontLibrary()
+		  await loadPageHeaderFonts()
 		  await loadStatus()
 	  if (isGenerating.value) return
 	  await loadPreviewSources()
@@ -10760,7 +10773,7 @@ onBeforeUnmount(() => {
 }
 
 .mcr-page-shell .yh-run-btn {
-  border: 0 !important;
+  border: 1px solid var(--yahaha-border) !important;
   background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft)) !important;
   box-shadow: 0 4px 12px var(--color-shadow) !important;
   overflow: visible !important;
@@ -10790,6 +10803,7 @@ onBeforeUnmount(() => {
   min-width: 112px !important;
   overflow: hidden !important;
   border-radius: 13px !important;
+  border-color: var(--yahaha-blue) !important;
   background: var(--yahaha-blue) !important;
 }
 

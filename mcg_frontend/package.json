@@ -1,6 +1,6 @@
 {
   "name": "yahahacoverstudio-frontend",
-  "version": "2.2.5",
+  "version": "2.2.6",
   "private": true,
   "scripts": {
     "dev": "vite",

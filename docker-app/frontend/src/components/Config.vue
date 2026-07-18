@@ -1,5 +1,5 @@
 <template>
-  <div class="mcr-shell mcr-config-shell" :data-mcr-theme="isDark ? 'dark' : 'light'">
+  <div ref="configShellEl" class="mcr-shell mcr-config-shell" :data-mcr-theme="isDark ? 'dark' : 'light'">
     <div class="mcr-shell__aurora" />
     <div class="mcr-shell__noise" />
     <v-card class="mcr-frame">
@@ -840,6 +840,35 @@
       </v-defaults-provider>
 
     </v-card>
+    <Teleport to="body">
+      <Transition name="yh-compact-header">
+        <div
+          v-if="configCompactHeaderVisible"
+          class="yh-compact-config-header"
+          :data-mcr-theme="isDark ? 'dark' : 'light'"
+          :style="configCompactHeaderStyle"
+        >
+          <span class="yh-compact-config-header__title">配置</span>
+          <div class="yh-compact-config-header__actions">
+            <button
+              type="button"
+              class="yh-compact-config-run"
+              :class="{ 'is-running': isGenerating }"
+              :style="configRunButtonProgressStyle"
+              :title="isGenerating ? configGenerationProgressLabel : '立即生成'"
+              :aria-label="isGenerating ? configGenerationProgressLabel : '立即生成'"
+              :disabled="generatingNow"
+              @click="handleGenerateAction"
+            >
+              <span class="yh-run-progress" aria-hidden="true" />
+              <span class="yh-run-content"><v-icon :icon="isGenerating ? 'mdi-stop' : 'mdi-play'" size="20" /><span v-if="isGenerating">{{ configGenerationProgressCount }}</span></span>
+            </button>
+            <button type="button" class="yh-compact-config-icon" title="保存配置" aria-label="保存配置" :disabled="isGenerating || generatingNow || configSaving" @click="saveConfig()"><v-icon icon="mdi-content-save-outline" size="20" /></button>
+            <button type="button" class="yh-compact-config-icon" title="封面预览" aria-label="封面预览" :disabled="isGenerating || generatingNow" @click="notifySwitch"><v-icon icon="mdi-image-multiple-outline" size="20" /></button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -884,21 +913,24 @@ const emit = defineEmits<{
 }>()
 
 const controlDefaults = MCR_CONTROL_DEFAULTS
+const configShellEl = ref<HTMLElement | null>(null)
 const settingsContentEl = ref<HTMLElement | null>(null)
 const configTopbarEl = ref<HTMLElement | null>(null)
 const configHeaderCompact = ref(false)
+const configCompactHeaderVisible = ref(false)
+const configCompactHeaderStyle = ref<Record<string, string>>({})
 const configHeaderFontRevision = ref(0)
 const configHeaderFontStyle = computed<Record<string, string>>(() => {
   configHeaderFontRevision.value
   return {
-    '--yh-settings-zh-font': `"${getTemplateFontFaceName('chaohei')}"`,
-    '--yh-settings-en-font': `"${getTemplateFontFaceName('impact')}"`,
+    '--yh-settings-zh-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
+    '--yh-settings-en-font': `"${getTemplateFontFaceName('app_impact')}"`,
   }
 })
 const configChineseTitleStyle = computed<Record<string, string>>(() => {
   configHeaderFontRevision.value
   return {
-    fontFamily: `"${getTemplateFontFaceName('chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
+    fontFamily: `"${getTemplateFontFaceName('app_chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
     fontWeight: '400',
     opacity: '.8',
   }
@@ -906,7 +938,7 @@ const configChineseTitleStyle = computed<Record<string, string>>(() => {
 const configEnglishTitleStyle = computed<Record<string, string>>(() => {
   configHeaderFontRevision.value
   return {
-    fontFamily: `"${getTemplateFontFaceName('impact')}", Impact, "Arial Narrow", sans-serif`,
+    fontFamily: `"${getTemplateFontFaceName('app_impact')}", Impact, "Arial Narrow", sans-serif`,
     fontWeight: '400',
   }
 })
@@ -1610,6 +1642,7 @@ async function loadConfigHeaderFonts() {
     const faces = await props.api.get<Record<string, any>>('/api/fonts/faces')
     await loadPreviewFontFaces(faces || {})
     configHeaderFontRevision.value += 1
+    updateConfigHeaderCompact()
   } catch (error) {
     console.warn('load settings header fonts failed', error)
   }
@@ -2216,9 +2249,24 @@ watch(selectedCustomTemplateId, (id) => {
 function updateConfigHeaderCompact() {
   if (typeof window === 'undefined') return
   const content = settingsContentEl.value
+  const header = configTopbarEl.value
+  const shell = configShellEl.value
   const contentTop = content?.getBoundingClientRect().top ?? 0
   const contentScrollTop = content?.scrollTop ?? 0
   configHeaderCompact.value = contentScrollTop > 28 || window.scrollY > 28 || contentTop < 12
+  if (!header || !shell) return
+  const headerRect = header.getBoundingClientRect()
+  const shellRect = shell.getBoundingClientRect()
+  configCompactHeaderVisible.value = headerRect.bottom <= 8
+  if (!configCompactHeaderVisible.value) return
+  const gutter = 8
+  const left = Math.max(gutter, Math.min(shellRect.left, window.innerWidth - gutter))
+  const width = Math.max(0, Math.min(shellRect.width, window.innerWidth - left - gutter))
+  configCompactHeaderStyle.value = {
+    '--yh-compact-left': `${left}px`,
+    '--yh-compact-width': `${width}px`,
+    '--yh-settings-zh-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
+  }
 }
 
 onMounted(() => {
@@ -5233,6 +5281,8 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 
 .mcr-config-shell .mcr-config-topbar {
   display: grid !important;
+  position: relative !important;
+  top: auto !important;
   grid-template-columns: minmax(0, 1fr) auto !important;
   grid-template-areas:
     "brand actions"
@@ -5278,6 +5328,85 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   grid-area: tabs;
   justify-self: stretch;
   width: min(360px, 100%) !important;
+}
+
+.yh-compact-config-header {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: var(--yh-compact-left);
+  z-index: 58;
+  display: flex;
+  width: var(--yh-compact-width);
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid var(--yahaha-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  box-shadow: 0 10px 24px var(--color-shadow);
+  color: var(--color-text-main);
+  backdrop-filter: blur(16px) saturate(130%);
+}
+
+.yh-compact-config-header[data-mcr-theme="dark"] {
+  border-color: rgba(230, 236, 245, .14);
+  background: rgba(23, 32, 51, .9);
+}
+
+.yh-compact-config-header__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-main);
+  font-family: var(--yh-settings-zh-font, "McrFont_chaohei"), "PingFang SC", sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  opacity: .8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yh-compact-config-header__actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+
+.yh-compact-config-run,
+.yh-compact-config-icon {
+  position: relative;
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--yahaha-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft));
+  color: var(--yahaha-blue);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  cursor: pointer;
+  transition: width 220ms cubic-bezier(.2, .8, .2, 1), background-color 180ms ease, transform 140ms ease;
+}
+
+.yh-compact-config-run:hover,
+.yh-compact-config-icon:hover { background: var(--color-primary-soft); transform: scale(1.03); }
+.yh-compact-config-run:active,
+.yh-compact-config-icon:active { transform: scale(.96); }
+.yh-compact-config-run:disabled,
+.yh-compact-config-icon:disabled { cursor: default; opacity: .48; transform: none; }
+.yh-compact-config-run .yh-run-progress { position: absolute; inset: 0 auto 0 0; width: var(--yh-run-progress, 0%); background: rgba(255, 255, 255, .24); }
+.yh-compact-config-run .yh-run-content { position: relative; display: inline-flex; align-items: center; gap: 5px; }
+.yh-compact-config-run.is-running { width: 88px; min-width: 88px; border-color: var(--yahaha-blue); background: var(--yahaha-blue); color: #fff; }
+
+.yh-compact-header-enter-active,
+.yh-compact-header-leave-active { transition: opacity 160ms ease, transform 180ms cubic-bezier(.2, .8, .2, 1); }
+.yh-compact-header-enter-from,
+.yh-compact-header-leave-to { opacity: 0; transform: translateY(-8px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .yh-compact-config-header,
+  .yh-compact-config-run,
+  .yh-compact-config-icon { transition: opacity 140ms ease; }
 }
 
 .mcr-config-shell .mcr-config-save-message--floating {
@@ -6367,7 +6496,7 @@ html.dark .mcr-config-shell .yh-settings-en span,
   min-width: 44px !important;
   height: 44px !important;
   padding: 0 !important;
-  border: 0 !important;
+  border: 1px solid var(--yahaha-border) !important;
   border-radius: 14px !important;
   background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft)) !important;
   box-shadow: 0 4px 12px var(--color-shadow) !important;
@@ -6386,6 +6515,7 @@ html.dark .mcr-config-shell .yh-settings-en span,
   width: 112px !important;
   min-width: 112px !important;
   border-radius: 13px !important;
+  border-color: var(--mcr-config-primary) !important;
   background: var(--mcr-config-primary) !important;
 }
 .mcr-config-shell .yh-run-btn.is-running .yh-run-content { color: #fff !important; }

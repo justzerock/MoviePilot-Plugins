@@ -190,19 +190,22 @@ test('media count badge is available in the persistent layout editor', () => {
 })
 
 test('application chrome uses subsetted chaohei and impact fonts with a compact scroll header', () => {
-  assert.match(page, /getTemplateFontFaceName\('chaohei'\)/)
-  assert.match(page, /getTemplateFontFaceName\('impact'\)/)
+  assert.match(page, /getTemplateFontFaceName\('app_chaohei'\)/)
+  assert.match(page, /getTemplateFontFaceName\('app_impact'\)/)
+  assert.match(page, /loadPageHeaderFonts\(\)/)
   assert.match(page, /yh-compact-page-header/)
   assert.match(page, /updateCompactHeader\(\)/)
   assert.match(config, /\/api\/fonts\/faces/)
-  assert.match(config, /getTemplateFontFaceName\('chaohei'\)/)
-  assert.match(config, /getTemplateFontFaceName\('impact'\)/)
+  assert.match(config, /getTemplateFontFaceName\('app_chaohei'\)/)
+  assert.match(config, /getTemplateFontFaceName\('app_impact'\)/)
+  assert.match(config, /yh-compact-config-header/)
 })
 
-test('generation action morphs between a borderless play control and progress stop control', () => {
+test('generation action morphs between a bordered play control and progress stop control', () => {
   assert.match(page, /isGenerating \? 'mdi-stop' : 'mdi-play'/)
   assert.match(page, /width: 112px !important/)
-  assert.match(page, /border: 0 !important/)
+  assert.match(page, /border: 1px solid var\(--yahaha-border\) !important/)
   assert.match(config, /isGenerating \? 'mdi-stop' : 'mdi-play'/)
   assert.match(config, /width: 112px !important/)
+  assert.match(config, /border: 1px solid var\(--yahaha-border\) !important/)
 })

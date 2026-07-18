@@ -127,7 +127,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.2.5"
+    plugin_version = "2.2.6"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -4642,13 +4642,13 @@ class YahahaCoverStudio(_PluginBase):
         # The application chrome uses these two curated presets as well. Keep
         # them in the same subsetting pipeline as the editable layout so a
         # preview never silently falls back to a browser font.
-        aliases = {"main_title", "subtitle", "custom_text", "chaohei", "impact"}
+        aliases = {"main_title", "subtitle", "custom_text", "chaohei", "impact", "app_chaohei", "app_impact"}
         alias_texts: Dict[str, str] = {
             # Include the application chrome glyphs in the subset. Otherwise
             # a ready subset can still render these headings through a system
             # fallback when the layout itself contains no matching text.
-            "chaohei": "呀哈哈封面工坊配置",
-            "impact": "Yahaha Cover StudioConfiguration",
+            "app_chaohei": "呀哈哈封面工坊配置",
+            "app_impact": "Yahaha Cover StudioConfiguration",
         }
         if isinstance(layout, dict):
             for layer in self.__iter_custom_text_layers(layout.get("layers") or []):
@@ -4657,7 +4657,8 @@ class YahahaCoverStudio(_PluginBase):
                 aliases.add(alias)
                 alias_texts[alias] = alias_texts.get(alias, "") + str(layer.get("content") or layer.get("textStyle", {}).get("content") or "")
         for key in aliases:
-            path_value = self.__resolve_template_font_path(key, alias_texts.get(key, "")) or semantic_paths.get(key)
+            source_key = {"app_chaohei": "chaohei", "app_impact": "impact"}.get(key, key)
+            path_value = self.__resolve_template_font_path(source_key, alias_texts.get(key, "")) or semantic_paths.get(key)
             if path_value and Path(path_value).is_file():
                 resolved_path = str(Path(path_value).resolve())
                 self._preview_font_paths[resolved_path] = resolved_path
@@ -4726,6 +4727,10 @@ class YahahaCoverStudio(_PluginBase):
                     else:
                         rendered_characters.append(str(layer.get("content") or layer.get("textStyle", {}).get("content") or ""))
             collect_layer_text(layout.get("layers") or [])
+        # The shell headings use independent application aliases. Include
+        # their glyphs in every subset request so an otherwise valid title
+        # subset cannot render the page chrome through a system fallback.
+        rendered_characters.extend(["呀哈哈封面工坊配置", "Yahaha Cover StudioConfiguration"])
         return {
             "preview_font_enabled": self._preview_font_enabled,
             "font_subset_enabled": self._font_subset_enabled,
