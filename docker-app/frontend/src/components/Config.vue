@@ -8,8 +8,8 @@
           <header ref="configTopbarEl" class="mcr-config-topbar" :class="{ 'is-compact': configHeaderCompact }">
             <div class="mcr-config-brand">
               <h1 class="yh-settings-title-wrap" :style="configHeaderFontStyle" aria-label="配置 Configuration">
-                <span class="yh-settings-en">Configuration</span>
-                <span class="yh-settings-zh">配置</span>
+                <span class="yh-settings-en" :style="configEnglishTitleStyle">Configuration</span>
+                <span class="yh-settings-zh" :style="configChineseTitleStyle">配置</span>
               </h1>
             </div>
             <div class="mcr-config-topbar__meta">
@@ -893,6 +893,21 @@ const configHeaderFontStyle = computed<Record<string, string>>(() => {
   return {
     '--yh-settings-zh-font': `"${getTemplateFontFaceName('chaohei')}"`,
     '--yh-settings-en-font': `"${getTemplateFontFaceName('impact')}"`,
+  }
+})
+const configChineseTitleStyle = computed<Record<string, string>>(() => {
+  configHeaderFontRevision.value
+  return {
+    fontFamily: `"${getTemplateFontFaceName('chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
+    fontWeight: '400',
+    opacity: '.8',
+  }
+})
+const configEnglishTitleStyle = computed<Record<string, string>>(() => {
+  configHeaderFontRevision.value
+  return {
+    fontFamily: `"${getTemplateFontFaceName('impact')}", Impact, "Arial Narrow", sans-serif`,
+    fontWeight: '400',
   }
 })
 const settingsAnchorSections = [
@@ -6354,14 +6369,19 @@ html.dark .mcr-config-shell .yh-settings-en span,
   padding: 0 !important;
   border: 0 !important;
   border-radius: 14px !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft)) !important;
+  box-shadow: 0 4px 12px var(--color-shadow) !important;
   overflow: hidden;
   transition: width 220ms ease, min-width 220ms ease, border-radius 220ms ease, background-color 180ms ease, transform 120ms ease !important;
 }
 
 .mcr-config-shell .yh-run-btn .yh-run-progress { background: rgba(255, 255, 255, .26) !important; }
 .mcr-config-shell .yh-run-btn .yh-run-content { color: var(--mcr-config-primary) !important; }
+.mcr-config-shell .yh-run-btn:hover {
+  background: var(--color-primary-soft) !important;
+  box-shadow: 0 7px 16px var(--color-shadow) !important;
+  transform: scale(1.03);
+}
 .mcr-config-shell .yh-run-btn.is-running {
   width: 112px !important;
   min-width: 112px !important;

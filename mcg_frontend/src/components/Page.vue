@@ -33,14 +33,14 @@
                     </span>
                   </button>
                   <h1 class="yh-brand-title" :class="{ 'is-loading': titleLoading }" :style="brandTitleFontStyle" aria-label="呀哈哈封面工坊 Yahaha Cover Studio">
-                    <span class="yh-brand-en-big" aria-hidden="true">
+                    <span class="yh-brand-en-big" :style="brandEnglishTitleStyle" aria-hidden="true">
                       <span class="yh-brand-en-pc">Yahaha Cover Studio</span>
                       <span class="yh-brand-en-mobile">
                         <span>Yahaha</span>
                         <span>CoverStudio</span>
                       </span>
                     </span>
-                    <span class="yh-brand-zh-overlap">
+                    <span class="yh-brand-zh-overlap" :style="brandChineseTitleStyle">
                       <span class="yh-brand-zh-part">呀哈哈</span><span class="yh-brand-zh-part">封面工坊</span>
                     </span>
                   </h1>
@@ -2111,6 +2111,23 @@ const brandTitleFontStyle = computed<Record<string, string>>(() => {
   return {
     '--yh-brand-zh-font': `"${getTemplateFontFaceName('chaohei')}"`,
     '--yh-brand-en-font': `"${getTemplateFontFaceName('impact')}"`,
+  }
+})
+
+const brandChineseTitleStyle = computed<Record<string, string>>(() => {
+  headerFontRevision.value
+  return {
+    fontFamily: `"${getTemplateFontFaceName('chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
+    fontWeight: '400',
+    opacity: '.8',
+  }
+})
+
+const brandEnglishTitleStyle = computed<Record<string, string>>(() => {
+  headerFontRevision.value
+  return {
+    fontFamily: `"${getTemplateFontFaceName('impact')}", Impact, "Arial Narrow", sans-serif`,
+    fontWeight: '400',
   }
 })
 
@@ -10744,8 +10761,8 @@ onBeforeUnmount(() => {
 
 .mcr-page-shell .yh-run-btn {
   border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft)) !important;
+  box-shadow: 0 4px 12px var(--color-shadow) !important;
   overflow: visible !important;
   transition:
     width 220ms cubic-bezier(.2, .8, .2, 1),
@@ -10756,9 +10773,9 @@ onBeforeUnmount(() => {
 }
 
 .mcr-page-shell .yh-run-btn:hover {
-  background: transparent !important;
-  box-shadow: none !important;
-  transform: scale(1.06);
+  background: var(--color-primary-soft) !important;
+  box-shadow: 0 7px 16px var(--color-shadow) !important;
+  transform: scale(1.03);
 }
 
 .mcr-page-shell .yh-run-btn .yh-run-content {
