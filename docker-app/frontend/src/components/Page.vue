@@ -10518,16 +10518,17 @@ onBeforeUnmount(() => {
   }
 
   .mcr-page-shell .yh-brand-en-mobile {
-    gap: 8px !important;
+    gap: 10px !important;
     width: max-content !important;
     max-width: none !important;
     overflow: visible !important;
   }
 
   .mcr-page-shell .yh-brand-en-mobile > span {
-    font-size: clamp(60px, 17vw, 92px) !important;
-    letter-spacing: -0.065em !important;
-    line-height: 0.88 !important;
+    font-size: clamp(52px, 14vw, 72px) !important;
+    letter-spacing: -0.018em !important;
+    line-height: 1.04 !important;
+    font-kerning: normal;
     white-space: nowrap !important;
   }
 
@@ -10575,7 +10576,8 @@ onBeforeUnmount(() => {
   }
 
   .mcr-page-shell .yh-brand-en-mobile > span {
-    font-size: 58px !important;
+    font-size: clamp(50px, 13.6vw, 56px) !important;
+    line-height: 1.04 !important;
   }
 
   .mcr-page-shell .yh-brand-zh-overlap {

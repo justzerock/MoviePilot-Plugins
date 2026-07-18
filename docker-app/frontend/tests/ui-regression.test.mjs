@@ -203,6 +203,12 @@ test('application chrome uses subsetted chaohei and impact fonts with a compact 
   assert.match(config, /yh-compact-config-header/)
 })
 
+test('mobile Impact wordmark keeps readable tracking and line boxes', () => {
+  assert.match(page, /letter-spacing: -0\.018em !important/)
+  assert.match(page, /line-height: 1\.04 !important/)
+  assert.match(page, /font-kerning: normal/)
+})
+
 test('generation action morphs between a bordered play control and progress stop control', () => {
   assert.match(page, /isGenerating \? 'mdi-stop' : 'mdi-play'/)
   assert.match(page, /width: 112px !important/)
