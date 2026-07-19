@@ -72,7 +72,7 @@
                   </button>
                   <button
                     type="button"
-                    class="yh-run-btn"
+                    class="yh-run-btn yh-header-control"
                     :class="{ 'is-running': isGenerating }"
                     :style="runButtonProgressStyle"
                     :title="isGenerating ? generationProgressLabel : '生成封面'"
@@ -88,7 +88,7 @@
                   </button>
                   <v-btn
                     size="small"
-                    class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn"
+                    class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn yh-header-control"
                     icon
                     title="配置"
                     aria-label="配置"
@@ -1133,11 +1133,21 @@
           :style="compactHeaderStyle"
           aria-label="呀哈哈封面工坊快捷操作"
         >
+          <button
+            type="button"
+            class="yh-compact-page-header__avatar"
+            title="使用数据统计"
+            aria-label="使用数据统计"
+            @click="openDonationDialog"
+          >
+            <img v-if="donationAvatarImage" :src="donationAvatarImage" alt="">
+            <v-icon v-else icon="mdi-account-circle-outline" size="20" />
+          </button>
           <span class="yh-compact-page-header__title">呀哈哈封面工坊</span>
           <div class="yh-compact-page-header__actions">
           <button
             type="button"
-            class="yh-run-btn"
+            class="yh-run-btn yh-header-control"
             :class="{ 'is-running': isGenerating }"
             :style="runButtonProgressStyle"
             :title="isGenerating ? generationProgressLabel : '生成封面'"
@@ -1151,7 +1161,7 @@
               <span v-if="isGenerating" class="yh-run-count">{{ generationProgressCount }}</span>
             </span>
           </button>
-          <v-btn class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn" icon title="配置" aria-label="配置" :disabled="controlsLocked" @click="notifySwitch">
+          <v-btn class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn yh-header-control" icon title="配置" aria-label="配置" :disabled="controlsLocked" @click="notifySwitch">
             <v-icon icon="mdi-cog-outline" size="20" />
           </v-btn>
           </div>
@@ -1183,6 +1193,7 @@ import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
 import { loadPreviewFontFaces } from '../services/fontPreview'
 import { getThemeColor } from '../utils/themeColors'
 import { formatTimelineClock, formatTimelineDate } from '../utils/dateTime'
+import { createCompactHeaderScrollController, type CompactHeaderScrollController } from '../utils/compactHeaderScrollRoot'
 import { getHistoryCache, getPreviewCache, invalidatePreviewCache, setHistoryCache, setPreviewCache, stableCacheSignature } from '../services/contentCache'
 import { images } from '../assets/base64/images.js'
 import {
@@ -1283,6 +1294,7 @@ const pageShellEl = ref<HTMLElement | null>(null)
 const pageHeroEl = ref<HTMLElement | null>(null)
 const compactHeaderVisible = ref(false)
 const compactHeaderStyle = ref<Record<string, string>>({})
+let compactHeaderScrollController: CompactHeaderScrollController | null = null
 const headerFontRevision = ref(0)
 const previewBayEl = ref<HTMLElement | null>(null)
 const schemeListScrollEl = ref<HTMLElement | null>(null)
@@ -2089,7 +2101,7 @@ const brandTitleFontStyle = computed<Record<string, string>>(() => {
   headerFontRevision.value
   return {
     '--yh-brand-zh-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
-    '--yh-brand-en-font': `"${getTemplateFontFaceName('app_impact')}"`,
+    '--yh-brand-en-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
   }
 })
 
@@ -2105,7 +2117,7 @@ const brandChineseTitleStyle = computed<Record<string, string>>(() => {
 const brandEnglishTitleStyle = computed<Record<string, string>>(() => {
   headerFontRevision.value
   return {
-    fontFamily: `"${getTemplateFontFaceName('app_impact')}", Impact, "Arial Narrow", sans-serif`,
+    fontFamily: `"${getTemplateFontFaceName('app_chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
     fontWeight: '400',
   }
 })
@@ -2135,7 +2147,8 @@ function updateCompactHeader() {
   if (typeof window === 'undefined' || !pageHeroEl.value || !pageShellEl.value) return
   const heroRect = pageHeroEl.value.getBoundingClientRect()
   const shellRect = pageShellEl.value.getBoundingClientRect()
-  const visible = heroRect.bottom <= 8
+  const rootRect = compactHeaderScrollController?.getScrollRoot()?.getBoundingClientRect()
+  const visible = heroRect.bottom <= (rootRect?.top ?? 0) + 28
   compactHeaderVisible.value = visible
   if (!visible) return
   const gutter = 8
@@ -4226,11 +4239,12 @@ onMounted(async () => {
     syncSystemTheme()
     pageThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     pageThemeMediaQuery.addEventListener?.('change', syncSystemTheme)
+
+    compactHeaderScrollController = createCompactHeaderScrollController(() => pageHeroEl.value, updateCompactHeader)
+    compactHeaderScrollController.bind()
 	    window.addEventListener('focus', syncBackendStatusWhenVisible)
 	    window.addEventListener('scroll', updateHistoryFloatingActionsPosition, true)
-	    window.addEventListener('scroll', updateCompactHeader, true)
 	    window.addEventListener('resize', updateHistoryFloatingActionsPosition)
-	    window.addEventListener('resize', updateCompactHeader)
 	    window.addEventListener('resize', updatePreviewBayHeight)
 	    window.addEventListener('scroll', scheduleTimeMachineDepth, true)
 	    window.addEventListener('resize', scheduleTimeMachineDepth)
@@ -4264,7 +4278,7 @@ onMounted(async () => {
 	  await loadPreviewSources()
 	  window.requestAnimationFrame(() => {
 	    updatePreviewBayHeight()
-	    updateCompactHeader()
+	    compactHeaderScrollController?.refresh()
 	  })
 	})
 
@@ -4275,9 +4289,9 @@ onBeforeUnmount(() => {
     pageThemeMediaQuery?.removeEventListener?.('change', syncSystemTheme)
 	    window.removeEventListener('focus', syncBackendStatusWhenVisible)
 	    window.removeEventListener('scroll', updateHistoryFloatingActionsPosition, true)
-	    window.removeEventListener('scroll', updateCompactHeader, true)
 	    window.removeEventListener('resize', updateHistoryFloatingActionsPosition)
-	    window.removeEventListener('resize', updateCompactHeader)
+	    compactHeaderScrollController?.dispose()
+	    compactHeaderScrollController = null
 	    window.removeEventListener('resize', updatePreviewBayHeight)
 	    window.removeEventListener('scroll', scheduleTimeMachineDepth, true)
 	    window.removeEventListener('resize', scheduleTimeMachineDepth)
@@ -10793,14 +10807,14 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
 /* Keep the application chrome on the same subset-capable font path as the
  * canvas preview without reintroducing CSS-only fallback fonts. */
 .mcr-page-shell .yh-brand-en-big {
-  font-family: var(--yh-brand-en-font, "Impact"), "Arial Narrow", sans-serif !important;
+  font-family: var(--yh-brand-en-font, "McrFont_chaohei"), "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-weight: 400 !important;
 }
 
 .mcr-page-shell .yh-brand-zh-overlap {
   font-family: var(--yh-brand-zh-font, "McrFont_chaohei"), "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-weight: 400 !important;
-  opacity: .8 !important;
+  opacity: 1 !important;
 }
 
 .mcr-page-shell .yh-run-btn {
@@ -10862,7 +10876,7 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
   position: fixed;
   top: max(8px, env(safe-area-inset-top));
   left: var(--yh-compact-left);
-  z-index: 58;
+  z-index: 2147482800;
   display: flex;
   width: var(--yh-compact-width);
   min-height: 48px;
@@ -10875,6 +10889,7 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
   background: color-mix(in srgb, var(--color-surface) 88%, transparent);
   box-shadow: 0 10px 24px var(--color-shadow);
   backdrop-filter: blur(16px) saturate(130%);
+  transform-origin: center top;
 }
 
 .yh-compact-page-header__title {
@@ -10898,16 +10913,19 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
 }
 
 .yh-compact-page-header .yh-run-btn,
-.yh-compact-page-header .yh-icon-btn {
-  width: 36px !important;
-  height: 36px !important;
-  min-width: 36px !important;
-  border-radius: 12px !important;
-}
-
 .yh-compact-page-header .yh-run-btn.is-running {
   width: 88px !important;
   min-width: 88px !important;
+  height: 36px !important;
+  border-radius: 12px !important;
+  transition: background-color var(--yh-motion-fast) var(--yh-motion-enter), border-color var(--yh-motion-fast) var(--yh-motion-enter), color var(--yh-motion-fast) var(--yh-motion-enter), transform var(--yh-motion-fast) var(--yh-motion-enter) !important;
+}
+
+.yh-compact-page-header .yh-icon-btn {
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  border-radius: 12px !important;
 }
 
 .yh-compact-page-header .yh-run-count {
@@ -10917,7 +10935,8 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
 
 .yh-compact-header-enter-active,
 .yh-compact-header-leave-active {
-  transition: opacity 160ms ease, transform 180ms cubic-bezier(.2, .8, .2, 1);
+  will-change: transform, opacity;
+  transition: opacity var(--yh-motion-fast) var(--yh-motion-enter), transform var(--yh-motion-standard) var(--yh-motion-enter);
 }
 
 .yh-compact-header-enter-from,
@@ -10970,5 +10989,73 @@ html.dark .mcr-page-shell .yh-brand-en-big span,
   .yh-compact-page-header__title {
     font-size: 16px;
   }
+}
+
+/* The English wordmark is intentionally a low-contrast desktop backdrop.
+ * Narrow viewports keep their own readable tracking below. */
+@media (min-width: 769px) {
+  .mcr-page-shell .yh-brand-en-big {
+    color: rgba(83, 125, 198, 0.11) !important;
+    letter-spacing: -0.02em !important;
+    line-height: 0.98 !important;
+  }
+
+  .mcr-page-shell[data-mcr-theme="dark"] .yh-brand-en-big,
+  .mcr-page-shell[data-mcr-theme="dark"] .yh-brand-en-big span {
+    color: rgba(244, 247, 251, 0.10) !important;
+    -webkit-text-fill-color: rgba(244, 247, 251, 0.10) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yh-compact-header-enter-active,
+  .yh-compact-header-leave-active {
+    transition: opacity var(--yh-motion-fast) linear !important;
+  }
+
+  .yh-compact-header-enter-from,
+  .yh-compact-header-leave-to {
+    transform: none;
+  }
+}
+
+/* Keep the Chinese product name crisp while the English layer stays purely
+ * decorative. These final theme rules win over older compatibility layers. */
+.mcr-page-shell .yh-brand-zh-overlap,
+.mcr-page-shell .yh-brand-zh-overlap .yh-brand-zh-part,
+.yh-compact-page-header__title {
+  color: #495267 !important;
+  opacity: 1 !important;
+}
+
+.mcr-page-shell[data-mcr-theme="dark"] .yh-brand-zh-overlap,
+.mcr-page-shell[data-mcr-theme="dark"] .yh-brand-zh-overlap .yh-brand-zh-part,
+.yh-compact-page-header[data-mcr-theme="dark"] .yh-compact-page-header__title {
+  color: #c5c9cc !important;
+}
+
+@media (max-width: 768px) {
+  .mcr-page-shell .yh-brand-en-big,
+  .mcr-page-shell .yh-brand-en-big span {
+    color: rgba(83, 125, 198, 0.065) !important;
+    -webkit-text-fill-color: rgba(83, 125, 198, 0.065) !important;
+  }
+
+  .mcr-page-shell[data-mcr-theme="dark"] .yh-brand-en-big,
+  .mcr-page-shell[data-mcr-theme="dark"] .yh-brand-en-big span {
+    color: rgba(244, 247, 251, 0.025) !important;
+    -webkit-text-fill-color: rgba(244, 247, 251, 0.025) !important;
+  }
+}
+</style>
+<style scoped>
+.yh-compact-page-header__avatar { width: 40px; height: 40px; min-width: 40px; }
+.yh-compact-page-header .yh-run-btn,
+.yh-compact-page-header .yh-run-btn.is-running { height: 40px !important; border-radius: 13px !important; }
+.yh-compact-page-header .yh-icon-btn { width: 40px !important; height: 40px !important; min-width: 40px !important; border-radius: 13px !important; }
+@media (max-width: 390px) {
+  .yh-compact-page-header { gap: 6px; padding-inline: 6px; }
+  .yh-compact-page-header__actions { gap: 4px; }
+  .yh-compact-page-header__title { font-size: 15px; }
 }
 </style>

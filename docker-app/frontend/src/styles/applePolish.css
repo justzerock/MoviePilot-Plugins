@@ -26,6 +26,10 @@
   --yh-apple-response-fast: 120ms;
   --yh-apple-response: 220ms;
   --yh-apple-ease: cubic-bezier(0.2, 0.78, 0.25, 1);
+  --yh-motion-enter: cubic-bezier(0.23, 1, 0.32, 1);
+  --yh-motion-move: cubic-bezier(0.77, 0, 0.175, 1);
+  --yh-motion-fast: 140ms;
+  --yh-motion-standard: 220ms;
   --mcr-font-body:
     -apple-system,
     BlinkMacSystemFont,
@@ -389,12 +393,45 @@ html.dark [data-mcr-theme],
 
 /* Popovers materialize from their anchor instead of appearing as flat boxes. */
 .mcr-blueprint-select__popover {
+  --yh-apple-border: rgba(60, 60, 67, 0.16);
+  --yh-apple-shadow-medium: 0 2px 6px rgba(0, 0, 0, 0.05), 0 16px 38px rgba(28, 39, 61, 0.10);
+  --yh-apple-response: 220ms;
+  --yh-apple-response-fast: 120ms;
+  --yh-apple-ease: cubic-bezier(0.2, 0.78, 0.25, 1);
+  --yh-popover-bg: rgba(255, 255, 255, 0.92);
+  --yh-popover-option: rgba(255, 255, 255, 0.36);
+  --yh-popover-option-hover: rgba(0, 122, 255, 0.08);
+  --yh-popover-text: #1d1d1f;
+  --yh-popover-muted: #6e6e73;
+  --yh-popover-border: rgba(60, 60, 67, 0.16);
   border-color: var(--yh-apple-border) !important;
-  background: var(--yh-apple-material-strong) !important;
+  background: var(--yh-popover-bg) !important;
+  color: var(--yh-popover-text) !important;
+  color-scheme: light;
   box-shadow: var(--yh-apple-shadow-medium) !important;
   backdrop-filter: blur(24px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
   animation: yh-apple-materialize var(--yh-apple-response) var(--yh-apple-ease) both;
+}
+
+/* Teleported menus cannot inherit theme variables from the settings shell. */
+.mcr-blueprint-select__popover[data-mcr-theme="dark"] {
+  --yh-apple-blue: #0a84ff;
+  --yh-apple-border: rgba(255, 255, 255, 0.14);
+  --yh-popover-bg: rgba(28, 28, 30, 0.90);
+  --yh-popover-option: rgba(44, 44, 46, 0.72);
+  --yh-popover-option-hover: rgba(58, 58, 60, 0.92);
+  --yh-popover-text: #f5f5f7;
+  --yh-popover-muted: #aeaeb2;
+  --yh-popover-border: rgba(255, 255, 255, 0.14);
+  border-color: var(--yh-popover-border) !important;
+  background: var(--yh-popover-bg) !important;
+  color: var(--yh-popover-text) !important;
+  -webkit-text-fill-color: var(--yh-popover-text) !important;
+  color-scheme: dark;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.22),
+    0 22px 54px rgba(0, 0, 0, 0.42) !important;
 }
 
 .mcr-blueprint-select__popover--top {
@@ -407,7 +444,9 @@ html.dark [data-mcr-theme],
 
 .mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option) {
   border-color: transparent !important;
-  background: transparent !important;
+  background: var(--yh-popover-option) !important;
+  color: var(--yh-popover-text) !important;
+  -webkit-text-fill-color: var(--yh-popover-text) !important;
   box-shadow: none !important;
   transition:
     background-color var(--yh-apple-response-fast) ease,
@@ -420,7 +459,7 @@ html.dark [data-mcr-theme],
 }
 
 .mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option:hover) {
-  background: color-mix(in srgb, var(--yh-apple-blue) 9%, transparent) !important;
+  background: var(--yh-popover-option-hover) !important;
 }
 
 .mcr-blueprint-select__popover :where(.mcr-blueprint-select__multi-option--active) {
@@ -429,27 +468,56 @@ html.dark [data-mcr-theme],
   -webkit-text-fill-color: var(--yh-apple-blue) !important;
 }
 
+.mcr-blueprint-select__popover[data-mcr-theme="dark"] :where(
+  .mcr-blueprint-select__multi-title,
+  .mcr-blueprint-select__done
+) {
+  color: var(--yh-popover-text) !important;
+  -webkit-text-fill-color: var(--yh-popover-text) !important;
+}
+
+.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__checkbox {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  background: rgba(18, 18, 20, 0.88) !important;
+  color: var(--yh-popover-text) !important;
+}
+
+.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__multi-option--active .mcr-blueprint-select__checkbox {
+  border-color: var(--yh-apple-blue) !important;
+  background: var(--yh-apple-blue) !important;
+  color: #fff !important;
+}
+
+.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__done {
+  border-color: var(--yh-popover-border) !important;
+  background: rgba(58, 58, 60, 0.72) !important;
+}
+
 /* Floating history detail uses a thicker material than small popovers. */
 .yh-history-expansion__dismiss {
-  background: rgba(0, 0, 0, 0.18) !important;
+  background: rgba(20, 24, 32, 0.12) !important;
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
 }
 
+[data-mcr-theme="dark"].yh-history-expansion .yh-history-expansion__dismiss {
+  background: rgba(0, 0, 0, 0.24) !important;
+}
+
 .yh-history-expansion__panel {
-  border-color: rgba(255, 255, 255, 0.66) !important;
+  border-color: var(--yh-history-border, rgba(60, 60, 67, 0.16)) !important;
   border-radius: 22px !important;
-  background: rgba(245, 245, 247, 0.78) !important;
+  background: var(--yh-history-panel, rgba(250, 250, 252, 0.62)) !important;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.06),
     0 24px 64px rgba(28, 39, 61, 0.20) !important;
-  backdrop-filter: blur(30px) saturate(150%) !important;
-  -webkit-backdrop-filter: blur(30px) saturate(150%) !important;
+  backdrop-filter: blur(32px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(140%) !important;
 }
 
 [data-mcr-theme="dark"].yh-history-expansion .yh-history-expansion__panel {
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  background: rgba(28, 28, 30, 0.82) !important;
+  border-color: var(--yh-history-border, rgba(255, 255, 255, 0.14)) !important;
+  background: var(--yh-history-panel, rgba(28, 28, 30, 0.66)) !important;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.28),
     0 28px 72px rgba(0, 0, 0, 0.44) !important;
@@ -495,29 +563,21 @@ html.dark [data-mcr-theme],
   }
 }
 
-.yh-history-expansion-enter-active,
-.yh-history-expansion-leave-active {
-  transition:
-    opacity 240ms ease,
-    backdrop-filter 240ms ease !important;
+.yh-history-expansion-enter-active { transition: opacity 180ms var(--yh-motion-enter) !important; }
+.yh-history-expansion-leave-active { transition: opacity 160ms ease-in !important; }
+.yh-history-expansion-enter-active .yh-history-expansion__panel {
+  transition: transform 240ms var(--yh-motion-enter), opacity 180ms ease-out !important;
 }
-
-.yh-history-expansion-enter-active .yh-history-expansion__panel,
 .yh-history-expansion-leave-active .yh-history-expansion__panel {
-  transition:
-    transform 320ms var(--yh-apple-ease),
-    opacity 220ms ease,
-    backdrop-filter 260ms ease !important;
+  transition: transform 180ms ease-in, opacity 150ms ease-in !important;
 }
-
-.yh-history-expansion-enter-from .yh-history-expansion__panel,
+.yh-history-expansion-enter-from .yh-history-expansion__panel {
+  opacity: 0 !important;
+  transform: translate3d(var(--yh-expand-from-x), var(--yh-expand-from-y), 0) scale(0.94) !important;
+}
 .yh-history-expansion-leave-to .yh-history-expansion__panel {
   opacity: 0 !important;
-  transform:
-    translate(var(--yh-expand-from-x), var(--yh-expand-from-y))
-    scale(0.82) !important;
-  backdrop-filter: blur(10px) saturate(120%) !important;
-  -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
+  transform: scale(0.98) !important;
 }
 
 /* Cards lift only for precise pointers; touch receives press feedback. */
@@ -619,4 +679,219 @@ html.dark [data-mcr-theme],
   ) {
     border-width: 2px !important;
   }
+}
+
+/* Header controls share one material language in the large and compact bars. */
+[data-mcr-theme] .yh-header-control.yh-header-control {
+  box-sizing: border-box;
+  border: 1px solid var(--yh-apple-border) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--color-surface) 76%, var(--color-surface-soft) 24%) !important;
+  color: var(--yh-apple-secondary-label) !important;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--color-shadow) 78%, transparent) !important;
+  backdrop-filter: blur(12px) saturate(125%);
+  -webkit-backdrop-filter: blur(12px) saturate(125%);
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 140ms var(--yh-motion-enter), box-shadow 180ms ease !important;
+}
+
+/* The settings header uses the exact same idle material as preview. */
+.mcr-config-shell[data-mcr-theme] .mcr-config-top-actions .yh-header-control.yh-header-control:not(.is-running),
+.yh-compact-config-header[data-mcr-theme] .yh-header-control.yh-header-control:not(.is-running) {
+  border-color: var(--yh-apple-border) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--color-surface) 76%, var(--color-surface-soft) 24%) !important;
+  color: var(--yh-apple-secondary-label) !important;
+  -webkit-text-fill-color: var(--yh-apple-secondary-label) !important;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--color-shadow) 78%, transparent) !important;
+}
+
+.mcr-config-shell[data-mcr-theme="dark"] .mcr-config-top-actions .yh-header-control.yh-header-control:not(.is-running),
+.yh-compact-config-header[data-mcr-theme="dark"] .yh-header-control.yh-header-control:not(.is-running) {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: color-mix(in srgb, var(--color-surface) 74%, var(--color-surface-soft) 26%) !important;
+  color: #d1d1d6 !important;
+  -webkit-text-fill-color: #d1d1d6 !important;
+}
+[data-mcr-theme="dark"] .yh-header-control.yh-header-control {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: color-mix(in srgb, var(--color-surface) 74%, var(--color-surface-soft) 26%) !important;
+  color: #d1d1d6 !important;
+}
+[data-mcr-theme] .yh-header-control.yh-header-control:hover:not(:disabled):not(.is-running) {
+  border-color: rgba(0, 122, 255, 0.28) !important;
+  background: var(--color-surface-soft) !important;
+  color: var(--yh-apple-blue) !important;
+}
+[data-mcr-theme="dark"] .yh-header-control.yh-header-control:hover:not(:disabled):not(.is-running) { background: var(--color-surface-soft) !important; }
+[data-mcr-theme] .yh-header-control:focus-visible { outline: none; box-shadow: var(--yh-apple-focus-ring), var(--yh-apple-shadow-small) !important; }
+[data-mcr-theme] .yh-header-control:active:not(:disabled) { transform: scale(.97); }
+[data-mcr-theme] .yh-header-control.is-running {
+  border-color: var(--yh-apple-blue) !important;
+  background: var(--yh-apple-blue) !important;
+  color: #fff !important;
+}
+
+.yh-compact-page-header__avatar,
+.yh-settings-title-glyph,
+.yh-compact-config-header__glyph {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--yh-apple-border);
+  background: var(--yh-apple-material-strong);
+  color: var(--yh-apple-blue);
+  box-shadow: var(--yh-apple-shadow-small);
+}
+.yh-compact-page-header__avatar {
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 140ms var(--yh-motion-enter), border-color 180ms ease;
+}
+.yh-compact-page-header__avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.yh-compact-page-header__avatar:active { transform: scale(.97); }
+.yh-settings-title-glyph { width: 44px; height: 44px; border-radius: 14px; }
+.yh-compact-config-header__identity { min-width: 0; display: flex; align-items: center; gap: 9px; }
+.yh-compact-config-header__glyph { width: 34px; height: 34px; border-radius: 11px; }
+[data-mcr-theme="dark"] :where(.yh-compact-page-header__avatar, .yh-settings-title-glyph, .yh-compact-config-header__glyph) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(44, 44, 46, 0.92);
+  color: #64a8ff;
+}
+.yh-settings-title-glyph,
+.yh-compact-config-header__glyph {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.yh-settings-title-glyph { width: 48px !important; height: 48px !important; }
+.yh-settings-title-glyph .v-icon { font-size: 30px !important; }
+.yh-compact-config-header__glyph { width: 38px !important; height: 38px !important; }
+.yh-compact-config-header__glyph .v-icon { font-size: 23px !important; }
+[data-mcr-theme="dark"] :where(.yh-settings-title-glyph, .yh-compact-config-header__glyph) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: #64a8ff;
+}
+.mcr-config-shell .mcr-config-brand { display: flex !important; align-items: center !important; gap: 10px !important; min-width: 0; }
+.mcr-config-shell .yh-settings-title-wrap { min-width: 0; }
+
+/* Idle controls remain square; only an active task grows to reveal progress. */
+[data-mcr-theme] .yh-compact-page-header .yh-run-btn.yh-header-control:not(.is-running),
+[data-mcr-theme] .yh-compact-config-header .yh-compact-config-run.yh-header-control:not(.is-running) {
+  width: 40px !important;
+  min-width: 40px !important;
+}
+
+/* Scheme assignment mirrors the quiet, individually bounded font rows. */
+.mcr-config-shell .yh-scheme-assignment-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-block: 16px;
+}
+.mcr-config-shell .yh-scheme-assignment__default { min-width: 0; }
+.mcr-config-shell .yh-scheme-assignment__add { min-height: 42px; margin: 0; align-self: end; }
+.mcr-config-shell .yh-scheme-assignment {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--yh-apple-border);
+  border-radius: 14px;
+  background: var(--color-surface-soft);
+  box-shadow: none;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 140ms var(--yh-motion-enter);
+}
+.mcr-config-shell[data-mcr-theme="dark"] .yh-scheme-assignment {
+  border-color: var(--color-border);
+  background: var(--color-surface-soft);
+  box-shadow: none;
+}
+.mcr-config-shell .yh-scheme-assignment:hover { border-color: var(--yh-apple-border-strong); }
+.mcr-config-shell .yh-scheme-assignment__fields {
+  display: grid;
+  grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.4fr) 40px;
+  align-items: start;
+  gap: 12px;
+  padding-bottom: 20px;
+}
+.mcr-config-shell .yh-scheme-assignment__fields > .mcr-blueprint-select {
+  position: relative;
+  align-self: start;
+  grid-template-rows: 15px 42px;
+  min-width: 0;
+}
+.mcr-config-shell .yh-scheme-assignment__fields .mcr-blueprint-select__label {
+  min-height: 15px;
+  display: flex;
+  align-items: center;
+  line-height: 15px;
+}
+.mcr-config-shell .yh-scheme-assignment__fields :where(
+  .mcr-blueprint-select__control,
+  .mcr-blueprint-select__multi-trigger
+) {
+  box-sizing: border-box;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
+}
+.mcr-config-shell .yh-scheme-assignment__fields .mcr-blueprint-select__hint {
+  position: absolute;
+  top: 66px;
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcr-config-shell .yh-scheme-assignment__remove {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--yh-apple-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--yh-apple-red);
+  cursor: pointer;
+  align-self: start !important;
+  margin-top: 22px;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 140ms var(--yh-motion-enter);
+}
+.mcr-config-shell .yh-scheme-assignment__remove:active { transform: scale(.97); }
+
+/* Keep switch tracks vertically aligned while labels and descriptions wrap. */
+.mcr-config-shell .v-switch { margin-block: 0; }
+.mcr-config-shell .v-switch .v-selection-control { min-height: 40px; align-items: center; }
+.mcr-config-shell .v-switch .v-selection-control__wrapper { align-self: center; }
+.mcr-config-shell .v-switch .v-label { min-height: 40px; display: flex; align-items: center; line-height: 1.35; }
+
+@media (max-width: 768px) {
+  .mcr-config-shell .yh-scheme-assignment-toolbar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-block: 12px; }
+  .mcr-config-shell .yh-scheme-assignment { padding: 12px; }
+  .mcr-config-shell .yh-scheme-assignment__fields { grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr) 40px; gap: 8px; }
+  .mcr-config-shell .v-switch .v-label { font-size: 14px; }
+}
+
+@media (max-width: 390px) {
+  .mcr-config-shell .yh-scheme-assignment__fields { grid-template-columns: minmax(0, 1fr) 40px; }
+  .mcr-config-shell .yh-scheme-assignment__fields > :first-child { grid-column: 1 / -1; }
+  .mcr-config-shell .yh-scheme-assignment__remove { grid-column: 2; grid-row: 2; }
+  .mcr-config-shell .yh-scheme-assignment__fields .mcr-blueprint-select__hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-mcr-theme] .yh-header-control,
+  .yh-compact-page-header__avatar,
+  .mcr-config-shell .yh-scheme-assignment,
+  .mcr-config-shell .yh-scheme-assignment__remove { transition: none !important; transform: none !important; }
 }

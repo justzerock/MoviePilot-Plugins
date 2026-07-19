@@ -7,6 +7,7 @@
         <div class="mcr-config-app">
           <header ref="configTopbarEl" class="mcr-config-topbar" :class="{ 'is-compact': configHeaderCompact }">
             <div class="mcr-config-brand">
+              <span class="yh-settings-title-glyph" aria-hidden="true"><v-icon icon="mdi-cog-outline" size="24" /></span>
               <h1 class="yh-settings-title-wrap" :style="configHeaderFontStyle" aria-label="配置 Configuration">
                 <span class="yh-settings-en" :style="configEnglishTitleStyle">Configuration</span>
                 <span class="yh-settings-zh" :style="configChineseTitleStyle">配置</span>
@@ -16,7 +17,7 @@
               <div class="mcr-config-top-actions yh-top-actions">
                 <button
                   type="button"
-                  class="yh-run-btn"
+                  class="yh-run-btn yh-header-control"
                   :class="{ 'is-running': isGenerating }"
                   :style="configRunButtonProgressStyle"
                   :title="isGenerating ? configGenerationProgressLabel : '立即生成'"
@@ -32,7 +33,7 @@
                 </button>
                 <v-btn
                   size="small"
-                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn yh-icon-btn--save"
+                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn yh-icon-btn--save yh-header-control"
                   icon
                   title="保存配置"
                   aria-label="保存配置"
@@ -44,7 +45,7 @@
                 </v-btn>
                 <v-btn
                   size="small"
-                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn"
+                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn yh-header-control"
                   icon
                   title="封面预览"
                   aria-label="封面预览"
@@ -55,7 +56,7 @@
                 </v-btn>
                 <v-btn
                   size="small"
-                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn"
+                  class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-icon-btn yh-header-control"
                   icon
                   title="关闭"
                   aria-label="关闭"
@@ -244,14 +245,18 @@
               <section id="settings-schemes" class="mcr-config-section-card">
                 <header class="mcr-config-section-card__header">
                   <div><div class="mcr-config-section-card__title">媒体库自选风格</div><p class="mcr-config-section-card__copy">为媒体库指定封面方案；未匹配的媒体库使用默认方案。</p></div>
-                  <v-btn size="small" class="mcr-button mcr-button--ghost mcr-button--dark-neutral" prepend-icon="mdi-plus" @click="addSchemeRule">新增规则</v-btn>
                 </header>
-                <BlueprintSelect v-model="config.default_scheme_id" :items="schemeItems" label="默认方案" />
-                <div v-for="(rule, index) in config.library_scheme_rules" :key="rule.id" class="mcr-config-scheme-rule">
-                  <div class="mcr-config-scheme-rule__fields">
+                <div class="yh-scheme-assignment-toolbar">
+                  <div class="yh-scheme-assignment__default">
+                    <BlueprintSelect v-model="config.default_scheme_id" :items="schemeItems" label="默认方案" />
+                  </div>
+                  <v-btn size="small" class="mcr-button mcr-button--ghost mcr-button--dark-neutral yh-scheme-assignment__add" prepend-icon="mdi-plus" @click="addSchemeRule">新增规则</v-btn>
+                </div>
+                <div v-for="(rule, index) in config.library_scheme_rules" :key="rule.id" class="yh-scheme-assignment">
+                  <div class="yh-scheme-assignment__fields">
                     <BlueprintSelect v-model="rule.scheme_id" :items="schemeItems" label="封面方案" />
                     <BlueprintSelect v-model="rule.library_keys" :items="ruleLibraryItems(index)" multiple label="媒体库" hint="已在其他规则中分配的媒体库不会重复显示" />
-                    <v-btn icon="mdi-close" size="small" variant="text" class="mcr-config-scheme-rule__remove" title="删除规则" @click="removeSchemeRule(index)" />
+                    <button type="button" class="yh-scheme-assignment__remove" :title="`删除指定方案 ${index + 1}`" @click="removeSchemeRule(index)"><v-icon icon="mdi-close" size="17" /></button>
                   </div>
                 </div>
               </section>
@@ -671,11 +676,14 @@
           :data-mcr-theme="isDark ? 'dark' : 'light'"
           :style="configCompactHeaderStyle"
         >
-          <span class="yh-compact-config-header__title">配置</span>
+          <div class="yh-compact-config-header__identity">
+            <span class="yh-compact-config-header__glyph" aria-hidden="true"><v-icon icon="mdi-cog-outline" size="18" /></span>
+            <span class="yh-compact-config-header__title">配置</span>
+          </div>
           <div class="yh-compact-config-header__actions">
             <button
               type="button"
-              class="yh-compact-config-run"
+              class="yh-compact-config-run yh-header-control"
               :class="{ 'is-running': isGenerating }"
               :style="configRunButtonProgressStyle"
               :title="isGenerating ? configGenerationProgressLabel : '立即生成'"
@@ -686,8 +694,9 @@
               <span class="yh-run-progress" aria-hidden="true" />
               <span class="yh-run-content"><v-icon :icon="isGenerating ? 'mdi-stop' : 'mdi-play'" size="20" /><span v-if="isGenerating">{{ configGenerationProgressCount }}</span></span>
             </button>
-            <button type="button" class="yh-compact-config-icon" title="保存配置" aria-label="保存配置" :disabled="isGenerating || generatingNow || configSaving" @click="saveConfig()"><v-icon icon="mdi-content-save-outline" size="20" /></button>
-            <button type="button" class="yh-compact-config-icon" title="封面预览" aria-label="封面预览" :disabled="isGenerating || generatingNow" @click="notifySwitch"><v-icon icon="mdi-image-multiple-outline" size="20" /></button>
+            <button type="button" class="yh-compact-config-icon yh-header-control" title="保存配置" aria-label="保存配置" :disabled="isGenerating || generatingNow || configSaving" @click="saveConfig()"><v-icon icon="mdi-content-save-outline" size="20" /></button>
+            <button type="button" class="yh-compact-config-icon yh-header-control" title="封面预览" aria-label="封面预览" :disabled="isGenerating || generatingNow" @click="notifySwitch"><v-icon icon="mdi-image-multiple-outline" size="20" /></button>
+            <button type="button" class="yh-compact-config-icon yh-header-control" title="关闭" aria-label="关闭" @click="notifyClose"><v-icon icon="mdi-close" size="20" /></button>
           </div>
         </div>
       </Transition>
@@ -702,6 +711,7 @@ import { PROGRAM_VERSION, UI_REV } from '../constants/ui'
 import { MCR_CONTROL_DEFAULTS } from '../constants/uiDefaults'
 import { BUILTIN_FONT_ITEMS, getTemplateFontFaceName } from '../constants/fonts'
 import { loadPreviewFontFaces } from '../services/fontPreview'
+import { createCompactHeaderScrollController, type CompactHeaderScrollController } from '../utils/compactHeaderScrollRoot'
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { PropType } from 'vue'
 import BlueprintField from './BlueprintField.vue'
@@ -741,12 +751,13 @@ const configTopbarEl = ref<HTMLElement | null>(null)
 const configHeaderCompact = ref(false)
 const configCompactHeaderVisible = ref(false)
 const configCompactHeaderStyle = ref<Record<string, string>>({})
+let configCompactHeaderScrollController: CompactHeaderScrollController | null = null
 const configHeaderFontRevision = ref(0)
 const configHeaderFontStyle = computed<Record<string, string>>(() => {
   configHeaderFontRevision.value
   return {
     '--yh-settings-zh-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
-    '--yh-settings-en-font': `"${getTemplateFontFaceName('app_impact')}"`,
+    '--yh-settings-en-font': `"${getTemplateFontFaceName('app_chaohei')}"`,
   }
 })
 const configChineseTitleStyle = computed<Record<string, string>>(() => {
@@ -760,7 +771,7 @@ const configChineseTitleStyle = computed<Record<string, string>>(() => {
 const configEnglishTitleStyle = computed<Record<string, string>>(() => {
   configHeaderFontRevision.value
   return {
-    fontFamily: `"${getTemplateFontFaceName('app_impact')}", Impact, "Arial Narrow", sans-serif`,
+    fontFamily: `"${getTemplateFontFaceName('app_chaohei')}", "PingFang SC", "Microsoft YaHei", sans-serif`,
     fontWeight: '400',
   }
 })
@@ -1745,7 +1756,8 @@ function updateConfigHeaderCompact() {
   if (!header || !shell) return
   const headerRect = header.getBoundingClientRect()
   const shellRect = shell.getBoundingClientRect()
-  configCompactHeaderVisible.value = headerRect.bottom <= 8
+  const rootRect = configCompactHeaderScrollController?.getScrollRoot()?.getBoundingClientRect()
+  configCompactHeaderVisible.value = headerRect.bottom <= (rootRect?.top ?? 0) + 28
   if (!configCompactHeaderVisible.value) return
   const gutter = 8
   const left = Math.max(gutter, Math.min(shellRect.left, window.innerWidth - gutter))
@@ -1764,8 +1776,8 @@ onMounted(() => {
     syncSystemTheme()
     configThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     configThemeMediaQuery.addEventListener?.('change', syncSystemTheme)
-    window.addEventListener('scroll', updateConfigHeaderCompact, true)
-    window.addEventListener('resize', updateConfigHeaderCompact)
+    configCompactHeaderScrollController = createCompactHeaderScrollController(() => configTopbarEl.value, updateConfigHeaderCompact)
+    configCompactHeaderScrollController.bind()
   }
   if (typeof document !== 'undefined') {
     configThemeObserver = new MutationObserver(() => {
@@ -1789,7 +1801,7 @@ onMounted(() => {
   void validateTitleConfig(false)
   nextTick(() => {
     suppressConfigAutoSave = false
-    updateConfigHeaderCompact()
+    configCompactHeaderScrollController?.refresh()
   })
 })
 
@@ -1808,8 +1820,8 @@ onBeforeUnmount(() => {
   }
   configThemeMediaQuery?.removeEventListener?.('change', syncSystemTheme)
   if (typeof window !== 'undefined') {
-    window.removeEventListener('scroll', updateConfigHeaderCompact, true)
-    window.removeEventListener('resize', updateConfigHeaderCompact)
+    configCompactHeaderScrollController?.dispose()
+    configCompactHeaderScrollController = null
   }
   configThemeObserver?.disconnect()
   configThemeMediaQuery = null
@@ -4632,7 +4644,7 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   position: fixed;
   top: max(8px, env(safe-area-inset-top));
   left: var(--yh-compact-left);
-  z-index: 58;
+  z-index: 2147482800;
   display: flex;
   width: var(--yh-compact-width);
   min-height: 48px;
@@ -4646,6 +4658,7 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   box-shadow: 0 10px 24px var(--color-shadow);
   color: var(--color-text-main);
   backdrop-filter: blur(16px) saturate(130%);
+  transform-origin: center top;
 }
 
 .yh-compact-config-header[data-mcr-theme="dark"] {
@@ -4669,6 +4682,23 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 .yh-compact-config-header__actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; }
 
 .yh-compact-config-run,
+.yh-compact-config-run.is-running {
+  position: relative;
+  display: inline-grid;
+  width: 88px;
+  height: 36px;
+  min-width: 88px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--yahaha-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft));
+  color: var(--yahaha-blue);
+  box-shadow: 0 4px 12px var(--color-shadow);
+  cursor: pointer;
+  transition: background-color var(--yh-motion-fast) var(--yh-motion-enter), border-color var(--yh-motion-fast) var(--yh-motion-enter), color var(--yh-motion-fast) var(--yh-motion-enter), transform var(--yh-motion-fast) var(--yh-motion-enter);
+}
+
 .yh-compact-config-icon {
   position: relative;
   display: inline-grid;
@@ -4683,7 +4713,7 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   color: var(--yahaha-blue);
   box-shadow: 0 4px 12px var(--color-shadow);
   cursor: pointer;
-  transition: width 220ms cubic-bezier(.2, .8, .2, 1), background-color 180ms ease, transform 140ms ease;
+  transition: background-color var(--yh-motion-fast) var(--yh-motion-enter), border-color var(--yh-motion-fast) var(--yh-motion-enter), color var(--yh-motion-fast) var(--yh-motion-enter), transform var(--yh-motion-fast) var(--yh-motion-enter);
 }
 
 .yh-compact-config-run:hover,
@@ -4694,17 +4724,21 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 .yh-compact-config-icon:disabled { cursor: default; opacity: .48; transform: none; }
 .yh-compact-config-run .yh-run-progress { position: absolute; inset: 0 auto 0 0; width: var(--yh-run-progress, 0%); background: rgba(255, 255, 255, .24); }
 .yh-compact-config-run .yh-run-content { position: relative; display: inline-flex; align-items: center; gap: 5px; }
-.yh-compact-config-run.is-running { width: 88px; min-width: 88px; border-color: var(--yahaha-blue); background: var(--yahaha-blue); color: #fff; }
+.yh-compact-config-run.is-running { border-color: var(--yahaha-blue); background: var(--yahaha-blue); color: #fff; }
 
 .yh-compact-header-enter-active,
-.yh-compact-header-leave-active { transition: opacity 160ms ease, transform 180ms cubic-bezier(.2, .8, .2, 1); }
+.yh-compact-header-leave-active { will-change: transform, opacity; transition: opacity var(--yh-motion-fast) var(--yh-motion-enter), transform var(--yh-motion-standard) var(--yh-motion-enter); }
 .yh-compact-header-enter-from,
 .yh-compact-header-leave-to { opacity: 0; transform: translateY(-8px); }
 
 @media (prefers-reduced-motion: reduce) {
   .yh-compact-config-header,
   .yh-compact-config-run,
-  .yh-compact-config-icon { transition: opacity 140ms ease; }
+  .yh-compact-config-icon,
+  .yh-compact-header-enter-active,
+  .yh-compact-header-leave-active { transition: opacity var(--yh-motion-fast) linear; }
+  .yh-compact-header-enter-from,
+  .yh-compact-header-leave-to { transform: none; }
 }
 
 .mcr-config-shell .mcr-config-save-message--floating {
@@ -5360,14 +5394,14 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 }
 
 .mcr-config-shell .yh-settings-en {
-  font-family: var(--yh-settings-en-font, "McrFont_impact"), "Impact", "Arial Narrow", sans-serif !important;
+  font-family: var(--yh-settings-en-font, "McrFont_chaohei"), "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-weight: 400 !important;
 }
 
 .mcr-config-shell .yh-settings-zh {
   font-family: var(--yh-settings-zh-font, "McrFont_chaohei"), "PingFang SC", "Microsoft YaHei", sans-serif !important;
   font-weight: 400 !important;
-  opacity: .8 !important;
+  opacity: 1 !important;
 }
 
 /* The settings header is always sticky; collapse its decorative layer only
@@ -5402,7 +5436,7 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
   color: var(--color-text-main) !important;
   font-size: 20px !important;
   line-height: 1 !important;
-  opacity: .8 !important;
+  opacity: 1 !important;
   transform: none !important;
 }
 
@@ -5454,4 +5488,142 @@ html.dark .mcr-config-shell :deep(.mcr-button--danger),
 }
 .mcr-config-shell .yh-run-btn.is-running .yh-run-content { color: #fff !important; }
 .mcr-config-shell .yh-run-btn.is-running .yh-run-count { min-width: 40px; }
+
+/* Match the preview header's title hierarchy: English is a quiet backdrop,
+ * while the Chinese title remains the foreground label. */
+.mcr-config-shell .yh-settings-title-wrap {
+  min-height: 76px !important;
+}
+
+.mcr-config-shell .yh-settings-en {
+  color: rgba(83, 125, 198, 0.11) !important;
+  font-size: clamp(42px, 4vw, 66px) !important;
+  letter-spacing: -0.02em !important;
+  line-height: 0.9 !important;
+}
+
+.mcr-config-shell .yh-settings-zh {
+  font-size: clamp(32px, 3vw, 50px) !important;
+  line-height: 0.95 !important;
+}
+
+.mcr-config-shell[data-mcr-theme="dark"] .yh-settings-en {
+  color: rgba(244, 247, 251, 0.10) !important;
+}
+
+@media (max-width: 768px) {
+  .mcr-config-shell .yh-settings-title-wrap {
+    min-height: 130px !important;
+  }
+
+  .mcr-config-shell .yh-settings-en {
+    font-size: clamp(50px, 13.6vw, 56px) !important;
+    letter-spacing: -0.018em !important;
+    line-height: 1.04 !important;
+    font-kerning: normal;
+  }
+
+  .mcr-config-shell .yh-settings-zh {
+    top: 28px !important;
+    font-size: 40px !important;
+    line-height: 1.02 !important;
+  }
+}
+
+/* The configuration title follows the preview hierarchy exactly. */
+.mcr-config-shell .yh-settings-zh,
+.mcr-config-shell .mcr-config-topbar.is-compact .yh-settings-zh,
+.yh-compact-config-header__title {
+  color: #495267 !important;
+  opacity: 1 !important;
+}
+
+.mcr-config-shell[data-mcr-theme="dark"] .yh-settings-zh,
+.mcr-config-shell[data-mcr-theme="dark"] .mcr-config-topbar.is-compact .yh-settings-zh,
+.yh-compact-config-header[data-mcr-theme="dark"] .yh-compact-config-header__title {
+  color: #c5c9cc !important;
+}
+
+@media (max-width: 768px) {
+  .mcr-config-shell .yh-settings-en,
+  .mcr-config-shell .yh-settings-en span {
+    color: rgba(83, 125, 198, 0.065) !important;
+    -webkit-text-fill-color: rgba(83, 125, 198, 0.065) !important;
+  }
+
+  .mcr-config-shell[data-mcr-theme="dark"] .yh-settings-en,
+  .mcr-config-shell[data-mcr-theme="dark"] .yh-settings-en span {
+    color: rgba(244, 247, 251, 0.025) !important;
+    -webkit-text-fill-color: rgba(244, 247, 251, 0.025) !important;
+  }
+
+  .mcr-config-shell .mcr-config-switch-col,
+  .mcr-config-shell .mcr-config-switch-col--backup {
+    align-items: center;
+    padding-top: 0;
+  }
+
+  .mcr-config-shell .mcr-config-switch-col :deep(.v-switch),
+  .mcr-config-shell .yh-switch-row :deep(.v-switch),
+  .mcr-config-shell .mcr-title-config-toolbar :deep(.v-switch) {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .mcr-config-shell .yh-switch-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .mcr-config-shell .mcr-font-switch-card {
+    min-height: 66px;
+    padding: 8px 10px;
+  }
+
+  .mcr-config-shell .mcr-font-switch-card :deep(.v-switch) {
+    min-height: 40px;
+    margin: 0;
+  }
+
+  .mcr-config-shell .mcr-font-switch-card p {
+    margin-left: 50px;
+  }
+}
+
+/* Keep the run control visually aligned with the preview header: quiet while
+ * idle, then clearly blue only while it represents an active task. */
+.mcr-config-shell .yh-run-btn {
+  border-color: var(--yahaha-border) !important;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary-soft)) !important;
+  box-shadow: 0 4px 12px var(--color-shadow) !important;
+}
+
+.mcr-config-shell .yh-run-btn:hover:not(.is-running) {
+  background: var(--color-primary-soft) !important;
+  box-shadow: 0 7px 16px var(--color-shadow) !important;
+}
+
+.mcr-config-shell .yh-run-btn:not(.is-running) .yh-run-content {
+  color: var(--yahaha-blue) !important;
+  -webkit-text-fill-color: var(--yahaha-blue) !important;
+}
+
+.mcr-config-shell .yh-run-btn.is-running {
+  border-color: var(--yahaha-blue) !important;
+  background: var(--yahaha-blue) !important;
+}
+</style>
+<style scoped>
+.yh-compact-config-run,
+.yh-compact-config-run.is-running { height: 40px; border-radius: 13px; }
+.yh-compact-config-icon { width: 40px; height: 40px; min-width: 40px; border-radius: 13px; }
+@media (max-width: 390px) {
+  .yh-compact-config-header { gap: 6px; padding-inline: 6px; }
+  .yh-compact-config-header__actions { gap: 4px; }
+  .yh-compact-config-header__glyph { width: 32px; height: 32px; }
+  .yh-compact-config-header__title { font-size: 16px; }
+}
 </style>

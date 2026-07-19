@@ -859,3 +859,60 @@ html.dark .mcr-blueprint-select__hint,
   }
 }
 </style>
+<style scoped>
+/* The menu is teleported to body, so dark-mode values must not depend on
+ * variables scoped to the settings shell. */
+:global([data-mcr-theme="dark"]) .mcr-blueprint-select__multi-trigger,
+:global(.v-theme--dark) .mcr-blueprint-select__multi-trigger {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #1c1c1e;
+  color: #f5f5f7;
+  -webkit-text-fill-color: #f5f5f7;
+}
+:global([data-mcr-theme="dark"]) .mcr-blueprint-select__placeholder,
+:global([data-mcr-theme="dark"]) .mcr-blueprint-select__count,
+:global(.v-theme--dark) .mcr-blueprint-select__placeholder,
+:global(.v-theme--dark) .mcr-blueprint-select__count { color: #aeaeb2; -webkit-text-fill-color: #aeaeb2; }
+:global([data-mcr-theme="dark"]) .mcr-blueprint-select__chip,
+:global(.v-theme--dark) .mcr-blueprint-select__chip {
+  border-color: rgba(10, 132, 255, 0.34);
+  background: rgba(10, 132, 255, 0.18);
+  color: #e8f3ff;
+  -webkit-text-fill-color: #e8f3ff;
+}
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"]) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(28, 28, 30, 0.98);
+  color: #f5f5f7;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+}
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__multi-option) {
+  border-color: rgba(255, 255, 255, 0.10);
+  background: #242426;
+  color: #f5f5f7;
+  -webkit-text-fill-color: #f5f5f7;
+}
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__multi-option:hover) { background: #2c2c2e; }
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__multi-option--active) {
+  border-color: rgba(10, 132, 255, 0.62);
+  background: rgba(10, 132, 255, 0.18);
+  color: #d9ebff;
+  -webkit-text-fill-color: #d9ebff;
+  box-shadow: inset 3px 0 0 #0a84ff;
+}
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__checkbox) {
+  border-color: rgba(255, 255, 255, 0.30);
+  background: #1c1c1e;
+  color: #f5f5f7;
+}
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__multi-option--active .mcr-blueprint-select__checkbox) {
+  border-color: #0a84ff;
+  background: #0a84ff;
+  color: #fff;
+}
+:global(.mcr-blueprint-select__popover[data-mcr-theme="dark"] .mcr-blueprint-select__done) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #2c2c2e;
+  color: #f5f5f7;
+}
+</style>

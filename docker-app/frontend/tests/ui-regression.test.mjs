@@ -7,6 +7,7 @@ const config = readFileSync(new URL('../src/components/Config.vue', import.meta.
 const navigation = readFileSync(new URL('../src/components/SettingsAnchorNav.vue', import.meta.url), 'utf8')
 const posterStack = readFileSync(new URL('../src/components/HistoryPosterStack.vue', import.meta.url), 'utf8')
 const expansionLayer = readFileSync(new URL('../src/components/HistoryExpansionLayer.vue', import.meta.url), 'utf8')
+const blueprintSelect = readFileSync(new URL('../src/components/BlueprintSelect.vue', import.meta.url), 'utf8')
 const dateTime = readFileSync(new URL('../src/utils/dateTime.ts', import.meta.url), 'utf8')
 const contentCache = readFileSync(new URL('../src/services/contentCache.ts', import.meta.url), 'utf8')
 const layoutEditor = readFileSync(new URL('../src/components/CustomLayoutEditor.vue', import.meta.url), 'utf8')
@@ -15,6 +16,8 @@ const customLayout = readFileSync(new URL('../src/utils/customLayout.ts', import
 const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
 const authGate = readFileSync(new URL('../src/components/AuthGate.vue', import.meta.url), 'utf8')
 const dockerApi = readFileSync(new URL('../src/dockerApi.ts', import.meta.url), 'utf8')
+const compactHeaderScrollRoot = readFileSync(new URL('../src/utils/compactHeaderScrollRoot.ts', import.meta.url), 'utf8')
+const applePolish = readFileSync(new URL('../src/styles/applePolish.css', import.meta.url), 'utf8')
 
 test('history starts in the time-machine view', () => {
   assert.match(page, /historyGroupMode = ref<'library' \| 'time-machine'>\('time-machine'\)/)
@@ -82,6 +85,7 @@ test('loading title breathes with opacity only', () => {
 })
 
 test('configuration controls stay compact and generation progress belongs to the run button', () => {
+  assert.match(config, /class="yh-scheme-assignment-toolbar"/)
   assert.match(config, /class="yh-scheme-assignment__fields"/)
   assert.match(config, /class="yh-scheme-assignment__remove"/)
   assert.match(config, /class="mcr-font-switch-card"/)
@@ -89,6 +93,30 @@ test('configuration controls stay compact and generation progress belongs to the
   assert.match(page, /generationProgressCount/)
   assert.doesNotMatch(page, /backendBusyLabel/)
   assert.doesNotMatch(page, /<AsyncStatusDots v-if="backendBusy"/)
+})
+
+test('history, headers, scheme rules, and teleported selects share neutral themed materials', () => {
+  assert.match(expansionLayer, /--yh-history-panel: rgba\(250, 250, 252, 0\.62\)/)
+  assert.match(expansionLayer, /backdrop-filter: blur\(32px\) saturate\(140%\)/)
+  assert.match(expansionLayer, /prefers-reduced-transparency: reduce/)
+  assert.match(expansionLayer, /--yh-history-selection: rgba\(22, 119, 255, 0\.055\)/)
+  assert.match(expansionLayer, /scale\(\.94\)/)
+  assert.match(expansionLayer, /prefers-reduced-motion: reduce/)
+  assert.match(page, /class="yh-compact-page-header__avatar"/)
+  assert.match(page, /yh-icon-btn yh-header-control/)
+  assert.match(config, /class="yh-settings-title-glyph"/)
+  assert.match(config, /class="yh-compact-config-header__identity"/)
+  assert.match(config, /font-size: clamp\(42px, 4vw, 66px\)/)
+  assert.match(applePolish, /\.mcr-config-shell \.yh-scheme-assignment-toolbar/)
+  assert.match(applePolish, /\.yh-header-control\.yh-header-control/)
+  assert.match(applePolish, /border-radius: 12px !important/)
+  assert.match(applePolish, /\.yh-settings-title-glyph,\s*\.yh-compact-config-header__glyph \{[\s\S]*?background: transparent/)
+  assert.match(applePolish, /\.yh-scheme-assignment \{[\s\S]*?background: var\(--color-surface-soft\)/)
+  assert.match(applePolish, /\.mcr-blueprint-select__popover\[data-mcr-theme="dark"\][\s\S]*?--yh-popover-bg: rgba\(28, 28, 30, 0\.90\)/)
+  assert.match(applePolish, /\.yh-scheme-assignment__fields[\s\S]*?grid-template-rows: 15px 42px/)
+  assert.match(applePolish, /\.mcr-config-top-actions \.yh-header-control\.yh-header-control:not\(\.is-running\)/)
+  assert.match(blueprintSelect, /popover\[data-mcr-theme="dark"\][\s\S]*?background: rgba\(28, 28, 30, 0\.98\)/)
+  assert.match(blueprintSelect, /background: rgba\(10, 132, 255, 0\.18\)/)
 })
 
 test('history cache persists an explicit plain-data snapshot', () => {
@@ -189,9 +217,9 @@ test('media count badge is available in the persistent layout editor', () => {
   assert.match(contentCache, /library_item_counts: record\.libraryItemCounts/)
 })
 
-test('application chrome uses subsetted chaohei and impact fonts with a compact scroll header', () => {
+test('application chrome uses the shared subsetted chaohei face with a compact scroll header', () => {
   assert.match(page, /getTemplateFontFaceName\('app_chaohei'\)/)
-  assert.match(page, /getTemplateFontFaceName\('app_impact'\)/)
+  assert.doesNotMatch(page, /getTemplateFontFaceName\('app_impact'\)/)
   assert.match(page, /loadPageHeaderFonts\(\)/)
   assert.match(page, /\/api\/fonts\/faces/)
   assert.match(page, /<Teleport to="body">/)
@@ -199,14 +227,38 @@ test('application chrome uses subsetted chaohei and impact fonts with a compact 
   assert.match(page, /updateCompactHeader\(\)/)
   assert.match(config, /\/api\/fonts\/faces/)
   assert.match(config, /getTemplateFontFaceName\('app_chaohei'\)/)
-  assert.match(config, /getTemplateFontFaceName\('app_impact'\)/)
+  assert.doesNotMatch(config, /getTemplateFontFaceName\('app_impact'\)/)
   assert.match(config, /yh-compact-config-header/)
 })
 
-test('mobile Impact wordmark keeps readable tracking and line boxes', () => {
+test('mobile wordmark keeps readable chaohei tracking and line boxes', () => {
   assert.match(page, /letter-spacing: -0\.018em !important/)
   assert.match(page, /line-height: 1\.04 !important/)
   assert.match(page, /font-kerning: normal/)
+})
+
+test('header title contrast stays crisp while mobile English remains decorative', () => {
+  assert.match(page, /color: #495267 !important;/)
+  assert.match(page, /color: #c5c9cc !important;/)
+  assert.match(page, /rgba\(83, 125, 198, 0\.065\)/)
+  assert.match(page, /rgba\(244, 247, 251, 0\.025\)/)
+  assert.match(config, /color: #495267 !important;/)
+  assert.match(config, /color: #c5c9cc !important;/)
+  assert.match(config, /mcr-config-switch-col[\s\S]*?align-items: center/)
+})
+
+test('compact headers bind to their real scroll root and use shared motion tokens', () => {
+  assert.match(compactHeaderScrollRoot, /resolveCompactHeaderScrollRoot/)
+  assert.match(compactHeaderScrollRoot, /scrollRoot\.addEventListener\('scroll', scheduleUpdate/)
+  assert.match(compactHeaderScrollRoot, /window\.addEventListener\('scroll', scheduleUpdate, \{ passive: true \}\)/)
+  assert.match(compactHeaderScrollRoot, /window\.addEventListener\('scroll', scheduleUpdate, \{ capture: true, passive: true \}\)/)
+  assert.match(compactHeaderScrollRoot, /new ResizeObserver\(scheduleUpdate\)/)
+  assert.match(page, /createCompactHeaderScrollController\(\(\) => pageHeroEl\.value, updateCompactHeader\)/)
+  assert.match(config, /createCompactHeaderScrollController\(\(\) => configTopbarEl\.value, updateConfigHeaderCompact\)/)
+  assert.match(applePolish, /--yh-motion-enter: cubic-bezier\(0\.23, 1, 0\.32, 1\)/)
+  assert.match(applePolish, /--yh-motion-standard: 220ms/)
+  assert.match(page, /width: 88px !important;[\s\S]*?--yh-motion-enter/)
+  assert.match(config, /width: 88px;[\s\S]*?--yh-motion-enter/)
 })
 
 test('generation action morphs between a bordered play control and progress stop control', () => {

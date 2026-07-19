@@ -35,11 +35,12 @@
         "name": "呀哈哈封面工坊",
         "description": "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
         "labels": "海报,可编辑画布,封面,Emby,Jellyfin,动态",
-        "version": "2.2.8",
+        "version": "2.2.9",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png",
         "author": "呀哈哈",
         "level": 1,
         "history": {
+            "v2.2.9": "统一设置与预览标题栏按钮，修复暗色多选菜单、规则对齐和历史封面玻璃背景。",
             "v2.2.8": "优化移动端 Impact 标题字距和行高，修复真实字体加载后的字形重叠。",
             "v2.2.7": "修复首屏标题字体接口与插件固定标题栏挂载，确保字体刷新后立即生效。",
             "v2.2.6": "修复应用标题字体加载与设置页固定标题栏，统一生成按钮边框样式。",

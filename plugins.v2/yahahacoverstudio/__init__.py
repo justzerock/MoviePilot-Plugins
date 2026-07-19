@@ -127,7 +127,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.2.8"
+    plugin_version = "2.2.9"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
