@@ -54,7 +54,7 @@ class MediaCoverGenerator(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/emby.png"
     # 插件版本
-    plugin_version = "0.9.6"
+    plugin_version = "0.9.7"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -68,6 +68,9 @@ class MediaCoverGenerator(_PluginBase):
 
     # 退出事件
     _event = threading.Event()
+    # 立即生成任务互斥（防止并发触发导致卡死）
+    _generate_lock = threading.Lock()
+    _generate_running = False
 
     # 私有属性
     _scheduler = None
@@ -114,6 +117,7 @@ class MediaCoverGenerator(_PluginBase):
     _title_spacing = ''
     _en_line_spacing = ''
     _title_scale = 1.0
+    _request_timeout = 30
     _resolution = '480p'
     _custom_width = 1920
     _custom_height = 1080
@@ -200,6 +204,14 @@ class MediaCoverGenerator(_PluginBase):
                 self._title_scale = float(config.get("title_scale", 1.0))
             except (ValueError, TypeError):
                 self._title_scale = 1.0
+            self._request_timeout = self.__clamp_value(
+                config.get("request_timeout", 30),
+                5,
+                120,
+                30,
+                "request_timeout[init_plugin]",
+                int,
+            )
             self._resolution = config.get("resolution", "480p")
             self._custom_width = config.get("custom_width", 1920)
             self._custom_height = config.get("custom_height", 1080)
@@ -417,6 +429,7 @@ class MediaCoverGenerator(_PluginBase):
             "title_spacing": self._title_spacing,
             "en_line_spacing": self._en_line_spacing,
             "title_scale": self._title_scale,
+            "request_timeout": self._request_timeout,
             "resolution": self._resolution,
             "custom_width": self._custom_width,
             "custom_height": self._custom_height,
@@ -664,6 +677,20 @@ class MediaCoverGenerator(_PluginBase):
                 "summary": "立即生成媒体库封面(兼容无前导斜杠)",
             },
             {
+                "path": "/generate_status",
+                "endpoint": self.api_generate_status,
+                "auth": "bear",
+                "methods": ["GET"],
+                "summary": "查询立即生成任务状态",
+            },
+            {
+                "path": "generate_status",
+                "endpoint": self.api_generate_status,
+                "auth": "bear",
+                "methods": ["GET"],
+                "summary": "查询立即生成任务状态(兼容无前导斜杠)",
+            },
+            {
                 "path": "/set_cover_style",
                 "endpoint": self.api_set_cover_style,
                 "auth": "bear",
@@ -755,14 +782,45 @@ class MediaCoverGenerator(_PluginBase):
                 if target_style not in allowed_styles:
                     return {"code": 1, "msg": f"不支持的风格: {target_style}"}
                 self._cover_style = target_style
-            logger.info(f"【MediaCoverGenerator】收到立即生成请求，风格: {self._cover_style}")
-            tips = self.__update_all_libraries()
-            return {"code": 0, "msg": tips or "封面生成任务已完成"}
+
+            # 避免重复触发导致卡死：同一时间只允许一个生成任务
+            with self._generate_lock:
+                if self._generate_running:
+                    logger.warning("【MediaCoverGenerator】立即生成失败：已有生成任务正在执行，请等待完成或点击停止任务")
+                    return {"code": 1, "msg": "已有生成任务正在执行，请等待完成或点击停止任务"}
+                self._generate_running = True
+
+            run_style = self._cover_style
+            logger.info(f"【MediaCoverGenerator】收到立即生成请求，风格: {run_style}，已提交后台任务")
+
+            def _worker():
+                # 子线程内独立维护风格，避免与主线程 finally 恢复产生竞争
+                try:
+                    self._cover_style = run_style
+                    self._event.clear()
+                    logger.info("【MediaCoverGenerator】后台封面生成任务开始")
+                    tips = self.__update_all_libraries()
+                    logger.info(f"【MediaCoverGenerator】后台封面生成任务结束：{tips or '已完成'}")
+                except Exception as inner_err:
+                    logger.error(f"【MediaCoverGenerator】后台封面生成失败: {inner_err}", exc_info=True)
+                finally:
+                    self._generate_running = False
+                    self._cover_style = old_style
+
+            threading.Thread(target=_worker, name="MCG-GenerateNow", daemon=True).start()
+            return {"code": 0, "msg": "已开始后台生成封面，请稍后查看日志或历史记录"}
         except Exception as e:
+            self._generate_running = False
             logger.error(f"【MediaCoverGenerator】立即生成失败: {e}", exc_info=True)
             return {"code": 1, "msg": f"封面生成失败: {e}"}
-        finally:
-            self._cover_style = old_style
+
+    def api_generate_status(self):
+        """查询后台生成任务是否仍在运行"""
+        return {
+            "code": 0,
+            "msg": "running" if self._generate_running else "idle",
+            "data": {"running": self._generate_running, "style": self._cover_style},
+        }
 
     def api_set_cover_style(self, style: str = ""):
         try:
@@ -1956,6 +2014,25 @@ class MediaCoverGenerator(_PluginBase):
                                                     }
                                                 ]
                                             },
+                                            {
+                                                'component': 'VCol',
+                                                'props': {
+                                                    'cols': 12,
+                                                    'md': 3
+                                                },
+                                                'content': [
+                                                    {
+                                                        'component': 'VTextField',
+                                                        'props': {
+                                                            'model': 'request_timeout',
+                                                            'label': '接口超时（秒）',
+                                                            'placeholder': '30',
+                                                            'hint': '单个媒体库查询超时时间，媒体库过大时可适当调大，防止卡死',
+                                                            'persistentHint': True
+                                                        }
+                                                    }
+                                                ]
+                                            },
                                         ]
                                     },
                                     {
@@ -2157,6 +2234,7 @@ class MediaCoverGenerator(_PluginBase):
             "transfer_monitor": True,
             "cron": "",
             "delay": 60,
+            "request_timeout": 30,
             "selected_servers": [],
             "include_libraries": [],
             "sort_by": "Random",
@@ -3381,12 +3459,20 @@ class MediaCoverGenerator(_PluginBase):
             print(f"警告: 无法为播放列表 {service.name}：{library['Name']} 找到有效的图片项目")
             return False
         
-    def __get_items_batch(self, service, parent_id, offset=0, limit=20, include_types=None):
-        # 调用API获取项目
+    def __get_items_batch(self, service, parent_id, offset=0, limit=20, include_types=None, timeout=None):
+        """
+        调用媒体服务器 API 获取媒体项。
+
+        timeout: 单次请求超时（秒）。超时会快速失败并返回空列表，
+                 避免个别媒体库（如条目极多/API 响应缓慢的短剧库）拖死整个生成流程。
+        """
         try:
             if not service:
                 return []
-            
+
+            if timeout is None:
+                timeout = self.__get_request_timeout()
+
             try:
                 if not self._sort_by:
                     sort_by = 'Random'
@@ -3404,18 +3490,39 @@ class MediaCoverGenerator(_PluginBase):
                       f'&StartIndex={offset}&IncludeItemTypes={include_types}' \
                       f'&Recursive=True&SortOrder=Descending'
 
-                res = service.instance.get_data(url=url)
+                started = time.monotonic()
+                try:
+                    res = service.instance.get_data(url=url, timeout=timeout)
+                except TypeError:
+                    # 兼容不支持 timeout 参数的旧版客户端
+                    res = service.instance.get_data(url=url)
+
+                elapsed = time.monotonic() - started
+                if elapsed >= timeout:
+                    logger.warning(
+                        f"获取媒体项超时（>={timeout}s，实际 {elapsed:.1f}s），"
+                        f"parent_id={parent_id}，已跳过本批次"
+                    )
+                    return []
+
                 if res:
                     data = res.json()
                     return data.get("Items", [])
             except Exception as err:
                 logger.error(f"获取媒体项失败：{str(err)}")
             return []
-                
+
         except Exception as err:
             logger.error(f"Failed to get latest items: {str(err)}")
             return []
-        
+
+    def __get_request_timeout(self) -> float:
+        """单次媒体服务器请求超时（秒），可通过配置项 request_timeout 调整。"""
+        try:
+            return max(5.0, min(120.0, float(self._request_timeout)))
+        except (TypeError, ValueError):
+            return 30.0
+
     def __filter_valid_items(self, items):
         """筛选有效的项目（包含所需图片的项目），并按图片标签去重"""
         valid_items = []
@@ -3493,9 +3600,13 @@ class MediaCoverGenerator(_PluginBase):
     def __update_single_image(self, service, library, title, item):
         """更新单图封面"""
         logger.info(f"媒体库 {service.name}：{library['Name']} 从媒体项获取图片")
+        if not item:
+            logger.warning(f"媒体库 {service.name}：{library['Name']} 没有可用的媒体项，跳过")
+            return False
         updated_item_id = ''
         image_url = self.__get_image_url(item)
         if not image_url:
+            logger.warning(f"媒体库 {service.name}：{library['Name']} 该媒体项没有可用图片，跳过")
             return False
             
         image_path = self.__download_image(service, image_url, library['Name'], count=1)
@@ -3513,12 +3624,13 @@ class MediaCoverGenerator(_PluginBase):
             library_id = library.get("Id")
         else:
             library_id = library.get("ItemId")
-        # 更新id
-        self.update_cover_history(
-            server=service.name, 
-            library_id=library_id, 
-            item_id=updated_item_id
-        )
+        # 更新id（item_id 为空时不做历史记录，避免污染去重逻辑）
+        if updated_item_id:
+            self.update_cover_history(
+                server=service.name, 
+                library_id=library_id, 
+                item_id=updated_item_id
+            )
 
         return image_data
     
@@ -3529,7 +3641,7 @@ class MediaCoverGenerator(_PluginBase):
         image_paths = []
         
         updated_item_ids = []
-        for i, item in enumerate(items):
+        for i, item in enumerate(items or []):
             if self._event.is_set():
                 logger.info("检测到停止信号，中断图片下载 ...")
                 return False
@@ -3538,7 +3650,9 @@ class MediaCoverGenerator(_PluginBase):
                 image_path = self.__download_image(service, image_url, library['Name'], count=i+1)
                 if image_path:
                     image_paths.append(image_path)
-                    updated_item_ids.append(self.__get_item_id(item))
+                    item_id = self.__get_item_id(item)
+                    if item_id:
+                        updated_item_ids.append(item_id)
         
         if len(image_paths) < 1:
             return False
@@ -3707,14 +3821,17 @@ class MediaCoverGenerator(_PluginBase):
         try:
             lib_items = []
             libraries = self.__get_server_libraries(service)
-            for library in libraries:
+            for library in libraries or []:
+                if not isinstance(library, dict):
+                    continue
                 if service.type == 'emby':
                     library_id = library.get("Id")
                 else:
                     library_id = library.get("ItemId")
-                if library['Name'] and library_id:
+                library_name = library.get("Name")
+                if library_name and library_id:
                     lib_item = {
-                        "name": f"{server}: {library['Name']}",
+                        "name": f"{server}: {library_name}",
                         "value": f"{server}-{library_id}"
                     }
                     lib_items.append(lib_item)
@@ -3726,7 +3843,12 @@ class MediaCoverGenerator(_PluginBase):
     def __get_image_url(self, item):
         """
         从媒体项信息中获取图片URL
+
+        说明：本函数只在命中图片分支时返回，未命中任何分支时返回 None。
+        调用方必须对 None 做判空处理，不能假定一定有返回值。
         """
+        if not item:
+            return None
         # Emby/Jellyfin
         if item['Type'] in 'MusicAlbum,Audio':
             if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
@@ -3837,9 +3959,19 @@ class MediaCoverGenerator(_PluginBase):
     def __get_item_id(self, item):
         """
         从媒体项信息中获取项目ID
+
+        注意：本函数曾经因为分支未命中导致 UnboundLocalError
+        （cannot access local variable 'item_id' where it is not associated with a value）。
+        这里统一改为在任何分支前先赋值兜底，并保证任何路径都有返回值。
         """
+        if not item:
+            return ''
+
+        # 兜底：默认使用自身 Id，保证后续任何分支都不会出现未绑定变量
+        item_id = item.get("Id")
+
         # Emby/Jellyfin
-        if item['Type'] in 'MusicAlbum,Audio':
+        if item.get('Type') in 'MusicAlbum,Audio':
             if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                 item_id = item.get("ParentBackdropItemId")
             elif item.get("PrimaryImageTag"):
