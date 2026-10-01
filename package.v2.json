@@ -35,11 +35,12 @@
         "name": "呀哈哈封面工坊",
         "description": "全新vue前端,支持可编辑静态封面、动态方案、历史封面、Webhook 入库监控",
         "labels": "海报,可编辑画布,封面,Emby,Jellyfin,动态",
-        "version": "2.2.10",
+        "version": "2.2.11",
         "icon": "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png",
         "author": "呀哈哈",
         "level": 1,
         "history": {
+            "v2.2.11": "修复 Jellyfin 根路径 API 请求，恢复媒体库读取、素材获取与封面上传；Docker 版已使用根路径 API。",
             "v2.2.10": "修复 Vue 设置保存后 MoviePilot 定时任务未刷新、Episode 动态封面素材 ID 异常，并增强 Docker 定时任务校验与状态记录。",
             "v2.2.9": "统一设置与预览标题栏按钮，修复暗色多选菜单、规则对齐和历史封面玻璃背景。",
             "v2.2.8": "优化移动端 Impact 标题字距和行高，修复真实字体加载后的字形重叠。",

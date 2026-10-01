@@ -127,7 +127,7 @@ class YahahaCoverStudio(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/justzerock/MoviePilot-Plugins/main/icons/yahaha-cover-studio.png"
     # 插件版本
-    plugin_version = "2.2.10"
+    plugin_version = "2.2.11"
     # 插件作者
     plugin_author = "呀哈哈"
     # 作者主页
@@ -5385,7 +5385,7 @@ class YahahaCoverStudio(_PluginBase):
         candidates: List[Tuple[int, Dict[str, Any], str, Path]] = []
         cache_dir = self.__preview_cache_root() / self.__sanitize_filename(library_name)
         for index, item in enumerate(items, start=1):
-            image_url = self.__get_image_url(item)
+            image_url = self.__get_image_url(item, service)
             if not image_url:
                 continue
             candidates.append((
@@ -5511,7 +5511,7 @@ class YahahaCoverStudio(_PluginBase):
     def __build_preview_image_entries(self, service, items):
         candidates: List[Tuple[int, Dict[str, Any], str]] = []
         for index, item in enumerate(items):
-            image_url = self.__get_image_url(item)
+            image_url = self.__get_image_url(item, service)
             if not image_url:
                 continue
             delimiter = '&' if '?' in image_url else '?'
@@ -9208,7 +9208,7 @@ class YahahaCoverStudio(_PluginBase):
                 if not include_types:
                     include_types = 'Movie,Series'
 
-                url = f'[HOST]emby/Items/?api_key=[APIKEY]' \
+                url = f'[HOST]{self.__media_api_prefix(service)}Items/?api_key=[APIKEY]' \
                       f'&ParentId={parent_id}&SortBy={sort_by}&Limit={limit}' \
                       f'&StartIndex={offset}&IncludeItemTypes={include_types}' \
                       f'&Recursive=True&SortOrder=Descending'
@@ -9303,7 +9303,7 @@ class YahahaCoverStudio(_PluginBase):
         """更新单图封面"""
         logger.info(f"媒体库 {service.name}：{library['Name']} 从媒体项获取图片")
         updated_item_id = ''
-        image_url = self.__get_image_url(item)
+        image_url = self.__get_image_url(item, service)
         if not image_url:
             return False
             
@@ -9340,7 +9340,7 @@ class YahahaCoverStudio(_PluginBase):
         updated_item_ids = []
         download_jobs = []
         for i, item in enumerate(items):
-            image_url = self.__get_image_url(item)
+            image_url = self.__get_image_url(item, service)
             if image_url:
                 download_jobs.append((i, item, image_url))
 
@@ -9622,9 +9622,9 @@ class YahahaCoverStudio(_PluginBase):
                 return []
             try:
                 if service.type == 'emby':
-                    url = f'[HOST]emby/Library/VirtualFolders/Query?api_key=[APIKEY]'
+                    url = f'[HOST]{self.__media_api_prefix(service)}Library/VirtualFolders/Query?api_key=[APIKEY]'
                 else:
-                    url = f'[HOST]emby/Library/VirtualFolders/?api_key=[APIKEY]'
+                    url = f'[HOST]{self.__media_api_prefix(service)}Library/VirtualFolders/?api_key=[APIKEY]'
                 res = service.instance.get_data(url=url)
                 if res:
                     data = res.json()
@@ -9667,7 +9667,7 @@ class YahahaCoverStudio(_PluginBase):
             try:
                 response = service.instance.get_data(
                     url=(
-                        f"[HOST]emby/Items/?api_key=[APIKEY]&ParentId={library_id}"
+                        f"[HOST]{self.__media_api_prefix(service)}Items/?api_key=[APIKEY]&ParentId={library_id}"
                         f"&Recursive=True&IncludeItemTypes={item_types}"
                         "&Limit=0&EnableTotalRecordCount=True"
                     )
@@ -9711,7 +9711,12 @@ class YahahaCoverStudio(_PluginBase):
             logger.error(f"获取所有媒体库失败：{str(err)}")
             return []
         
-    def __get_image_url(self, item):
+    @staticmethod
+    def __media_api_prefix(service=None) -> str:
+        """Keep Emby's conventional prefix while using Jellyfin's root API paths."""
+        return "emby/" if getattr(service, "type", None) == "emby" else ""
+
+    def __get_image_url(self, item, service=None):
         """
         从媒体项信息中获取图片URL
         """
@@ -9720,15 +9725,15 @@ class YahahaCoverStudio(_PluginBase):
             if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                 item_id = item.get("ParentBackdropItemId")
                 tag = item["ParentBackdropImageTags"][0]
-                return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
             elif item.get("PrimaryImageTag"):
                 item_id = item.get("PrimaryImageItemId")
                 tag = item.get("PrimaryImageTag")
-                return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
             elif item.get("AlbumPrimaryImageTag"):
                 item_id = item.get("AlbumId")
                 tag = item.get("AlbumPrimaryImageTag")
-                return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
 
         elif self._cover_style == 'static_3' or self._cover_style in ['animated_1', 'animated_2', 'animated_3', 'animated_4']:
             if self._use_primary:
@@ -9736,45 +9741,45 @@ class YahahaCoverStudio(_PluginBase):
                     if item.get("SeriesPrimaryImageTag"):
                         item_id = item.get("SeriesId")
                         tag = item.get("SeriesPrimaryImageTag")
-                        return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
                     elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                         item_id = item.get("ParentBackdropItemId")
                         tag = item["ParentBackdropImageTags"][0]
-                        return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ImageTags") and item.get("ImageTags").get("Primary"):
                     item_id = item.get("Id")
                     tag = item.get("ImageTags").get("Primary")
-                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                     item_id = item.get("ParentBackdropItemId")
                     tag = item["ParentBackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
                     item_id = item.get("Id")
                     tag = item["BackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
             else:
                 if item.get("Type") == 'Episode':
                     if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                         item_id = item.get("ParentBackdropItemId")
                         tag = item["ParentBackdropImageTags"][0]
-                        return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                     elif item.get("SeriesPrimaryImageTag"):
                         item_id = item.get("SeriesId")
                         tag = item.get("SeriesPrimaryImageTag")
-                        return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
                 if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                     item_id = item.get("ParentBackdropItemId")
                     tag = item["ParentBackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
                     item_id = item.get("Id")
                     tag = item["BackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ImageTags") and item.get("ImageTags").get("Primary"):
                     item_id = item.get("Id")
                     tag = item.get("ImageTags").get("Primary")
-                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
 
         elif self._cover_style.startswith('static'):
             if self._use_primary:
@@ -9782,45 +9787,45 @@ class YahahaCoverStudio(_PluginBase):
                     if item.get("SeriesPrimaryImageTag"):
                         item_id = item.get("SeriesId")
                         tag = item.get("SeriesPrimaryImageTag")
-                        return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
                     elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                         item_id = item.get("ParentBackdropItemId")
                         tag = item["ParentBackdropImageTags"][0]
-                        return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ImageTags") and item.get("ImageTags").get("Primary"):
                     item_id = item.get("Id")
                     tag = item.get("ImageTags").get("Primary")
-                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                     item_id = item.get("ParentBackdropItemId")
                     tag = item["ParentBackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
                     item_id = item.get("Id")
                     tag = item["BackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
             else:
                 if item.get("Type") == 'Episode':
                     if item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                         item_id = item.get("ParentBackdropItemId")
                         tag = item["ParentBackdropImageTags"][0]
-                        return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                     elif item.get("SeriesPrimaryImageTag"):
                         item_id = item.get("SeriesId")
                         tag = item.get("SeriesPrimaryImageTag")
-                        return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                        return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ParentBackdropImageTags") and len(item["ParentBackdropImageTags"]) > 0:
                     item_id = item.get("ParentBackdropItemId")
                     tag = item["ParentBackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("BackdropImageTags") and len(item["BackdropImageTags"]) > 0:
                     item_id = item.get("Id")
                     tag = item["BackdropImageTags"][0]
-                    return f'[HOST]emby/Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Backdrop/0?tag={tag}&api_key=[APIKEY]'
                 elif item.get("ImageTags") and item.get("ImageTags").get("Primary"):
                     item_id = item.get("Id")
                     tag = item.get("ImageTags").get("Primary")
-                    return f'[HOST]emby/Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
+                    return f'[HOST]{self.__media_api_prefix(service)}Items/{item_id}/Images/Primary?tag={tag}&api_key=[APIKEY]'
             
     def __get_item_id(self, item):
         """
@@ -10025,7 +10030,7 @@ class YahahaCoverStudio(_PluginBase):
             else:
                 library_id = library.get("ItemId")
             
-            url = f'[HOST]emby/Items/{library_id}/Images/Primary?api_key=[APIKEY]'
+            url = f'[HOST]{self.__media_api_prefix(service)}Items/{library_id}/Images/Primary?api_key=[APIKEY]'
             # 根据 base64 前几个字节简单判断格式
             content_type = "image/png"
             extension = "png"
